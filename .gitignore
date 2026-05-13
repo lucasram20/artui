@@ -1,0 +1,26 @@
+# Rust build output
+/target/
+
+# Local editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# artui runtime/session output
+.artui/session/
+.artui/logs/
+
+# Temporary files
+*.tmp
+*.temp
