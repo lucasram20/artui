@@ -50,7 +50,7 @@ Optional for local model chat:
 
 ```bash
 ollama serve
-ollama pull qwen2.5-coder:7b
+ollama pull gemma4:e2b
 ```
 
 ### Build and check
@@ -68,7 +68,7 @@ cargo check
 cargo run
 ```
 
-By default, artui tries to use Ollama at `http://localhost:11434` with `qwen2.5-coder:7b`.
+By default, artui tries to use Ollama at `http://localhost:11434` with `gemma4:e2b`.
 
 ## Configuration
 
@@ -93,7 +93,7 @@ max_read_file_chars = 16000
 
 [providers.ollama]
 host = "http://localhost:11434"
-default_model = "qwen2.5-coder:7b"
+default_model = "gemma4:e2b"
 
 [providers.openai_compat]
 base_url = "https://api.openai.com/v1"

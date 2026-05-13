@@ -60,7 +60,7 @@ impl Default for OllamaConfig {
     fn default() -> Self {
         Self {
             host: "http://localhost:11434".to_owned(),
-            default_model: "qwen2.5-coder:7b".to_owned(),
+            default_model: "gemma4:e2b".to_owned(),
         }
     }
 }

@@ -783,7 +783,7 @@ max_read_file_chars = 16000
 
 [providers.ollama]
 host = "http://localhost:11434"
-default_model = "qwen2.5-coder:7b"
+default_model = "gemma4:e2b"
 
 [providers.openai_compat]
 base_url = "https://api.openai.com/v1"

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,20 @@ impl OllamaProvider {
 
     async fn send_event(tx: &mpsc::Sender<AppEvent>, event: ModelEvent) {
         let _ = tx.send(AppEvent::Model(event)).await;
+    }
+
+    async fn handle_stream_line(tx: &mpsc::Sender<AppEvent>, line: &str) -> Result<bool> {
+        let event: OllamaChatResponse =
+            serde_json::from_str(line).context("failed to parse Ollama stream event")?;
+        if let Some(message) = event.message {
+            Self::send_event(tx, ModelEvent::Token(message.content)).await;
+        }
+        if event.done {
+            Self::send_event(tx, ModelEvent::Done).await;
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     async fn stream_chat(&self, request: ModelRequest, tx: mpsc::Sender<AppEvent>) -> Result<()> {
@@ -56,28 +70,39 @@ impl OllamaProvider {
             .json(&body)
             .send()
             .await
-            .context("failed to connect to Ollama")?
-            .error_for_status()
-            .context("Ollama returned an error")?;
+            .context("failed to connect to Ollama")?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response
+                .text()
+                .await
+                .context("failed to read Ollama error response")?;
+            bail!("Ollama returned HTTP {status}: {body}");
+        }
 
         let mut stream = response.bytes_stream();
+        let mut buffer = Vec::new();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.context("failed to read Ollama response")?;
-            for line in String::from_utf8_lossy(&chunk).lines() {
-                if line.trim().is_empty() {
+            buffer.extend_from_slice(&chunk);
+
+            while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
+                let line = buffer.drain(..=newline).collect::<Vec<_>>();
+                let line = String::from_utf8_lossy(&line);
+                let line = line.trim();
+                if line.is_empty() {
                     continue;
                 }
-
-                let event: OllamaChatResponse =
-                    serde_json::from_str(line).context("failed to parse Ollama stream event")?;
-                if let Some(message) = event.message {
-                    Self::send_event(&tx, ModelEvent::Token(message.content)).await;
-                }
-                if event.done {
-                    Self::send_event(&tx, ModelEvent::Done).await;
+                if Self::handle_stream_line(&tx, line).await? {
                     return Ok(());
                 }
             }
+        }
+
+        let line = String::from_utf8_lossy(&buffer);
+        let line = line.trim();
+        if !line.is_empty() && Self::handle_stream_line(&tx, line).await? {
+            return Ok(());
         }
 
         Self::send_event(&tx, ModelEvent::Done).await;
