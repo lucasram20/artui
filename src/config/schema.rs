@@ -6,6 +6,7 @@ pub struct AppConfig {
     pub default_provider: String,
     pub agent: AgentConfig,
     pub providers: ProviderConfig,
+    pub ui: UiConfig,
 }
 
 impl Default for AppConfig {
@@ -14,8 +15,74 @@ impl Default for AppConfig {
             default_provider: "ollama".to_owned(),
             agent: AgentConfig::default(),
             providers: ProviderConfig::default(),
+            ui: UiConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct UiConfig {
+    pub thinking_phrases: Vec<String>,
+    pub reasoning_phrases: Vec<String>,
+    pub reasoning_model_patterns: Vec<String>,
+    pub spinner_frames: Vec<String>,
+    pub spinner_interval_ms: u64,
+    pub phrase_interval_ms: u64,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            thinking_phrases: default_thinking_phrases(),
+            reasoning_phrases: default_reasoning_phrases(),
+            reasoning_model_patterns: Vec::new(),
+            spinner_frames: default_spinner_frames(),
+            spinner_interval_ms: 120,
+            phrase_interval_ms: 1_800,
+        }
+    }
+}
+
+fn default_thinking_phrases() -> Vec<String> {
+    [
+        "Working",
+        "Reading",
+        "Mapping",
+        "Planning",
+        "Checking",
+        "Composing",
+        "Stitching",
+        "Polishing",
+        "Untangling",
+        "Brewing",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn default_reasoning_phrases() -> Vec<String> {
+    [
+        "Thinking",
+        "Reasoning",
+        "Weighing options",
+        "Tracing logic",
+        "Checking assumptions",
+        "Connecting clues",
+        "Exploring paths",
+        "Refining plan",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn default_spinner_frames() -> Vec<String> {
+    ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]

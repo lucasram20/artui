@@ -1,4 +1,8 @@
-use std::{process::Command, sync::Arc};
+use std::{
+    process::Command,
+    sync::Arc,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     config::AppConfig,
@@ -122,6 +126,9 @@ pub const SLASH_COMMANDS: [SlashCommand; 7] = [
     },
 ];
 
+const FALLBACK_THINKING_PHRASE: &str = "Working";
+const FALLBACK_SPINNER_FRAME: &str = "•";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusLineItem {
     Model,
@@ -200,11 +207,17 @@ pub struct App {
     pub statusline_enabled: [bool; StatusLineItem::ALL.len()],
     pub git_branch_label: String,
     pub git_status_label: String,
+    pub thinking_frame: usize,
+    pub thinking_phrase: usize,
+    pub thinking_started_at: Option<Instant>,
+    pub last_thinking_frame_at: Instant,
+    pub last_thinking_phrase_at: Instant,
 }
 
 impl App {
     pub fn new(config: AppConfig, provider: Arc<dyn LlmProvider>) -> Self {
         let model_options = available_model_options(&config);
+        let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
             config,
@@ -227,6 +240,11 @@ impl App {
             statusline_enabled: [true; StatusLineItem::ALL.len()],
             git_branch_label: git_branch().unwrap_or_else(|| "no-git".to_owned()),
             git_status_label: git_status_label().unwrap_or_else(|| "unknown".to_owned()),
+            thinking_frame: 0,
+            thinking_phrase: 0,
+            thinking_started_at: None,
+            last_thinking_frame_at: now,
+            last_thinking_phrase_at: now,
         }
     }
 
@@ -280,6 +298,7 @@ impl App {
         });
         self.mode = UiMode::Streaming;
         self.status = "Streaming response".to_owned();
+        self.start_thinking_animation();
 
         Some(ProviderRequest {
             provider: Arc::clone(&self.provider),
@@ -295,11 +314,13 @@ impl App {
             AppEvent::Model(ModelEvent::Done) => {
                 self.mode = UiMode::Input;
                 self.status = format!("Provider: {}", self.config.default_provider);
+                self.stop_thinking_animation();
             }
             AppEvent::Model(ModelEvent::Error(error)) => {
                 self.append_assistant_token(&format!("\nError: {error}"));
                 self.mode = UiMode::Input;
                 self.status = "Provider error".to_owned();
+                self.stop_thinking_animation();
             }
         }
     }
@@ -481,6 +502,60 @@ impl App {
         self.status = "Transcript cleared".to_owned();
     }
 
+    pub fn advance_thinking_animation(&mut self) {
+        if self.mode != UiMode::Streaming {
+            return;
+        }
+
+        let now = Instant::now();
+        if now.duration_since(self.last_thinking_frame_at) >= self.spinner_interval() {
+            self.thinking_frame =
+                next_wrapped_index(self.thinking_frame, self.spinner_frame_count());
+            self.last_thinking_frame_at = now;
+        }
+
+        if now.duration_since(self.last_thinking_phrase_at) >= self.phrase_interval() {
+            self.thinking_phrase =
+                next_wrapped_index(self.thinking_phrase, self.thinking_phrase_count());
+            self.last_thinking_phrase_at = now;
+        }
+    }
+
+    pub fn thinking_frame(&self) -> &str {
+        self.config
+            .ui
+            .spinner_frames
+            .get(self.thinking_frame)
+            .map(String::as_str)
+            .filter(|frame| !frame.is_empty())
+            .unwrap_or(FALLBACK_SPINNER_FRAME)
+    }
+
+    pub fn thinking_phrase(&self) -> &str {
+        if self.active_model_has_reasoning() {
+            return self
+                .config
+                .ui
+                .reasoning_phrases
+                .get(self.thinking_phrase)
+                .map(String::as_str)
+                .filter(|phrase| !phrase.is_empty())
+                .unwrap_or(FALLBACK_THINKING_PHRASE);
+        }
+
+        self.config
+            .ui
+            .thinking_phrases
+            .get(self.thinking_phrase)
+            .map(String::as_str)
+            .filter(|phrase| !phrase.is_empty())
+            .unwrap_or(FALLBACK_THINKING_PHRASE)
+    }
+
+    pub fn thinking_elapsed(&self) -> Option<Duration> {
+        self.thinking_started_at.map(|started| started.elapsed())
+    }
+
     pub fn scroll_chat_up(&mut self) {
         if self.can_scroll_chat() {
             self.chat_scroll = self.chat_scroll.saturating_add(CHAT_SCROLL_STEP);
@@ -625,6 +700,79 @@ impl App {
         {
             message.content.push_str(token);
         }
+    }
+
+    fn start_thinking_animation(&mut self) {
+        let now = Instant::now();
+        self.thinking_frame = 0;
+        self.thinking_phrase = self.random_thinking_phrase_index();
+        self.thinking_started_at = Some(now);
+        self.last_thinking_frame_at = now;
+        self.last_thinking_phrase_at = now;
+    }
+
+    fn stop_thinking_animation(&mut self) {
+        self.thinking_started_at = None;
+    }
+
+    fn random_thinking_phrase_index(&self) -> usize {
+        let count = self.thinking_phrase_count();
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos() as usize)
+            .unwrap_or(0);
+        (seed ^ self.transcript.len() ^ self.active_model().len()) % count
+    }
+
+    fn spinner_interval(&self) -> Duration {
+        Duration::from_millis(self.config.ui.spinner_interval_ms.max(1))
+    }
+
+    fn phrase_interval(&self) -> Duration {
+        Duration::from_millis(self.config.ui.phrase_interval_ms.max(1))
+    }
+
+    fn spinner_frame_count(&self) -> usize {
+        self.config
+            .ui
+            .spinner_frames
+            .iter()
+            .filter(|frame| !frame.is_empty())
+            .count()
+            .max(1)
+    }
+
+    fn thinking_phrase_count(&self) -> usize {
+        let phrases = if self.active_model_has_reasoning() {
+            &self.config.ui.reasoning_phrases
+        } else {
+            &self.config.ui.thinking_phrases
+        };
+
+        phrases
+            .iter()
+            .filter(|phrase| !phrase.is_empty())
+            .count()
+            .max(1)
+    }
+
+    fn active_model_has_reasoning(&self) -> bool {
+        let active_model = self.active_model().to_ascii_lowercase();
+        self.config
+            .ui
+            .reasoning_model_patterns
+            .iter()
+            .map(|pattern| pattern.trim().to_ascii_lowercase())
+            .filter(|pattern| !pattern.is_empty())
+            .any(|pattern| active_model.contains(&pattern))
+    }
+}
+
+fn next_wrapped_index(index: usize, len: usize) -> usize {
+    if len <= 1 {
+        0
+    } else {
+        (index + 1) % len
     }
 }
 

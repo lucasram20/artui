@@ -2,6 +2,11 @@
 name = "artui"
 version = "0.0.1"
 edition = "2021"
+default-run = "artui"
+
+[[bin]]
+name = "art"
+path = "src/bin/art.rs"
 
 [dependencies]
 anyhow = "1"

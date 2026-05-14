@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, Role},
+    app::{App, Role, UiMode},
     ui::layout::theme,
 };
 
@@ -22,13 +22,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
         };
 
         if message.content.is_empty() {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("{marker} "),
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("thinking...", Style::default().fg(palette.subtle)),
-            ]));
+            lines.push(thinking_line(app, marker, color));
         } else {
             for (index, segment) in display_segments(message.content.as_str())
                 .into_iter()
@@ -58,6 +52,38 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
+}
+
+fn thinking_line(app: &App, marker: &str, marker_color: ratatui::style::Color) -> Line<'static> {
+    let palette = theme::palette(app.theme);
+    let elapsed = app
+        .thinking_elapsed()
+        .map(|duration| format!(" ({}s • esc to interrupt)", duration.as_secs()))
+        .unwrap_or_default();
+    let phrase = if app.mode == UiMode::Streaming {
+        format!("{}{}", app.thinking_phrase(), elapsed)
+    } else {
+        "waiting".to_owned()
+    };
+
+    Line::from(vec![
+        Span::styled(
+            format!("{marker} "),
+            Style::default()
+                .fg(marker_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{} ", app.thinking_frame()),
+            Style::default().fg(palette.accent),
+        ),
+        Span::styled(
+            phrase,
+            Style::default()
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ])
 }
 
 fn transcript_scroll_offset(app: &App, area: Rect) -> u16 {

@@ -12,10 +12,24 @@ artui is designed around explicit tool use, bounded output, approvals, diffs, an
 
 ## Quick Start
 
-Install Rust, then run:
+Install Rust, then install the local command:
 
 ```bash
-cargo run
+cargo install --path .
+```
+
+Then start the TUI with either command:
+
+```bash
+art
+# or
+artui
+```
+
+For development without installing, run the explicit binary target:
+
+```bash
+cargo run --bin artui
 ```
 
 Optional local model setup:

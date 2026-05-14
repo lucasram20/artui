@@ -6,6 +6,10 @@ All notable changes to artui will be documented in this file.
 
 ### Added
 
+- Added OAuth provider support todos under `docs/todos/` for future OpenAI account and GitHub Copilot subscription provider work.
+- Added a configurable streaming/loading animation with spinner frames and rotating catch phrases for empty assistant responses.
+- Added configurable reasoning-only loading phrases that are used only when the active model matches user-defined reasoning model patterns.
+- Added the short `art` binary alongside `artui` so installed builds can be launched without `cargo run`.
 - Added chat transcript scrolling with ↑/↓, PageUp/PageDown, and Ctrl+U/Ctrl+D while keeping the composer/statusline fixed.
 - Added a slash-command suggestion list below the chat input when typing `/`.
 - Added basic built-in slash commands for `/help`, `/theme`, `/model`, `/statusline`, `/clear`, `/quit`, and `/exit`.
