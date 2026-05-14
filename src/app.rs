@@ -1,8 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
-
-use image::{DynamicImage, RgbaImage};
-use ratatui::layout::Size;
-use ratatui_image::{picker::Picker, protocol::Protocol, Resize};
+use std::{process::Command, sync::Arc};
 
 use crate::{
     config::AppConfig,
@@ -14,6 +10,56 @@ pub enum UiMode {
     Normal,
     Input,
     Streaming,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeId {
+    MonokaiBlue,
+    TokyoNight,
+    CatppuccinMocha,
+    Gruvbox,
+    Nord,
+    Dracula,
+}
+
+impl ThemeId {
+    pub const ALL: [Self; 6] = [
+        Self::MonokaiBlue,
+        Self::TokyoNight,
+        Self::CatppuccinMocha,
+        Self::Gruvbox,
+        Self::Nord,
+        Self::Dracula,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::MonokaiBlue => "Monokai Blue",
+            Self::TokyoNight => "Tokyo Night",
+            Self::CatppuccinMocha => "Catppuccin Mocha",
+            Self::Gruvbox => "Gruvbox",
+            Self::Nord => "Nord",
+            Self::Dracula => "Dracula",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::MonokaiBlue => "charcoal, tan text, warm blue accents",
+            Self::TokyoNight => "deep navy with cool blue highlights",
+            Self::CatppuccinMocha => "soft mocha with lavender and peach",
+            Self::Gruvbox => "warm retro brown with gold accents",
+            Self::Nord => "arctic blue-gray with frost accents",
+            Self::Dracula => "dark purple with vivid pink and cyan",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|theme| *theme == self)
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +98,12 @@ pub struct App {
     pub input: String,
     pub status: String,
     pub should_quit: bool,
-    pub logo: Option<Protocol>,
+    pub logo: &'static str,
+    pub theme: ThemeId,
+    pub theme_picker_open: bool,
+    pub theme_cursor: usize,
+    pub git_branch_label: String,
+    pub git_status_label: String,
 }
 
 impl App {
@@ -65,12 +116,17 @@ impl App {
             transcript: Vec::new(),
             input: String::new(),
             should_quit: false,
-            logo: build_logo_protocol(),
+            logo: LOGO,
+            theme: ThemeId::MonokaiBlue,
+            theme_picker_open: false,
+            theme_cursor: ThemeId::MonokaiBlue.index(),
+            git_branch_label: git_branch().unwrap_or_else(|| "no-git".to_owned()),
+            git_status_label: git_status_label().unwrap_or_else(|| "unknown".to_owned()),
         }
     }
 
     pub fn edit_input(&mut self, action: InputAction) {
-        if self.mode == UiMode::Streaming {
+        if self.mode == UiMode::Streaming || self.theme_picker_open {
             return;
         }
 
@@ -90,6 +146,11 @@ impl App {
 
         let content = self.input.trim().to_owned();
         if content.is_empty() {
+            return None;
+        }
+        if content == "/theme" {
+            self.input.clear();
+            self.open_theme_picker();
             return None;
         }
 
@@ -129,10 +190,48 @@ impl App {
     }
 
     pub fn cancel_input(&mut self) {
+        if self.theme_picker_open {
+            self.close_theme_picker();
+            return;
+        }
         if self.mode != UiMode::Streaming {
             self.input.clear();
             self.mode = UiMode::Normal;
         }
+    }
+
+    pub fn open_theme_picker(&mut self) {
+        self.theme_picker_open = true;
+        self.theme_cursor = self.theme.index();
+        self.mode = UiMode::Normal;
+        self.status = "Select a theme".to_owned();
+    }
+
+    pub fn next_theme(&mut self) {
+        if self.theme_picker_open {
+            self.theme_cursor = (self.theme_cursor + 1) % ThemeId::ALL.len();
+        }
+    }
+
+    pub fn previous_theme(&mut self) {
+        if self.theme_picker_open {
+            self.theme_cursor = (self.theme_cursor + ThemeId::ALL.len() - 1) % ThemeId::ALL.len();
+        }
+    }
+
+    pub fn select_theme(&mut self) {
+        if self.theme_picker_open {
+            self.theme = ThemeId::ALL[self.theme_cursor];
+            self.theme_picker_open = false;
+            self.mode = UiMode::Input;
+            self.status = format!("Theme: {}", self.theme.name());
+        }
+    }
+
+    fn close_theme_picker(&mut self) {
+        self.theme_picker_open = false;
+        self.mode = UiMode::Input;
+        self.status = format!("Provider: {}", self.config.default_provider);
     }
 
     pub fn clear_transcript(&mut self) {
@@ -157,132 +256,32 @@ impl From<ModelEvent> for AppEvent {
     }
 }
 
-fn build_logo_protocol() -> Option<Protocol> {
-    let image = image::load_from_memory(include_bytes!("assets/artui.png")).ok()?;
-    let image = crop_logo(image)?;
-    let picker = Picker::halfblocks();
-    picker
-        .new_protocol(image, Size::new(18, 6), Resize::Fit(None))
-        .ok()
+fn git_branch() -> Option<String> {
+    run_git(["branch", "--show-current"]).and_then(|branch| {
+        if branch.is_empty() {
+            run_git(["rev-parse", "--short", "HEAD"])
+        } else {
+            Some(branch)
+        }
+    })
 }
 
-fn crop_logo(image: DynamicImage) -> Option<DynamicImage> {
-    let rgba = image.to_rgba8();
-    let (width, height) = rgba.dimensions();
-    let mut min_x = width;
-    let mut min_y = height;
-    let mut max_x = 0;
-    let mut max_y = 0;
-    let mut found = false;
-
-    for y in 0..height {
-        for x in 0..width {
-            let [red, green, blue, alpha] = rgba.get_pixel(x, y).0;
-            if alpha > 12 && is_logo_pixel(red, green, blue) {
-                min_x = min_x.min(x);
-                min_y = min_y.min(y);
-                max_x = max_x.max(x);
-                max_y = max_y.max(y);
-                found = true;
-            }
+fn git_status_label() -> Option<String> {
+    run_git(["status", "--porcelain"]).map(|status| {
+        if status.is_empty() {
+            "working tree clean".to_owned()
+        } else {
+            format!("{} changed", status.lines().count())
         }
-    }
+    })
+}
 
-    if !found {
+fn run_git<const N: usize>(args: [&str; N]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    if !output.status.success() {
         return None;
     }
-
-    let padding = 18;
-    min_x = min_x.saturating_sub(padding);
-    min_y = min_y.saturating_sub(padding);
-    max_x = (max_x + padding).min(width.saturating_sub(1));
-    max_y = (max_y + padding).min(height.saturating_sub(1));
-
-    let mut cropped = image::imageops::crop_imm(
-        &rgba,
-        min_x,
-        min_y,
-        max_x.saturating_sub(min_x) + 1,
-        max_y.saturating_sub(min_y) + 1,
-    )
-    .to_image();
-    remove_edge_background(&mut cropped);
-    tint_logo(&mut cropped);
-    Some(DynamicImage::ImageRgba8(cropped))
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-fn is_logo_pixel(red: u8, green: u8, blue: u8) -> bool {
-    let blue_mark = blue > red.saturating_add(24) && blue > green.saturating_add(6);
-    let dark_screen = red < 70 && green < 85 && blue < 115;
-    blue_mark || dark_screen
-}
-
-fn remove_edge_background(image: &mut RgbaImage) {
-    let (width, height) = image.dimensions();
-    let mut visited = vec![false; width.saturating_mul(height) as usize];
-    let mut queue = VecDeque::new();
-
-    for x in 0..width {
-        queue.push_back((x, 0));
-        queue.push_back((x, height.saturating_sub(1)));
-    }
-    for y in 0..height {
-        queue.push_back((0, y));
-        queue.push_back((width.saturating_sub(1), y));
-    }
-
-    while let Some((x, y)) = queue.pop_front() {
-        let index = (y * width + x) as usize;
-        if visited[index] {
-            continue;
-        }
-        visited[index] = true;
-
-        let [red, green, blue, alpha] = image.get_pixel(x, y).0;
-        if alpha > 12 && !is_background_pixel(red, green, blue) {
-            continue;
-        }
-
-        image.get_pixel_mut(x, y).0[3] = 0;
-        if x > 0 {
-            queue.push_back((x - 1, y));
-        }
-        if x + 1 < width {
-            queue.push_back((x + 1, y));
-        }
-        if y > 0 {
-            queue.push_back((x, y - 1));
-        }
-        if y + 1 < height {
-            queue.push_back((x, y + 1));
-        }
-    }
-}
-
-fn is_background_pixel(red: u8, green: u8, blue: u8) -> bool {
-    let bright = red > 210 && green > 210 && blue > 210;
-    let neutral = red.abs_diff(green) < 18 && green.abs_diff(blue) < 18 && red.abs_diff(blue) < 18;
-    bright && neutral
-}
-
-fn tint_logo(image: &mut RgbaImage) {
-    for pixel in image.pixels_mut() {
-        let [red, green, blue, alpha] = pixel.0;
-        if alpha == 0 {
-            continue;
-        }
-
-        let luminance = (u16::from(red) * 30 + u16::from(green) * 59 + u16::from(blue) * 11) / 100;
-        let strength = 72 + luminance.min(183);
-        pixel.0 = [
-            scale_channel(253, strength),
-            scale_channel(151, strength),
-            scale_channel(31, strength),
-            alpha,
-        ];
-    }
-}
-
-fn scale_channel(channel: u8, strength: u16) -> u8 {
-    ((u16::from(channel) * strength) / 255).min(255) as u8
-}
+const LOGO: &str = "┌────────┐\n│  >_  ●●│\n└────────┘";

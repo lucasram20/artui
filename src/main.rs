@@ -87,7 +87,14 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => app.should_quit = true,
         (KeyModifiers::CONTROL, KeyCode::Char('l')) => app.clear_transcript(),
         (_, KeyCode::Esc) => app.cancel_input(),
-        (_, KeyCode::Char('q')) if app.mode == UiMode::Normal => app.should_quit = true,
+        (_, KeyCode::Up) => app.previous_theme(),
+        (_, KeyCode::Down) => app.next_theme(),
+        (_, KeyCode::Char('k')) if app.theme_picker_open => app.previous_theme(),
+        (_, KeyCode::Char('j')) if app.theme_picker_open => app.next_theme(),
+        (_, KeyCode::Char('q')) if app.mode == UiMode::Normal && !app.theme_picker_open => {
+            app.should_quit = true
+        }
+        (_, KeyCode::Enter) if app.theme_picker_open => app.select_theme(),
         (_, KeyCode::Enter) => {
             if let Some(request) = app.submit_input() {
                 tokio::spawn(async move {

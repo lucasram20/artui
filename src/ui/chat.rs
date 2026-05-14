@@ -12,12 +12,13 @@ use crate::{
 };
 
 pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let palette = theme::palette(app.theme);
     let mut lines = Vec::new();
 
     for message in &app.transcript {
         let (marker, color) = match message.role {
-            Role::User => ("›", theme::ACCENT),
-            Role::Assistant => ("•", theme::GREEN),
+            Role::User => ("›", palette.accent),
+            Role::Assistant => ("•", palette.green),
         };
 
         let label = Span::styled(
@@ -26,17 +27,17 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
         );
 
         let content = if message.content.is_empty() {
-            Span::styled("thinking...", Style::default().fg(theme::SUBTLE))
+            Span::styled("thinking...", Style::default().fg(palette.subtle))
         } else {
-            Span::styled(message.content.as_str(), Style::default().fg(theme::TEXT))
+            Span::styled(message.content.as_str(), Style::default().fg(palette.text))
         };
 
-        lines.push(Line::from(vec![label, content]).style(Style::default().fg(theme::TEXT)));
+        lines.push(Line::from(vec![label, content]).style(Style::default().fg(palette.text)));
         lines.push(Line::from(""));
     }
 
     let paragraph = Paragraph::new(lines)
-        .style(Style::default().fg(theme::TEXT).bg(theme::BG))
+        .style(Style::default().fg(palette.text).bg(palette.bg))
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
 }
