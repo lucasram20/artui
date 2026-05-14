@@ -1,6 +1,7 @@
 mod chat;
 mod layout;
 mod popups;
+#[allow(dead_code)]
 mod tools;
 
 use ratatui::Frame;
