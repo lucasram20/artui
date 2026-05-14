@@ -8,11 +8,12 @@ use ratatui::{
 
 use crate::{
     app::{App, StatusLineItem, ThemeId},
+    providers::registry::{AuthRequirement, PROVIDERS},
     ui::layout::theme,
 };
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
-    if app.theme_picker_open || app.model_picker_open {
+    if app.theme_picker_open || app.model_picker_open || app.login_picker_open {
         draw_modal_backdrop(frame, app);
     }
     if app.theme_picker_open {
@@ -20,6 +21,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     if app.model_picker_open {
         draw_model_picker(frame, app);
+    }
+    if app.login_picker_open {
+        draw_login_picker(frame, app);
     }
     if app.statusline_open {
         draw_statusline_picker(frame, app);
@@ -244,16 +248,36 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
 
     let items = if app.model_options.is_empty() {
         vec![ListItem::new(Line::from(Span::styled(
-            "No models found. Use /model <name> to set one manually.",
+            "No models found. Connected account providers may still be refreshing.",
             Style::default().fg(palette.muted),
         )))]
     } else {
-        app.model_options
+        let visible_rows = rows[1].height as usize;
+        let start = app
+            .model_scroll
+            .min(app.model_options.len().saturating_sub(visible_rows));
+        let end = start
+            .saturating_add(visible_rows)
+            .min(app.model_options.len());
+        app.model_options[start..end]
             .iter()
             .enumerate()
-            .map(|(index, model)| {
+            .map(|(index, option)| {
+                let index = start + index;
                 let is_selected = index == app.model_cursor;
-                let is_active = model == app.active_model();
+                let is_active = option.provider_id == app.config.default_provider
+                    && option.model.as_deref() == Some(app.active_model());
+                if option.model.is_none() {
+                    return ListItem::new(Line::from(vec![
+                        Span::styled("  ", Style::default().fg(palette.subtle)),
+                        Span::styled(
+                            option.provider_name.clone(),
+                            Style::default()
+                                .fg(palette.accent)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
                 let item_style = if is_selected {
                     Style::default()
                         .fg(palette.accent)
@@ -269,7 +293,8 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
                 ListItem::new(Line::from(vec![
                     Span::styled(selector_pointer(is_selected), item_style),
                     Span::styled(selected_mark(is_active), item_style),
-                    Span::styled(model.clone(), item_style),
+                    Span::styled("  ", item_style),
+                    Span::styled(option.model.clone().unwrap_or_default(), item_style),
                 ]))
             })
             .collect::<Vec<_>>()
@@ -277,6 +302,95 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(List::new(items), rows[1]);
 
     draw_selector_help(frame, app, rows[2], "switch");
+}
+
+fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
+    let item_count = PROVIDERS.len() as u16;
+    let area = selector_area(frame.area(), 82, item_count.saturating_add(8));
+    render_popup_surface(frame, app, area);
+
+    let palette = theme::palette(app.theme);
+    let block = selector_block(app, "Provider Login", "/login");
+    let inner = block.inner(area).inner(Margin {
+        vertical: 1,
+        horizontal: 2,
+    });
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(item_count),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+
+    let auth_path = app
+        .auth_store
+        .as_ref()
+        .map(|store| store.path().display().to_string())
+        .unwrap_or_else(|| "unavailable".to_owned());
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                "Choose a provider to connect or inspect.",
+                Style::default().fg(palette.text),
+            )),
+            Line::from(vec![
+                Span::styled("Auth store ", Style::default().fg(palette.muted)),
+                Span::styled(auth_path, Style::default().fg(palette.subtle)),
+            ]),
+        ])
+        .style(Style::default().bg(palette.bg)),
+        rows[0],
+    );
+
+    let items = PROVIDERS
+        .iter()
+        .enumerate()
+        .map(|(index, provider)| {
+            let is_selected = index == app.login_cursor;
+            let is_connected = matches!(
+                provider.auth_requirement,
+                AuthRequirement::None | AuthRequirement::ApiKey
+            ) || app.provider_status_label(provider.id) == "connected";
+            let item_style = if is_selected {
+                Style::default()
+                    .fg(palette.accent)
+                    .bg(palette.rule)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_connected {
+                Style::default()
+                    .fg(palette.text)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            let description_style = if is_selected {
+                Style::default().fg(palette.text).bg(palette.rule)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(selector_pointer(is_selected), item_style),
+                Span::styled(selected_mark(is_connected), item_style),
+                Span::styled(format!("{:<16}", provider.display_name), item_style),
+                Span::styled(
+                    format!(
+                        "{} • {} • streaming {}",
+                        app.provider_status_label(provider.id),
+                        provider.auth_requirement.label(),
+                        if provider.streaming { "yes" } else { "not yet" }
+                    ),
+                    description_style,
+                ),
+            ]))
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(List::new(items), rows[1]);
+
+    draw_selector_help(frame, app, rows[2], "connect");
 }
 
 fn selector_block<'a>(app: &App, title: &'a str, command: &'a str) -> Block<'a> {

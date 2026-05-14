@@ -41,34 +41,41 @@ src/providers/
 
 ### Phase 1 — Auth foundation
 
-- [ ] Add an `AuthStore` abstraction with provider-scoped records.
-- [ ] Store credentials under the platform data/config directory, for example `~/.local/share/artui/auth.json` on Linux.
-- [ ] Create files with owner-only permissions on Unix.
-- [ ] Add config for auth storage path override for tests and advanced users.
-- [ ] Add `/login`, `/logout`, and `/providers` slash commands.
-- [ ] Add redacted provider status in the TUI, e.g. `connected`, `expired`, `not connected`.
-- [ ] Add tests for auth-file serialization, missing files, corrupt files, and secret redaction.
+- [x] Add an `AuthStore` abstraction with provider-scoped records.
+- [x] Store credentials under the platform data/config directory, for example `~/.local/share/artui/auth.json` on Linux.
+- [x] Create files with owner-only permissions on Unix.
+- [x] Add config for auth storage path override for tests and advanced users.
+- [x] Add `/login`, `/logout`, and `/providers` slash commands.
+- [x] Add redacted provider status in the TUI, e.g. `connected`, `expired`, `not connected`.
+- [x] Add tests for auth-file serialization, missing files, corrupt files, and secret redaction.
 
 ### Phase 2 — Provider registry
 
-- [ ] Introduce a provider registry that can merge Ollama, API-key providers, and account-backed providers.
-- [ ] Extend `/model` so provider/model pairs are displayed without hardcoding local machines.
-- [ ] Add provider metadata: `id`, display name, auth requirement, model list strategy, and streaming capability.
-- [ ] Keep existing `default_provider` and `default_model` config compatible.
+- [x] Introduce a provider registry that can merge Ollama, API-key providers, and account-backed providers.
+- [x] Extend `/model` so provider/model pairs are displayed without hardcoding local machines.
+- [x] Add provider metadata: `id`, display name, auth requirement, model list strategy, and streaming capability.
+- [x] Keep existing `default_provider` and `default_model` config compatible.
 
 ### Phase 3 — GitHub Copilot provider
 
-- [ ] Prefer official GitHub OAuth / Copilot SDK guidance for user authentication.
-- [ ] Support token discovery from environment variables only as explicit fallback, e.g. `GITHUB_TOKEN` / `GH_TOKEN` when documented.
-- [ ] If using a Copilot-token exchange compatibility path, make the token endpoint and API base URL configurable.
+- [x] Prefer official GitHub OAuth / Copilot SDK guidance for user authentication.
+- [x] Support token discovery from environment variables only as explicit fallback, e.g. `GITHUB_TOKEN` / `GH_TOKEN` when documented.
+- [x] If using a Copilot-token exchange compatibility path, make the token endpoint and API base URL configurable.
 - [ ] Refresh Copilot access tokens before expiry and retry once on `401`.
-- [ ] Fetch or configure available Copilot models dynamically when possible; avoid freezing a long hardcoded list in core UI.
-- [ ] Add tests with mocked token exchange, model listing, streaming, expiry, and refresh failure.
+- [x] Fetch or configure available Copilot models dynamically when possible; avoid freezing a long hardcoded list in core UI.
+- [x] Route Copilot models by discovered endpoint metadata, including OpenAI-compatible chat, Responses API, and Anthropic-compatible messages paths.
+- [x] Filter Copilot model picker results using backend picker flags and disabled policy state.
+- [x] Add unit coverage for Copilot stream parsing, API routing heuristics, model filtering, and endpoint validation.
+- [ ] Add integration tests with mocked token exchange, model listing, streaming, expiry, and refresh failure.
+- [ ] Persist token exchange expiry metadata and avoid exchanging a GitHub token on every Copilot request when a session token is still valid.
+- [ ] Retry Copilot requests once with a fresh session token after `401` or an expired Copilot session token response.
+- [ ] Surface model-specific capability hints in `/model`, such as messages/responses routing, context window, vision, and reasoning support.
+- [ ] Add a configurable Copilot request timeout for model discovery and streaming setup.
 
 ### Phase 4 — OpenAI account-backed provider
 
-- [ ] First keep official OpenAI API-key support as the stable path.
-- [ ] Only add ChatGPT subscription OAuth if there is an official documented flow or permitted integration path for third-party apps.
+- [x] First keep official OpenAI API-key support as the stable path.
+- [x] Only add ChatGPT subscription OAuth if there is an official documented flow or permitted integration path for third-party apps.
 - [ ] If an account-backed flow is added, keep token storage, refresh, and logout in the shared auth layer.
 - [ ] Do not reuse or scrape another tool's private auth tokens.
 - [ ] Add clear UX copy distinguishing API billing from ChatGPT subscription/account usage.
@@ -76,18 +83,21 @@ src/providers/
 ### Phase 5 — UX polish
 
 - [ ] Add `/login <provider>` and `/logout <provider>` command completions.
-- [ ] Show connected providers in `/providers` using the same centered popup style as `/model` and `/theme`.
-- [ ] Add actionable error messages for expired auth, missing browser, denied OAuth, and unsupported subscription provider.
+- [x] Show connected providers in `/login` using the same centered popup style as `/model` and `/theme`.
+- [x] Add actionable error messages for expired auth, missing browser, denied OAuth, and unsupported subscription provider.
 - [ ] Add docs for setup, logout, and how to delete local auth state manually.
+- [ ] Show Copilot entitlement or model-unavailable errors with a direct hint to refresh `/model` and check GitHub Copilot plan settings.
+- [ ] Add a manual `/model refresh` command for account-backed providers.
+- [ ] Add statusline copy that distinguishes API-key providers from account-backed subscription providers.
 
 ## Security checklist
 
-- [ ] Auth files are ignored by git and never logged.
-- [ ] Tokens are redacted from errors, debug logs, and panic output.
-- [ ] Logout removes provider tokens and cached derived tokens.
-- [ ] Refresh-token writes are atomic to avoid corrupting auth state.
-- [ ] Tests verify permissions on Unix where possible.
-- [ ] Provider endpoints are validated and not silently redirected to untrusted hosts.
+- [x] Auth files are ignored by git and never logged.
+- [x] Tokens are redacted from errors, debug logs, and panic output.
+- [x] Logout removes provider tokens and cached derived tokens.
+- [x] Refresh-token writes are atomic to avoid corrupting auth state.
+- [x] Tests verify permissions on Unix where possible.
+- [x] Provider endpoints are validated and not silently redirected to untrusted hosts.
 
 ## References
 

@@ -1,9 +1,12 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub default_provider: String,
+    pub auth_storage_path: Option<PathBuf>,
     pub agent: AgentConfig,
     pub providers: ProviderConfig,
     pub ui: UiConfig,
@@ -13,6 +16,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             default_provider: "ollama".to_owned(),
+            auth_storage_path: None,
             agent: AgentConfig::default(),
             providers: ProviderConfig::default(),
             ui: UiConfig::default(),
@@ -114,6 +118,8 @@ impl Default for AgentConfig {
 pub struct ProviderConfig {
     pub ollama: OllamaConfig,
     pub openai_compat: OpenAiCompatConfig,
+    pub openai_account: OpenAiAccountConfig,
+    pub copilot: CopilotConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -146,6 +152,53 @@ impl Default for OpenAiCompatConfig {
             base_url: "https://api.openai.com/v1".to_owned(),
             api_key_env: "OPENAI_API_KEY".to_owned(),
             default_model: "gpt-4o-mini".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct OpenAiAccountConfig {
+    pub base_url: String,
+    pub default_model: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct CopilotConfig {
+    pub api_base_url: String,
+    pub token_url: String,
+    pub models_url: String,
+    pub models: Vec<String>,
+    pub integration_id: String,
+    pub editor_version: String,
+    pub editor_plugin_version: String,
+    pub github_oauth_client_id: String,
+    pub github_device_code_url: String,
+    pub github_oauth_token_url: String,
+    pub github_oauth_scope: String,
+    pub github_login_timeout_secs: u64,
+    pub github_token_env: Vec<String>,
+    pub default_model: String,
+}
+
+impl Default for CopilotConfig {
+    fn default() -> Self {
+        Self {
+            api_base_url: "https://api.githubcopilot.com".to_owned(),
+            token_url: "https://api.github.com/copilot_internal/v2/token".to_owned(),
+            models_url: "https://api.githubcopilot.com/models".to_owned(),
+            models: Vec::new(),
+            integration_id: "vscode-chat".to_owned(),
+            editor_version: "artui".to_owned(),
+            editor_plugin_version: "artui".to_owned(),
+            github_oauth_client_id: String::new(),
+            github_device_code_url: "https://github.com/login/device/code".to_owned(),
+            github_oauth_token_url: "https://github.com/login/oauth/access_token".to_owned(),
+            github_oauth_scope: "read:user".to_owned(),
+            github_login_timeout_secs: 900,
+            github_token_env: vec!["GITHUB_TOKEN".to_owned(), "GH_TOKEN".to_owned()],
+            default_model: String::new(),
         }
     }
 }

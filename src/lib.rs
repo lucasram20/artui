@@ -1,4 +1,5 @@
 pub mod app;
+pub mod auth;
 pub mod config;
 pub mod providers;
 pub mod ui;
@@ -7,7 +8,7 @@ pub mod util;
 use std::{io, panic, time::Duration};
 
 use anyhow::Result;
-use app::{App, AppEvent, InputAction, UiMode};
+use app::{App, AppEvent, AppRequest, InputAction, UiMode};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
@@ -92,6 +93,15 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Char('k')) if app.model_picker_open => app.previous_model(),
         (_, KeyCode::Char('j')) if app.model_picker_open => app.next_model(),
         (_, KeyCode::Enter) if app.model_picker_open => app.select_model(),
+        (_, KeyCode::Up) if app.login_picker_open => app.previous_login_provider(),
+        (_, KeyCode::Down) if app.login_picker_open => app.next_login_provider(),
+        (_, KeyCode::Char('k')) if app.login_picker_open => app.previous_login_provider(),
+        (_, KeyCode::Char('j')) if app.login_picker_open => app.next_login_provider(),
+        (_, KeyCode::Enter) if app.login_picker_open => {
+            if let Some(request) = app.select_login_provider() {
+                spawn_app_request(request, event_tx);
+            }
+        }
         (_, KeyCode::Up) if app.statusline_open => app.previous_statusline_item(),
         (_, KeyCode::Down) if app.statusline_open => app.next_statusline_item(),
         (_, KeyCode::Char('k')) if app.statusline_open => app.previous_statusline_item(),
@@ -116,6 +126,7 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
             if app.mode == UiMode::Normal
                 && !app.theme_picker_open
                 && !app.model_picker_open
+                && !app.login_picker_open
                 && !app.statusline_open =>
         {
             app.should_quit = true
@@ -124,26 +135,53 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Tab) => app.complete_slash_command(),
         (_, KeyCode::Enter) if app.has_slash_command_matches() => {
             if let Some(request) = app.submit_slash_command_selection() {
-                tokio::spawn(async move {
-                    request
-                        .provider
-                        .stream_turn(request.request, event_tx)
-                        .await;
-                });
+                spawn_app_request(request, event_tx);
             }
         }
         (_, KeyCode::Enter) => {
             if let Some(request) = app.submit_input() {
-                tokio::spawn(async move {
-                    request
-                        .provider
-                        .stream_turn(request.request, event_tx)
-                        .await;
-                });
+                spawn_app_request(request, event_tx);
             }
         }
         (_, KeyCode::Backspace) => app.edit_input(InputAction::Backspace),
         (_, KeyCode::Char(ch)) => app.edit_input(InputAction::Insert(ch)),
         _ => {}
     }
+}
+
+fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
+    tokio::spawn(async move {
+        match request {
+            AppRequest::Provider(request) => {
+                request
+                    .provider
+                    .stream_turn(request.request, event_tx)
+                    .await;
+            }
+            AppRequest::GitHubDeviceLogin {
+                config,
+                copilot_config,
+                store,
+            } => {
+                crate::auth::run_github_device_login(config, *copilot_config, store, event_tx)
+                    .await;
+            }
+            AppRequest::RefreshCopilotModels { config, store } => {
+                let result = crate::providers::copilot::fetch_copilot_models(&config, &store)
+                    .await
+                    .map_err(|error| error.to_string());
+                if let Ok(models) = &result {
+                    if let Ok(Some(mut record)) = store.record("copilot") {
+                        if let Ok(serialized) = serde_json::to_string(models) {
+                            record.metadata.insert("models".to_owned(), serialized);
+                            let _ = store.upsert(record);
+                        }
+                    }
+                }
+                let _ = event_tx
+                    .send(AppEvent::Auth(crate::app::AuthEvent::CopilotModels(result)))
+                    .await;
+            }
+        }
+    });
 }

@@ -5,8 +5,13 @@ use std::{
 };
 
 use crate::{
-    config::AppConfig,
-    providers::{build_provider, LlmProvider, ModelEvent, ModelRequest},
+    auth::{AuthRecord, AuthStatus, AuthStore, GitHubDeviceFlowConfig},
+    config::{AppConfig, CopilotConfig},
+    providers::{
+        build_provider,
+        registry::{self, AuthRequirement, PROVIDERS},
+        LlmProvider, ModelEvent, ModelRequest,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +86,14 @@ pub struct Message {
 #[derive(Debug)]
 pub enum AppEvent {
     Model(ModelEvent),
+    Auth(AuthEvent),
+}
+
+#[derive(Debug)]
+pub enum AuthEvent {
+    Status(String),
+    Message(String),
+    CopilotModels(Result<Vec<String>, String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,7 +108,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 7] = [
+pub const SLASH_COMMANDS: [SlashCommand; 9] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -111,6 +124,14 @@ pub const SLASH_COMMANDS: [SlashCommand; 7] = [
     SlashCommand {
         name: "/statusline",
         description: "Configure statusline items",
+    },
+    SlashCommand {
+        name: "/login",
+        description: "Connect an account provider",
+    },
+    SlashCommand {
+        name: "/logout",
+        description: "Remove saved provider credentials",
     },
     SlashCommand {
         name: "/clear",
@@ -185,9 +206,57 @@ pub struct ProviderRequest {
     pub request: ModelRequest,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelOption {
+    pub provider_id: String,
+    pub provider_name: String,
+    pub model: Option<String>,
+}
+
+impl ModelOption {
+    fn header(provider_id: &str, provider_name: &str) -> Self {
+        Self {
+            provider_id: provider_id.to_owned(),
+            provider_name: provider_name.to_owned(),
+            model: None,
+        }
+    }
+
+    fn model(provider_id: &str, provider_name: &str, model: String) -> Self {
+        Self {
+            provider_id: provider_id.to_owned(),
+            provider_name: provider_name.to_owned(),
+            model: Some(model),
+        }
+    }
+
+    fn is_selectable(&self) -> bool {
+        self.model.is_some()
+    }
+}
+
+pub enum AppRequest {
+    Provider(ProviderRequest),
+    GitHubDeviceLogin {
+        config: GitHubDeviceFlowConfig,
+        copilot_config: Box<CopilotConfig>,
+        store: AuthStore,
+    },
+    RefreshCopilotModels {
+        config: Box<CopilotConfig>,
+        store: AuthStore,
+    },
+}
+
+enum SlashCommandResult {
+    NotCommand,
+    Handled(Option<AppRequest>),
+}
+
 pub struct App {
     pub config: AppConfig,
     pub provider: Arc<dyn LlmProvider>,
+    pub auth_store: Option<AuthStore>,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -201,7 +270,10 @@ pub struct App {
     pub theme_cursor: usize,
     pub model_picker_open: bool,
     pub model_cursor: usize,
-    pub model_options: Vec<String>,
+    pub model_scroll: usize,
+    pub model_options: Vec<ModelOption>,
+    pub login_picker_open: bool,
+    pub login_cursor: usize,
     pub statusline_open: bool,
     pub statusline_cursor: usize,
     pub statusline_enabled: [bool; StatusLineItem::ALL.len()],
@@ -216,12 +288,14 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig, provider: Arc<dyn LlmProvider>) -> Self {
-        let model_options = available_model_options(&config);
+        let auth_store = AuthStore::from_config(&config);
+        let model_options = available_model_options(&config, auth_store.as_ref());
         let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
             config,
             provider,
+            auth_store,
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -234,7 +308,10 @@ impl App {
             theme_cursor: ThemeId::MonokaiBlue.index(),
             model_picker_open: false,
             model_cursor: 0,
+            model_scroll: 0,
             model_options,
+            login_picker_open: false,
+            login_cursor: 0,
             statusline_open: false,
             statusline_cursor: 0,
             statusline_enabled: [true; StatusLineItem::ALL.len()],
@@ -252,6 +329,7 @@ impl App {
         if self.mode == UiMode::Streaming
             || self.theme_picker_open
             || self.model_picker_open
+            || self.login_picker_open
             || self.statusline_open
         {
             return;
@@ -270,7 +348,7 @@ impl App {
         }
     }
 
-    pub fn submit_input(&mut self) -> Option<ProviderRequest> {
+    pub fn submit_input(&mut self) -> Option<AppRequest> {
         if self.mode == UiMode::Streaming {
             return None;
         }
@@ -279,10 +357,10 @@ impl App {
         if content.is_empty() {
             return None;
         }
-        if self.run_slash_command(&content) {
+        if let SlashCommandResult::Handled(request) = self.run_slash_command(&content) {
             self.input.clear();
             self.slash_cursor = 0;
-            return None;
+            return request;
         }
 
         self.input.clear();
@@ -300,12 +378,12 @@ impl App {
         self.status = "Streaming response".to_owned();
         self.start_thinking_animation();
 
-        Some(ProviderRequest {
+        Some(AppRequest::Provider(ProviderRequest {
             provider: Arc::clone(&self.provider),
             request: ModelRequest {
                 messages: self.transcript.clone(),
             },
-        })
+        }))
     }
 
     pub fn handle_event(&mut self, event: AppEvent) {
@@ -316,6 +394,64 @@ impl App {
                 self.status = format!("Provider: {}", self.config.default_provider);
                 self.stop_thinking_animation();
             }
+            AppEvent::Auth(AuthEvent::Status(status)) => {
+                self.status = status;
+                self.mode = UiMode::Input;
+            }
+            AppEvent::Auth(AuthEvent::Message(message)) => {
+                self.transcript.push(Message {
+                    role: Role::Assistant,
+                    content: message,
+                });
+                self.mode = UiMode::Input;
+            }
+            AppEvent::Auth(AuthEvent::CopilotModels(result)) => match result {
+                Ok(models) => {
+                    if self.config.default_provider == "copilot"
+                        && !models.iter().any(|model| model == self.active_model())
+                    {
+                        if let Some(model) = models.first() {
+                            self.config.providers.copilot.default_model = model.clone();
+                            if let Ok(provider) = build_provider(&self.config) {
+                                self.provider = provider;
+                            }
+                        }
+                    }
+                    self.config.providers.copilot.models = models;
+                    if self.model_picker_open {
+                        self.model_options =
+                            available_model_options(&self.config, self.auth_store.as_ref());
+                        self.model_cursor = self
+                            .model_options
+                            .iter()
+                            .position(|option| {
+                                option.provider_id == "copilot" && option.is_selectable()
+                            })
+                            .or_else(|| first_selectable_model_index(&self.model_options))
+                            .unwrap_or(0);
+                        self.ensure_model_cursor_visible();
+                    }
+                    self.status = format!(
+                        "GitHub Copilot models refreshed: {}",
+                        self.config.providers.copilot.models.len()
+                    );
+                    self.mode = if self.model_picker_open {
+                        UiMode::Normal
+                    } else {
+                        UiMode::Input
+                    };
+                }
+                Err(error) => {
+                    let message = format!("Copilot model refresh failed: {error}");
+                    self.status = message.clone();
+                    self.push_login_message(message);
+                    self.mode = if self.model_picker_open {
+                        UiMode::Normal
+                    } else {
+                        UiMode::Input
+                    };
+                }
+            },
             AppEvent::Model(ModelEvent::Error(error)) => {
                 self.append_assistant_token(&format!("\nError: {error}"));
                 self.mode = UiMode::Input;
@@ -334,6 +470,10 @@ impl App {
             self.close_model_picker();
             return;
         }
+        if self.login_picker_open {
+            self.close_login_picker();
+            return;
+        }
         if self.statusline_open {
             self.close_statusline_picker();
             return;
@@ -348,6 +488,7 @@ impl App {
     pub fn open_theme_picker(&mut self) {
         self.statusline_open = false;
         self.model_picker_open = false;
+        self.login_picker_open = false;
         self.theme_picker_open = true;
         self.theme_cursor = self.theme.index();
         self.mode = UiMode::Normal;
@@ -384,6 +525,7 @@ impl App {
     pub fn open_statusline_picker(&mut self) {
         self.theme_picker_open = false;
         self.model_picker_open = false;
+        self.login_picker_open = false;
         self.statusline_open = true;
         self.statusline_cursor = self
             .statusline_cursor
@@ -426,31 +568,42 @@ impl App {
         self.status = format!("Provider: {}", self.config.default_provider);
     }
 
-    pub fn open_model_picker(&mut self) {
+    pub fn open_model_picker(&mut self) -> Option<AppRequest> {
         self.theme_picker_open = false;
         self.statusline_open = false;
-        self.model_options = available_model_options(&self.config);
+        self.login_picker_open = false;
+        self.model_options = available_model_options(&self.config, self.auth_store.as_ref());
         let active_model = self.active_model().to_owned();
         self.model_cursor = self
             .model_options
             .iter()
-            .position(|model| model == &active_model)
+            .position(|option| {
+                option.provider_id == self.config.default_provider
+                    && option.model.as_deref() == Some(active_model.as_str())
+            })
+            .or_else(|| first_selectable_model_index(&self.model_options))
             .unwrap_or(0);
+        self.model_scroll = 0;
         self.model_picker_open = true;
         self.mode = UiMode::Normal;
         self.status = "Select a model".to_owned();
+        self.copilot_model_refresh_request()
     }
 
     pub fn next_model(&mut self) {
         if self.model_picker_open && !self.model_options.is_empty() {
-            self.model_cursor = (self.model_cursor + 1) % self.model_options.len();
+            self.model_cursor = next_selectable_model_index(&self.model_options, self.model_cursor)
+                .unwrap_or(self.model_cursor);
+            self.ensure_model_cursor_visible();
         }
     }
 
     pub fn previous_model(&mut self) {
         if self.model_picker_open && !self.model_options.is_empty() {
             self.model_cursor =
-                (self.model_cursor + self.model_options.len() - 1) % self.model_options.len();
+                previous_selectable_model_index(&self.model_options, self.model_cursor)
+                    .unwrap_or(self.model_cursor);
+            self.ensure_model_cursor_visible();
         }
     }
 
@@ -458,8 +611,10 @@ impl App {
         if !self.model_picker_open {
             return;
         }
-        if let Some(model) = self.model_options.get(self.model_cursor).cloned() {
-            self.switch_active_model(model);
+        if let Some(option) = self.model_options.get(self.model_cursor).cloned() {
+            if let Some(model) = option.model {
+                self.switch_active_model(option.provider_id, model);
+            }
         }
         self.model_picker_open = false;
         self.mode = UiMode::Input;
@@ -467,28 +622,93 @@ impl App {
 
     fn close_model_picker(&mut self) {
         self.model_picker_open = false;
+        self.model_scroll = 0;
         self.mode = UiMode::Input;
         self.status = format!("Model: {}", self.active_model());
+    }
+
+    fn ensure_model_cursor_visible(&mut self) {
+        const MODEL_PICKER_VISIBLE_ROWS: usize = 12;
+        if self.model_cursor < self.model_scroll {
+            self.model_scroll = self.model_cursor;
+        } else if self.model_cursor >= self.model_scroll.saturating_add(MODEL_PICKER_VISIBLE_ROWS) {
+            self.model_scroll = self
+                .model_cursor
+                .saturating_add(1)
+                .saturating_sub(MODEL_PICKER_VISIBLE_ROWS);
+        }
+        self.model_scroll = self.model_scroll.min(
+            self.model_options
+                .len()
+                .saturating_sub(MODEL_PICKER_VISIBLE_ROWS),
+        );
+    }
+
+    pub fn open_login_picker(&mut self) {
+        self.theme_picker_open = false;
+        self.model_picker_open = false;
+        self.statusline_open = false;
+        self.login_picker_open = true;
+        self.login_cursor = self.login_cursor.min(PROVIDERS.len().saturating_sub(1));
+        self.mode = UiMode::Normal;
+        self.status = "Select a provider to log in".to_owned();
+    }
+
+    pub fn next_login_provider(&mut self) {
+        if self.login_picker_open {
+            self.login_cursor = (self.login_cursor + 1) % PROVIDERS.len();
+        }
+    }
+
+    pub fn previous_login_provider(&mut self) {
+        if self.login_picker_open {
+            self.login_cursor = (self.login_cursor + PROVIDERS.len() - 1) % PROVIDERS.len();
+        }
+    }
+
+    pub fn select_login_provider(&mut self) -> Option<AppRequest> {
+        if !self.login_picker_open {
+            return None;
+        }
+        let provider_id = PROVIDERS[self.login_cursor].id;
+        self.login_picker_open = false;
+        self.mode = UiMode::Input;
+        self.push_login_message(format!(
+            "Selected {}.",
+            PROVIDERS[self.login_cursor].display_name
+        ));
+        self.login_provider(provider_id)
+    }
+
+    fn close_login_picker(&mut self) {
+        self.login_picker_open = false;
+        self.mode = UiMode::Input;
+        self.status = format!("Provider: {}", self.config.default_provider);
     }
 
     pub fn active_model(&self) -> &str {
         active_model_from_config(&self.config)
     }
 
-    fn switch_active_model(&mut self, model: String) {
-        match self.config.default_provider.as_str() {
-            "ollama" => self.config.providers.ollama.default_model = model.clone(),
-            "openai_compat" => self.config.providers.openai_compat.default_model = model.clone(),
+    fn switch_active_model(&mut self, provider_id: String, model: String) {
+        let mut next_config = self.config.clone();
+        match provider_id.as_str() {
+            "ollama" => next_config.providers.ollama.default_model = model.clone(),
+            "openai_compat" => next_config.providers.openai_compat.default_model = model.clone(),
+            "copilot" => next_config.providers.copilot.default_model = model.clone(),
+            "openai_account" => next_config.providers.openai_account.default_model = model.clone(),
             provider => {
                 self.status = format!("Cannot switch model for unsupported provider: {provider}");
                 return;
             }
         }
+        next_config.default_provider = provider_id.clone();
 
-        match build_provider(&self.config) {
+        match build_provider(&next_config) {
             Ok(provider) => {
+                self.config = next_config;
                 self.provider = provider;
-                self.status = format!("Model: {model}");
+                self.status = format!("Model: {provider_id}/{model}");
             }
             Err(error) => {
                 self.status = format!("Model switch failed: {error}");
@@ -580,6 +800,7 @@ impl App {
         !self.transcript.is_empty()
             && !self.theme_picker_open
             && !self.model_picker_open
+            && !self.login_picker_open
             && !self.statusline_open
             && !self.has_slash_command_matches()
     }
@@ -591,7 +812,7 @@ impl App {
         }
     }
 
-    pub fn submit_slash_command_selection(&mut self) -> Option<ProviderRequest> {
+    pub fn submit_slash_command_selection(&mut self) -> Option<AppRequest> {
         if let Some(command) = self.selected_slash_command() {
             self.input = command.name.to_owned();
             return self.submit_input();
@@ -633,47 +854,63 @@ impl App {
         }
     }
 
-    fn run_slash_command(&mut self, content: &str) -> bool {
+    fn run_slash_command(&mut self, content: &str) -> SlashCommandResult {
         match content {
             "/help" => {
                 self.show_help();
-                true
+                SlashCommandResult::Handled(None)
             }
             "/theme" => {
                 self.open_theme_picker();
-                true
+                SlashCommandResult::Handled(None)
             }
-            "/model" => {
-                self.open_model_picker();
-                true
-            }
+            "/model" => SlashCommandResult::Handled(self.open_model_picker()),
             "/statusline" => {
                 self.open_statusline_picker();
-                true
+                SlashCommandResult::Handled(None)
             }
             "/clear" => {
                 self.clear_transcript();
                 self.mode = UiMode::Input;
-                true
+                SlashCommandResult::Handled(None)
             }
             "/quit" | "/exit" => {
                 self.should_quit = true;
-                true
+                SlashCommandResult::Handled(None)
             }
             command if command.starts_with("/model ") => {
                 let model = command.trim_start_matches("/model").trim();
                 if model.is_empty() {
-                    self.open_model_picker();
+                    return SlashCommandResult::Handled(self.open_model_picker());
                 } else {
-                    self.switch_active_model(model.to_owned());
+                    self.switch_active_model(
+                        self.config.default_provider.clone(),
+                        model.to_owned(),
+                    );
                 }
-                true
+                SlashCommandResult::Handled(None)
+            }
+            command if command.starts_with("/login ") => {
+                let request = self.login_provider(command.trim_start_matches("/login").trim());
+                SlashCommandResult::Handled(request)
+            }
+            command if command.starts_with("/logout ") => {
+                self.logout_provider(command.trim_start_matches("/logout").trim());
+                SlashCommandResult::Handled(None)
+            }
+            "/login" => {
+                self.open_login_picker();
+                SlashCommandResult::Handled(None)
+            }
+            "/logout" => {
+                self.status = "Usage: /logout <provider>".to_owned();
+                SlashCommandResult::Handled(None)
             }
             command if command.starts_with('/') => {
                 self.status = format!("Unknown command: {command}");
-                true
+                SlashCommandResult::Handled(None)
             }
-            _ => false,
+            _ => SlashCommandResult::NotCommand,
         }
     }
 
@@ -689,6 +926,211 @@ impl App {
         });
         self.mode = UiMode::Input;
         self.status = "Showing commands".to_owned();
+    }
+
+    #[allow(dead_code)]
+    fn show_providers(&mut self) {
+        let lines = PROVIDERS
+            .iter()
+            .map(|provider| {
+                format!(
+                    "{} — {} — auth: {} — models: {} — streaming: {}",
+                    provider.id,
+                    self.provider_status_label(provider.id),
+                    provider.auth_requirement.label(),
+                    provider.model_list_strategy.label(),
+                    if provider.streaming { "yes" } else { "not yet" }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let auth_path = self
+            .auth_store
+            .as_ref()
+            .map(|store| store.path().display().to_string())
+            .unwrap_or_else(|| "unavailable".to_owned());
+        self.transcript.push(Message {
+            role: Role::Assistant,
+            content: format!(
+                "Providers:\n{lines}\n\nAuth store: {auth_path}\nUse /login <provider> or /logout <provider> for account-backed providers."
+            ),
+        });
+        self.mode = UiMode::Input;
+        self.status = "Showing providers".to_owned();
+    }
+
+    fn login_provider(&mut self, provider_id: &str) -> Option<AppRequest> {
+        let provider_id = provider_id.trim().to_ascii_lowercase();
+        if provider_id == "copilot --env" {
+            self.login_copilot_from_env();
+            return None;
+        }
+        let Some(metadata) = registry::provider_metadata(&provider_id) else {
+            self.status = format!("Unknown provider: {provider_id}");
+            return None;
+        };
+
+        match metadata.auth_requirement {
+            AuthRequirement::None => {
+                self.status = format!("{} does not require login", metadata.display_name);
+                self.push_login_message(self.status.clone());
+                None
+            }
+            AuthRequirement::ApiKey => {
+                self.status = format!(
+                    "{} uses its configured API key environment variable",
+                    metadata.display_name
+                );
+                self.push_login_message(self.status.clone());
+                None
+            }
+            AuthRequirement::Account if provider_id == "copilot" => {
+                self.login_copilot_device_flow()
+            }
+            AuthRequirement::Account => {
+                self.status = format!(
+                    "{} login is not implemented until an official third-party OAuth flow is configured",
+                    metadata.display_name
+                );
+                self.push_login_message(self.status.clone());
+                None
+            }
+        }
+    }
+
+    fn login_copilot_device_flow(&mut self) -> Option<AppRequest> {
+        let Some(store) = self.auth_store.clone() else {
+            self.status = "Auth store is unavailable on this platform".to_owned();
+            return None;
+        };
+
+        let config = match copilot_device_flow_config(&self.config.providers.copilot) {
+            Ok(config) => config,
+            Err(message) => {
+                self.status = message;
+                self.push_login_message(self.status.clone());
+                return None;
+            }
+        };
+
+        self.status = "Starting GitHub device login".to_owned();
+        self.push_login_message(
+            "Starting GitHub Copilot device login. A browser tab should open after GitHub returns a device code.".to_owned(),
+        );
+        Some(AppRequest::GitHubDeviceLogin {
+            config,
+            copilot_config: Box::new(self.config.providers.copilot.clone()),
+            store,
+        })
+    }
+
+    fn login_copilot_from_env(&mut self) {
+        let Some(store) = &self.auth_store else {
+            self.status = "Auth store is unavailable on this platform".to_owned();
+            return;
+        };
+
+        let found = self
+            .config
+            .providers
+            .copilot
+            .github_token_env
+            .iter()
+            .find_map(|name| {
+                std::env::var(name)
+                    .ok()
+                    .filter(|token| !token.is_empty())
+                    .map(|token| (name, token))
+            });
+        let Some((env_name, token)) = found else {
+            self.status =
+                "Set a configured GitHub token env var, then run /login copilot --env".to_owned();
+            self.push_login_message(self.status.clone());
+            return;
+        };
+
+        let mut metadata = std::collections::BTreeMap::new();
+        metadata.insert("source".to_owned(), "environment".to_owned());
+        metadata.insert("env".to_owned(), env_name.clone());
+        let record = AuthRecord {
+            provider_id: "copilot".to_owned(),
+            account_label: Some(format!("env:{env_name}")),
+            access_token: Some(token),
+            refresh_token: None,
+            expires_at: None,
+            updated_at: 0,
+            metadata,
+        };
+
+        match store.upsert(record) {
+            Ok(()) => self.status = "Copilot token saved from environment".to_owned(),
+            Err(error) => self.status = format!("Login failed: {error}"),
+        }
+        self.push_login_message(self.status.clone());
+    }
+
+    fn push_login_message(&mut self, content: String) {
+        self.transcript.push(Message {
+            role: Role::Assistant,
+            content,
+        });
+        self.chat_scroll = 0;
+    }
+
+    fn copilot_model_refresh_request(&self) -> Option<AppRequest> {
+        let store = self.auth_store.clone()?;
+        let connected = store
+            .status("copilot")
+            .ok()
+            .is_some_and(|status| status == AuthStatus::Connected);
+        connected.then(|| AppRequest::RefreshCopilotModels {
+            config: Box::new(self.config.providers.copilot.clone()),
+            store,
+        })
+    }
+
+    fn logout_provider(&mut self, provider_id: &str) {
+        let provider_id = provider_id.trim().to_ascii_lowercase();
+        if registry::provider_metadata(&provider_id).is_none() {
+            self.status = format!("Unknown provider: {provider_id}");
+            return;
+        }
+        let Some(store) = &self.auth_store else {
+            self.status = "Auth store is unavailable on this platform".to_owned();
+            return;
+        };
+
+        match store.remove(&provider_id) {
+            Ok(true) => self.status = format!("Logged out of {provider_id}"),
+            Ok(false) => self.status = format!("{provider_id} was not connected"),
+            Err(error) => self.status = format!("Logout failed: {error}"),
+        }
+    }
+
+    pub fn provider_status_label(&self, provider_id: &str) -> String {
+        match registry::provider_metadata(provider_id).map(|provider| provider.auth_requirement) {
+            Some(AuthRequirement::None) => "available".to_owned(),
+            Some(AuthRequirement::ApiKey) => {
+                let env_name = self.config.providers.openai_compat.api_key_env.as_str();
+                if std::env::var(env_name)
+                    .ok()
+                    .filter(|value| !value.is_empty())
+                    .is_some()
+                {
+                    format!("configured via {env_name}")
+                } else {
+                    format!("missing env {env_name}")
+                }
+            }
+            Some(AuthRequirement::Account) => self
+                .auth_store
+                .as_ref()
+                .and_then(|store| store.status(provider_id).ok())
+                .unwrap_or(AuthStatus::NotConnected)
+                .label()
+                .to_owned(),
+            None => "unknown".to_owned(),
+        }
     }
 
     fn append_assistant_token(&mut self, token: &str) {
@@ -825,26 +1267,196 @@ fn active_model_from_config(config: &AppConfig) -> &str {
     match config.default_provider.as_str() {
         "ollama" => config.providers.ollama.default_model.as_str(),
         "openai_compat" => config.providers.openai_compat.default_model.as_str(),
+        "copilot" => config.providers.copilot.default_model.as_str(),
+        "openai_account" => config.providers.openai_account.default_model.as_str(),
         _ => "unknown",
     }
 }
 
-fn available_model_options(config: &AppConfig) -> Vec<String> {
-    let current = active_model_from_config(config);
-    let discovered = match config.default_provider.as_str() {
-        "ollama" => ollama_model_options(),
-        "openai_compat" => Vec::new(),
-        _ => Vec::new(),
-    };
+fn copilot_device_flow_config(config: &CopilotConfig) -> Result<GitHubDeviceFlowConfig, String> {
+    let client_id = config
+        .github_oauth_client_id
+        .trim()
+        .to_owned()
+        .or_else_env([
+            "ARTUI_GITHUB_OAUTH_CLIENT_ID",
+            "GITHUB_COPILOT_OAUTH_CLIENT_ID",
+        ]);
+    let missing = [
+        (
+            "providers.copilot.github_oauth_client_id",
+            client_id.as_str(),
+        ),
+        (
+            "providers.copilot.github_device_code_url",
+            config.github_device_code_url.as_str(),
+        ),
+        (
+            "providers.copilot.github_oauth_token_url",
+            config.github_oauth_token_url.as_str(),
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(name, value)| value.trim().is_empty().then_some(name))
+    .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        return Err(format!(
+            "Configure {} before running /login copilot. You can set github_oauth_client_id in ~/.config/artui/config.toml or export ARTUI_GITHUB_OAUTH_CLIENT_ID.",
+            missing.join(", ")
+        ));
+    }
 
-    unique_model_options(current, discovered)
+    Ok(GitHubDeviceFlowConfig {
+        provider_id: "copilot".to_owned(),
+        client_id,
+        device_code_url: config.github_device_code_url.clone(),
+        token_url: config.github_oauth_token_url.clone(),
+        scope: config.github_oauth_scope.clone(),
+        timeout_secs: config.github_login_timeout_secs.max(1),
+    })
+}
+
+trait EnvFallback {
+    fn or_else_env<const N: usize>(self, names: [&str; N]) -> String;
+}
+
+impl EnvFallback for String {
+    fn or_else_env<const N: usize>(self, names: [&str; N]) -> String {
+        if !self.trim().is_empty() {
+            return self;
+        }
+        names
+            .into_iter()
+            .find_map(|name| {
+                std::env::var(name)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            })
+            .unwrap_or_default()
+    }
+}
+
+fn available_model_options(config: &AppConfig, auth_store: Option<&AuthStore>) -> Vec<ModelOption> {
+    let mut options = Vec::new();
+    for provider in PROVIDERS {
+        if !include_provider_models(config, auth_store, provider.id) {
+            continue;
+        }
+        let models = provider_model_options(config, auth_store, provider.id);
+        if models.is_empty() {
+            continue;
+        }
+        options.push(ModelOption::header(provider.id, provider.display_name));
+        for model in models {
+            options.push(ModelOption::model(
+                provider.id,
+                provider.display_name,
+                model,
+            ));
+        }
+    }
+    options
+}
+
+fn include_provider_models(
+    config: &AppConfig,
+    auth_store: Option<&AuthStore>,
+    provider_id: &str,
+) -> bool {
+    if provider_id == config.default_provider {
+        return true;
+    }
+
+    match registry::provider_metadata(provider_id).map(|provider| provider.auth_requirement) {
+        Some(AuthRequirement::None) => true,
+        Some(AuthRequirement::ApiKey) => {
+            std::env::var(config.providers.openai_compat.api_key_env.as_str())
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .is_some()
+        }
+        Some(AuthRequirement::Account) => auth_store
+            .and_then(|store| store.status(provider_id).ok())
+            .is_some_and(|status| status == AuthStatus::Connected),
+        None => false,
+    }
+}
+
+fn provider_model_options(
+    config: &AppConfig,
+    auth_store: Option<&AuthStore>,
+    provider_id: &str,
+) -> Vec<String> {
+    match provider_id {
+        "ollama" => unique_model_options(
+            config.providers.ollama.default_model.as_str(),
+            ollama_model_options(),
+        ),
+        "openai_compat" => unique_model_options(
+            config.providers.openai_compat.default_model.as_str(),
+            Vec::new(),
+        ),
+        "copilot" => unique_model_options(
+            copilot_current_model(config, auth_store),
+            copilot_discovered_models(config, auth_store),
+        ),
+        "openai_account" => unique_model_options(
+            config.providers.openai_account.default_model.as_str(),
+            Vec::new(),
+        ),
+        _ => Vec::new(),
+    }
+}
+
+fn stored_copilot_models(auth_store: Option<&AuthStore>) -> Option<Vec<String>> {
+    let record = auth_store?.record("copilot").ok()??;
+    let models = record.metadata.get("models")?;
+    serde_json::from_str::<Vec<String>>(models).ok()
+}
+
+fn copilot_current_model<'a>(config: &'a AppConfig, auth_store: Option<&AuthStore>) -> &'a str {
+    let current = config.providers.copilot.default_model.as_str();
+    let discovered = copilot_discovered_models(config, auth_store);
+    if !discovered.is_empty() && !discovered.iter().any(|model| model == current) {
+        return "";
+    }
+    current
+}
+
+fn copilot_discovered_models(config: &AppConfig, auth_store: Option<&AuthStore>) -> Vec<String> {
+    stored_copilot_models(auth_store)
+        .filter(|models| !models.is_empty())
+        .unwrap_or_else(|| config.providers.copilot.models.clone())
+}
+
+fn first_selectable_model_index(options: &[ModelOption]) -> Option<usize> {
+    options.iter().position(ModelOption::is_selectable)
+}
+
+fn next_selectable_model_index(options: &[ModelOption], cursor: usize) -> Option<usize> {
+    if options.is_empty() {
+        return None;
+    }
+    (1..=options.len())
+        .map(|offset| (cursor + offset) % options.len())
+        .find(|index| options[*index].is_selectable())
+}
+
+fn previous_selectable_model_index(options: &[ModelOption], cursor: usize) -> Option<usize> {
+    if options.is_empty() {
+        return None;
+    }
+    (1..=options.len())
+        .map(|offset| (cursor + options.len() - offset) % options.len())
+        .find(|index| options[*index].is_selectable())
 }
 
 fn unique_model_options(current: &str, discovered: Vec<String>) -> Vec<String> {
     let mut models = Vec::new();
     for model in std::iter::once(current.to_owned()).chain(discovered) {
-        if !model.is_empty() && !models.iter().any(|known| known == &model) {
-            models.push(model);
+        let model = model.trim();
+        if !model.is_empty() && !models.iter().any(|known| known == model) {
+            models.push(model.to_owned());
         }
     }
     models
@@ -872,3 +1484,98 @@ const CHAT_SCROLL_STEP: u16 = 3;
 const CHAT_PAGE_SCROLL_STEP: u16 = 10;
 
 const LOGO: &str = "┌────────┐\n│  >_  ●●│\n└────────┘";
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, path::PathBuf};
+
+    use super::*;
+
+    fn temp_auth_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "artui-{name}-{}-{}.json",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        ))
+    }
+
+    fn connected_store_with_models(path: PathBuf, models: &[&str]) -> AuthStore {
+        let mut metadata = BTreeMap::new();
+        metadata.insert("models".to_owned(), serde_json::to_string(models).unwrap());
+        let store = AuthStore::new(path);
+        store
+            .upsert(AuthRecord {
+                provider_id: "copilot".to_owned(),
+                account_label: Some("test".to_owned()),
+                access_token: Some("secret".to_owned()),
+                refresh_token: None,
+                expires_at: None,
+                updated_at: 0,
+                metadata,
+            })
+            .unwrap();
+        store
+    }
+
+    #[test]
+    fn connected_copilot_is_listed_in_model_options() {
+        let config = AppConfig::default();
+        let path = temp_auth_path("connected-copilot-options");
+        let store = connected_store_with_models(path.clone(), &["plan-model"]);
+
+        let options = available_model_options(&config, Some(&store));
+
+        assert!(options.iter().any(|option| option.provider_id == "copilot"
+            && option.model.as_deref() == Some("plan-model")));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn stored_copilot_models_are_grouped_under_provider_header() {
+        let config = AppConfig::default();
+        let path = temp_auth_path("stored-copilot-models");
+        let store = connected_store_with_models(path.clone(), &["claude-sonnet-4.5", "gpt-5"]);
+
+        let options = available_model_options(&config, Some(&store));
+        let copilot_header = options
+            .iter()
+            .position(|option| option.provider_id == "copilot" && option.model.is_none())
+            .unwrap();
+
+        assert_eq!(options[copilot_header].provider_name, "GitHub Copilot");
+        assert!(options[copilot_header + 1..].iter().any(|option| {
+            option.provider_id == "copilot" && option.model.as_deref() == Some("claude-sonnet-4.5")
+        }));
+        assert!(options[copilot_header + 1..].iter().any(|option| {
+            option.provider_id == "copilot" && option.model.as_deref() == Some("gpt-5")
+        }));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn selecting_copilot_model_switches_provider_and_model() {
+        let mut config = AppConfig::default();
+        let path = temp_auth_path("select-copilot-model");
+        config.auth_storage_path = Some(path.clone());
+        let _store = connected_store_with_models(path.clone(), &["plan-model"]);
+        let provider = build_provider(&config).unwrap();
+        let mut app = App::new(config, provider);
+
+        app.open_model_picker();
+        app.model_cursor = app
+            .model_options
+            .iter()
+            .position(|option| {
+                option.provider_id == "copilot" && option.model.as_deref() == Some("plan-model")
+            })
+            .unwrap();
+        app.select_model();
+
+        assert_eq!(app.config.default_provider, "copilot");
+        assert_eq!(app.active_model(), "plan-model");
+        let _ = std::fs::remove_file(path);
+    }
+}

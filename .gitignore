@@ -18,6 +18,8 @@ Thumbs.db
 *.key
 
 # artui runtime/session output
+.artui/auth.json
+.artui/auth.json.tmp
 .artui/session/
 .artui/logs/
 

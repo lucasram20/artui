@@ -86,6 +86,17 @@ host = "http://localhost:11434"
 default_model = "gemma4:e2b"
 ```
 
+GitHub Copilot account login uses GitHub's OAuth device flow. Create a GitHub OAuth app with device flow enabled, then configure its client ID and the GitHub OAuth endpoints from the official GitHub docs:
+
+```toml
+[providers.copilot]
+github_oauth_client_id = "your-oauth-app-client-id"
+github_oauth_scope = ""
+github_login_timeout_secs = 900
+```
+
+Then run `/login` inside artui and choose GitHub Copilot. The GitHub device-code and token URLs default to GitHub's official OAuth endpoints and can be overridden if needed. Tokens are stored in the platform data directory auth store unless `auth_storage_path` is configured. After login, artui exchanges the GitHub token for a Copilot session token when possible, fetches available Copilot models, and shows them under a GitHub Copilot section in `/model`.
+
 ## Documentation
 
 - [v1 Agentic Spec](docs/spec/artui_v1_agentic_spec.md)

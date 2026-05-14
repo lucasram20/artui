@@ -106,9 +106,8 @@ pub fn message_visual_height(content: &str, width: usize) -> usize {
     } else {
         segments
             .iter()
-            .enumerate()
-            .map(|(index, segment)| {
-                let prefix_width = if index == 0 { 2 } else { 2 };
+            .map(|segment| {
+                let prefix_width = 2;
                 let line_width = segment.text.chars().count() + prefix_width;
                 line_width.max(1).div_ceil(width.max(1))
             })

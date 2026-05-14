@@ -1,5 +1,8 @@
+mod account;
+pub(crate) mod copilot;
 mod ollama;
 mod openai_compat;
+pub mod registry;
 
 use std::sync::Arc;
 
@@ -36,6 +39,13 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
         ))),
         "openai_compat" => Ok(Arc::new(OpenAiCompatProvider::new(
             config.providers.openai_compat.clone(),
+        ))),
+        "copilot" => Ok(Arc::new(copilot::CopilotProvider::new(
+            config.providers.copilot.clone(),
+            crate::auth::AuthStore::from_config(config),
+        ))),
+        "openai_account" => Ok(Arc::new(account::AccountProvider::new(
+            config.default_provider.clone(),
         ))),
         provider => bail!("unsupported provider: {provider}"),
     }
