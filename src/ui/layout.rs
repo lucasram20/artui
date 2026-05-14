@@ -1,4 +1,4 @@
-use crate::app::{App, UiMode};
+use crate::app::{slash_command_matches, App, SlashCommand, StatusLineItem, UiMode};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
@@ -25,16 +25,11 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     };
     let root = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(header_height),
-            Constraint::Length(1),
-            Constraint::Min(10),
-        ])
+        .constraints([Constraint::Length(header_height), Constraint::Min(10)])
         .split(content);
 
     draw_header(frame, app, root[0]);
-    draw_rule(frame, app, root[1]);
-    draw_body(frame, app, root[2]);
+    draw_body(frame, app, root[1]);
 }
 
 fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -75,21 +70,32 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn draw_body(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let composer_height = input_height(app, area.width);
-    let history_height = transcript_height(app, area.width, area.height, composer_height);
+    let composer_height = input_height(app, area.width).saturating_add(1);
+    let suggestions = visible_slash_commands(app);
+    let suggestions_height = slash_commands_height(&suggestions);
+    let footer_height = if suggestions.is_empty() { 2 } else { 0 };
+    let reserved_height = composer_height + footer_height + suggestions_height;
+    let max_history_height = area.height.saturating_sub(reserved_height);
+    let history_height = conversation_anchor_height(app, area.width, max_history_height);
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(history_height),
             Constraint::Length(composer_height),
-            Constraint::Length(2),
+            Constraint::Length(suggestions_height),
+            Constraint::Length(footer_height),
             Constraint::Min(0),
         ])
         .split(area);
 
     super::chat::draw(frame, app, rows[0]);
     draw_input(frame, app, rows[1]);
-    draw_footer(frame, app, rows[2]);
+    if !suggestions.is_empty() {
+        draw_slash_commands(frame, app, rows[2], &suggestions);
+    }
+    if suggestions.is_empty() {
+        draw_footer(frame, app, rows[3]);
+    }
 }
 
 fn draw_compact_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -341,31 +347,21 @@ fn dev_quotes(app: &App) -> (&'static str, &'static str) {
     QUOTES[index]
 }
 
-fn draw_rule(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    frame.render_widget(
-        Paragraph::new(Line::from(""))
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .border_style(Style::default().fg(theme::palette(app.theme).border)),
-            )
-            .style(Style::default().bg(theme::palette(app.theme).bg)),
-        area,
-    );
-}
-
 fn draw_input(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let input_area = area.inner(Margin {
-        vertical: 0,
-        horizontal: 0,
-    });
     let prompt = if app.mode == UiMode::Streaming {
         "…"
     } else {
         "›"
     };
     let prompt_width = prompt.chars().count() + 1;
-    let text_width = input_area.width.saturating_sub(prompt_width as u16).max(1) as usize;
+    let text_width = area.width.saturating_sub(prompt_width as u16).max(1) as usize;
+    let input_lines = input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16;
+    let input_area = Rect {
+        x: area.x,
+        y: area.y.saturating_add(1),
+        width: area.width,
+        height: input_lines.min(area.height.saturating_sub(1)),
+    };
     let lines = if app.input.is_empty() {
         vec![Line::from(vec![
             Span::styled(
@@ -381,12 +377,24 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, area: Rect) {
         wrapped_input_lines(prompt, app.input.as_str(), text_width, app)
     };
 
+    let palette = theme::palette(app.theme);
     frame.render_widget(
-        Paragraph::new(lines).style(Style::default().bg(theme::palette(app.theme).bg)),
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(palette.border))
+            .style(Style::default().bg(palette.bg)),
+        area,
+    );
+    frame.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(palette.bg)),
         input_area,
     );
 
-    if !app.theme_picker_open {
+    if input_area.height > 0
+        && !app.theme_picker_open
+        && !app.model_picker_open
+        && !app.statusline_open
+    {
         let (cursor_row, cursor_col) = input_cursor(app.input.as_str(), text_width);
         let cursor_x = input_area.x + prompt_width as u16 + cursor_col;
         let cursor_y = input_area.y + cursor_row.min(input_area.height.saturating_sub(1));
@@ -397,24 +405,26 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, area: Rect) {
 fn input_height(app: &App, width: u16) -> u16 {
     let prompt_width = 2usize;
     let text_width = width.saturating_sub(prompt_width as u16).max(1) as usize;
-    let input_lines = if app.input.is_empty() {
-        1
-    } else {
-        app.input
-            .split('\n')
-            .map(|line| {
-                let len = line.chars().count();
-                len.max(1).div_ceil(text_width)
-            })
-            .sum::<usize>()
-    };
-    input_lines.clamp(1, 6) as u16
+    input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16
 }
 
-fn transcript_height(app: &App, width: u16, available_height: u16, composer_height: u16) -> u16 {
-    let usable_width = width.saturating_sub(2).max(1) as usize;
-    let lines = app
-        .transcript
+fn input_line_count(input: &str, text_width: usize) -> usize {
+    if input.is_empty() {
+        return 1;
+    }
+
+    input
+        .split('\n')
+        .map(|line| {
+            let len = line.chars().count();
+            len.max(1).div_ceil(text_width)
+        })
+        .sum::<usize>()
+}
+
+fn transcript_height(app: &App, width: u16) -> u16 {
+    let usable_width = width.max(1) as usize;
+    app.transcript
         .iter()
         .map(|message| {
             let content_lines = if message.content.is_empty() {
@@ -431,10 +441,26 @@ fn transcript_height(app: &App, width: u16, available_height: u16, composer_heig
             };
             content_lines + 1
         })
-        .sum::<usize>();
-    let max_history = available_height.saturating_sub(composer_height + 2);
-    (lines as u16).min(max_history)
+        .sum::<usize>()
+        .min(u16::MAX as usize) as u16
 }
+
+fn conversation_anchor_height(app: &App, width: u16, max_height: u16) -> u16 {
+    let transcript_height = transcript_height(app, width);
+    let empty_anchor = empty_conversation_anchor(max_height);
+    empty_anchor
+        .saturating_add(transcript_height)
+        .min(max_height)
+}
+
+fn empty_conversation_anchor(max_height: u16) -> u16 {
+    let anchor = max_height / EMPTY_CONVERSATION_ANCHOR_DIVISOR;
+    anchor.clamp(MIN_EMPTY_CONVERSATION_ANCHOR, MAX_EMPTY_CONVERSATION_ANCHOR)
+}
+
+const EMPTY_CONVERSATION_ANCHOR_DIVISOR: u16 = 24;
+const MIN_EMPTY_CONVERSATION_ANCHOR: u16 = 0;
+const MAX_EMPTY_CONVERSATION_ANCHOR: u16 = 1;
 
 fn input_cursor(input: &str, text_width: usize) -> (u16, u16) {
     let mut row = 0usize;
@@ -497,57 +523,84 @@ fn wrapped_input_lines(
     lines
 }
 
-fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let branch = app.git_branch_label.as_str();
-    let git_state = app.git_status_label.as_str();
-    let context_percent = context_percent(app);
-    let mut spans = vec![
-        Span::styled("● ", Style::default().fg(theme::palette(app.theme).green)),
-        Span::styled(
-            active_model(app),
-            Style::default().fg(theme::palette(app.theme).text),
-        ),
-        Span::styled("   ", Style::default().fg(theme::palette(app.theme).subtle)),
-        Span::styled(
-            current_dir_label(),
-            Style::default().fg(theme::palette(app.theme).muted),
-        ),
-    ];
-    if area.width >= 86 {
-        spans.extend([
-            Span::styled("   ", Style::default().fg(theme::palette(app.theme).subtle)),
-            Span::styled(
-                branch,
-                Style::default().fg(theme::palette(app.theme).purple),
-            ),
-            Span::styled("   ", Style::default().fg(theme::palette(app.theme).subtle)),
-            Span::styled(
-                "context ",
-                Style::default().fg(theme::palette(app.theme).muted),
-            ),
-            Span::styled(
-                progress_bar(context_percent, 12, true),
-                Style::default().fg(theme::palette(app.theme).accent),
-            ),
-            Span::styled(
-                progress_bar(context_percent, 12, false),
-                Style::default().fg(theme::palette(app.theme).rule),
-            ),
-            Span::styled(
-                format!(" {context_percent}%   "),
-                Style::default().fg(theme::palette(app.theme).text),
-            ),
-            Span::styled(
-                git_state,
-                Style::default().fg(theme::palette(app.theme).pink),
-            ),
-            Span::styled("   ", Style::default().fg(theme::palette(app.theme).subtle)),
-            Span::styled(
-                "esc back",
-                Style::default().fg(theme::palette(app.theme).subtle),
-            ),
-        ]);
+fn visible_slash_commands(app: &App) -> Vec<&'static SlashCommand> {
+    if app.mode == UiMode::Streaming
+        || app.theme_picker_open
+        || app.model_picker_open
+        || app.statusline_open
+    {
+        return Vec::new();
     }
+
+    slash_command_matches(app.input.as_str())
+}
+
+fn slash_commands_height(commands: &[&SlashCommand]) -> u16 {
+    if commands.is_empty() {
+        0
+    } else {
+        commands.len().min(6) as u16 + 1
+    }
+}
+
+fn draw_slash_commands(frame: &mut Frame<'_>, app: &App, area: Rect, commands: &[&SlashCommand]) {
+    let palette = theme::palette(app.theme);
+    let rows = commands
+        .iter()
+        .take(area.height.saturating_sub(1) as usize)
+        .enumerate()
+        .map(|(index, command)| {
+            let selected = index == app.slash_cursor.min(commands.len().saturating_sub(1));
+            let command_style = if selected {
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            let description_style = if selected {
+                Style::default().fg(palette.text)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            Line::from(vec![
+                Span::styled(format!("{:<12}", command.name), command_style),
+                Span::styled(
+                    trim_to_width(command.description, area.width.saturating_sub(14) as usize),
+                    description_style,
+                ),
+            ])
+        })
+        .collect::<Vec<_>>();
+
+    let mut lines = Vec::with_capacity(rows.len() + 1);
+    lines.push(Line::from(Span::styled(
+        "─".repeat(area.width as usize),
+        Style::default().fg(palette.border),
+    )));
+    lines.extend(rows);
+
+    frame.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(palette.bg)),
+        area,
+    );
+}
+
+fn trim_to_width(value: &str, width: usize) -> String {
+    if value.chars().count() <= width {
+        return value.to_owned();
+    }
+    if width <= 1 {
+        return "…".to_owned();
+    }
+
+    let mut output = value.chars().take(width - 1).collect::<String>();
+    output.push('…');
+    output
+}
+
+fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let spans = statusline_spans(app, area.width);
 
     frame.render_widget(
         Paragraph::new(Line::from(spans))
@@ -563,6 +616,87 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
             ),
         area,
     );
+}
+
+fn statusline_spans(app: &App, width: u16) -> Vec<Span<'static>> {
+    let palette = theme::palette(app.theme);
+    let mut spans = Vec::new();
+
+    for item in StatusLineItem::ALL {
+        if !app.statusline_enabled[item.index()] {
+            continue;
+        }
+
+        if !spans.is_empty() {
+            spans.push(Span::styled("   ", Style::default().fg(palette.subtle)));
+        }
+
+        match item {
+            StatusLineItem::Model => {
+                spans.push(Span::styled("● ", Style::default().fg(palette.green)));
+                spans.push(Span::styled(
+                    active_model(app).to_owned(),
+                    Style::default().fg(palette.text),
+                ));
+            }
+            StatusLineItem::CurrentDir => {
+                spans.push(Span::styled(
+                    compact_cwd(),
+                    Style::default().fg(palette.muted),
+                ));
+            }
+            StatusLineItem::ProjectName => {
+                spans.push(Span::styled(
+                    current_dir_label(),
+                    Style::default().fg(palette.muted),
+                ));
+            }
+            StatusLineItem::GitBranch => {
+                spans.push(Span::styled(
+                    app.git_branch_label.clone(),
+                    Style::default().fg(palette.purple),
+                ));
+            }
+            StatusLineItem::Context => {
+                let context_percent = context_percent(app);
+                let bar_width = if width >= 86 { 12 } else { 8 };
+                spans.push(Span::styled("context ", Style::default().fg(palette.muted)));
+                spans.push(Span::styled(
+                    progress_bar(context_percent, bar_width, true),
+                    Style::default().fg(palette.accent),
+                ));
+                spans.push(Span::styled(
+                    progress_bar(context_percent, bar_width, false),
+                    Style::default().fg(palette.rule),
+                ));
+                spans.push(Span::styled(
+                    format!(" {context_percent}%"),
+                    Style::default().fg(palette.text),
+                ));
+            }
+            StatusLineItem::GitStatus => {
+                spans.push(Span::styled(
+                    app.git_status_label.clone(),
+                    Style::default().fg(palette.pink),
+                ));
+            }
+            StatusLineItem::EscHint => {
+                spans.push(Span::styled(
+                    "esc back",
+                    Style::default().fg(palette.subtle),
+                ));
+            }
+        }
+    }
+
+    if spans.is_empty() {
+        spans.push(Span::styled(
+            "statusline hidden",
+            Style::default().fg(palette.subtle),
+        ));
+    }
+
+    spans
 }
 
 fn compact_cwd() -> String {
@@ -586,11 +720,7 @@ fn current_dir_label() -> String {
 }
 
 fn active_model(app: &App) -> &str {
-    match app.config.default_provider.as_str() {
-        "ollama" => app.config.providers.ollama.default_model.as_str(),
-        "openai_compat" => app.config.providers.openai_compat.default_model.as_str(),
-        _ => "default",
-    }
+    app.active_model()
 }
 
 fn context_percent(app: &App) -> usize {

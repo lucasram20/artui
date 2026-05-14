@@ -87,14 +87,51 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => app.should_quit = true,
         (KeyModifiers::CONTROL, KeyCode::Char('l')) => app.clear_transcript(),
         (_, KeyCode::Esc) => app.cancel_input(),
-        (_, KeyCode::Up) => app.previous_theme(),
-        (_, KeyCode::Down) => app.next_theme(),
+        (_, KeyCode::Up) if app.model_picker_open => app.previous_model(),
+        (_, KeyCode::Down) if app.model_picker_open => app.next_model(),
+        (_, KeyCode::Char('k')) if app.model_picker_open => app.previous_model(),
+        (_, KeyCode::Char('j')) if app.model_picker_open => app.next_model(),
+        (_, KeyCode::Enter) if app.model_picker_open => app.select_model(),
+        (_, KeyCode::Up) if app.statusline_open => app.previous_statusline_item(),
+        (_, KeyCode::Down) if app.statusline_open => app.next_statusline_item(),
+        (_, KeyCode::Char('k')) if app.statusline_open => app.previous_statusline_item(),
+        (_, KeyCode::Char('j')) if app.statusline_open => app.next_statusline_item(),
+        (_, KeyCode::Char(' ')) if app.statusline_open => app.toggle_statusline_item(),
+        (_, KeyCode::Enter) if app.statusline_open => app.select_statusline(),
+        (_, KeyCode::Up) if app.has_slash_command_matches() => app.previous_slash_command(),
+        (_, KeyCode::Down) if app.has_slash_command_matches() => app.next_slash_command(),
+        (_, KeyCode::Char('k')) if app.has_slash_command_matches() => app.previous_slash_command(),
+        (_, KeyCode::Char('j')) if app.has_slash_command_matches() => app.next_slash_command(),
+        (_, KeyCode::Up) if app.theme_picker_open => app.previous_theme(),
+        (_, KeyCode::Down) if app.theme_picker_open => app.next_theme(),
         (_, KeyCode::Char('k')) if app.theme_picker_open => app.previous_theme(),
         (_, KeyCode::Char('j')) if app.theme_picker_open => app.next_theme(),
-        (_, KeyCode::Char('q')) if app.mode == UiMode::Normal && !app.theme_picker_open => {
+        (_, KeyCode::PageUp) => app.page_chat_up(),
+        (_, KeyCode::PageDown) => app.page_chat_down(),
+        (KeyModifiers::CONTROL, KeyCode::Char('u')) => app.page_chat_up(),
+        (KeyModifiers::CONTROL, KeyCode::Char('d')) => app.page_chat_down(),
+        (_, KeyCode::Up) => app.scroll_chat_up(),
+        (_, KeyCode::Down) => app.scroll_chat_down(),
+        (_, KeyCode::Char('q'))
+            if app.mode == UiMode::Normal
+                && !app.theme_picker_open
+                && !app.model_picker_open
+                && !app.statusline_open =>
+        {
             app.should_quit = true
         }
         (_, KeyCode::Enter) if app.theme_picker_open => app.select_theme(),
+        (_, KeyCode::Tab) => app.complete_slash_command(),
+        (_, KeyCode::Enter) if app.has_slash_command_matches() => {
+            if let Some(request) = app.submit_slash_command_selection() {
+                tokio::spawn(async move {
+                    request
+                        .provider
+                        .stream_turn(request.request, event_tx)
+                        .await;
+                });
+            }
+        }
         (_, KeyCode::Enter) => {
             if let Some(request) = app.submit_input() {
                 tokio::spawn(async move {
