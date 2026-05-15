@@ -26,3 +26,10 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Pi local harness/session state (never commit)
+.pi/
+
+# Graphify outputs: keep only HTML visualizations (root + nested)
+**/graphify-out/*
+!**/graphify-out/*.html
