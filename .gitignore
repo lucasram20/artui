@@ -27,8 +27,9 @@ Thumbs.db
 *.tmp
 *.temp
 
-# Pi local harness/session state (never commit)
-.pi/
+# Pi local harness/session state (never commit); keep only a safe placeholder tracked
+.pi/*
+!.pi/README.md
 
 # Graphify outputs: keep only HTML visualizations (root + nested)
 **/graphify-out/*
