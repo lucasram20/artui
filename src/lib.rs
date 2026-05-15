@@ -31,6 +31,8 @@ pub async fn run() -> Result<()> {
     let provider = providers::build_provider(&config)?;
     let (event_tx, mut event_rx) = mpsc::channel(64);
     let mut app = App::new(config, provider);
+    let _ = event_tx.send(AppEvent::Auth(app::AuthEvent::Status("Ready".to_owned()))).await;
+    spawn_app_request(AppRequest::FetchQuote, event_tx.clone());
 
     let mut terminal = setup_terminal()?;
     let result = async {
@@ -191,6 +193,20 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                 let _ = event_tx
                     .send(AppEvent::Auth(crate::app::AuthEvent::CopilotModels(result)))
                     .await;
+            }
+            AppRequest::FetchQuote => {
+                let client = reqwest::Client::new();
+                if let Ok(response) = client
+                    .get("https://zenquotes.io/api/random")
+                    .send()
+                    .await
+                {
+                    if let Ok(quotes) = response.json::<Vec<crate::app::Quote>>().await {
+                        if let Some(quote) = quotes.into_iter().next() {
+                            let _ = event_tx.send(AppEvent::Quote(quote)).await;
+                        }
+                    }
+                }
             }
         }
     });

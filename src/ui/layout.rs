@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
 
@@ -226,18 +226,26 @@ fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
         )),
         Line::from(""),
         Line::from(Span::styled(
-            "Dev notes",
+            "Quotes of the day",
             Style::default().fg(palette.accent).add_modifier(Modifier::BOLD),
         )),
-        Line::from(Span::styled(
-            "Ship the narrowest useful slice.",
-            Style::default().fg(palette.cyan),
-        )),
-        Line::from(Span::styled(
-            "Momentum comes from working software, not perfect guesses.",
-            Style::default().fg(palette.muted),
-        )),
     ];
+
+    if let Some(quote) = &app.quote {
+        text.push(Line::from(Span::styled(
+            format!("\"{}\"", quote.text),
+            Style::default().fg(palette.cyan),
+        )));
+        text.push(Line::from(Span::styled(
+            format!("— {}", quote.author),
+            Style::default().fg(palette.muted),
+        )));
+    } else {
+        text.push(Line::from(Span::styled(
+            "Fetching wisdom...",
+            Style::default().fg(palette.muted),
+        )));
+    }
 
     if app.mode == UiMode::Streaming {
         text.push(Line::from(""));
@@ -251,7 +259,8 @@ fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
     frame.render_widget(
         Paragraph::new(text)
             .style(Style::default().bg(palette.bg))
-            .alignment(Alignment::Left),
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true }),
         area.inner(Margin {
             vertical: vertical_margin,
             horizontal: 2,

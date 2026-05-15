@@ -159,10 +159,19 @@ impl ReasoningEffort {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Quote {
+    #[serde(rename = "q")]
+    pub text: String,
+    #[serde(rename = "a")]
+    pub author: String,
+}
+
 #[derive(Debug)]
 pub enum AppEvent {
     Model(ModelEvent),
     Auth(AuthEvent),
+    Quote(Quote),
 }
 
 #[derive(Debug)]
@@ -341,6 +350,7 @@ pub enum AppRequest {
         config: Box<CopilotConfig>,
         store: AuthStore,
     },
+    FetchQuote,
 }
 
 enum SlashCommandResult {
@@ -383,6 +393,7 @@ pub struct App {
     pub thinking_started_at: Option<Instant>,
     pub last_thinking_frame_at: Instant,
     pub last_thinking_phrase_at: Instant,
+    pub quote: Option<Quote>,
 }
 
 impl App {
@@ -425,6 +436,7 @@ impl App {
             thinking_started_at: None,
             last_thinking_frame_at: now,
             last_thinking_phrase_at: now,
+            quote: None,
         }
     }
 
@@ -690,6 +702,9 @@ impl App {
                 self.mode = UiMode::Input;
                 self.status = "Provider error".to_owned();
                 self.stop_thinking_animation();
+            }
+            AppEvent::Quote(quote) => {
+                self.quote = Some(quote);
             }
         }
     }
