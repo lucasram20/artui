@@ -191,16 +191,21 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     frame.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled(
-                format!(
-                    "{} with {} mode · {}",
-                    active_model(app),
-                    mode_label(app),
-                    app.config.default_provider
+            Line::from(vec![
+                Span::styled("Agent: ", Style::default().fg(palette.muted)),
+                Span::styled(
+                    app.active_agent_name(),
+                    Style::default().fg(palette.accent).add_modifier(Modifier::BOLD),
                 ),
+                Span::styled(
+                    format!(" ({})", app.active_agent_id()),
+                    Style::default().fg(palette.muted),
+                ),
+            ]),
+            Line::from(Span::styled(
+                trim_to_width(app.active_agent_description(), content.width as usize),
                 Style::default().fg(palette.muted),
             )),
-            Line::from(Span::styled(compact_cwd(), Style::default().fg(palette.muted))),
         ])
         .alignment(Alignment::Center)
         .style(Style::default().fg(palette.text).bg(palette.bg)),
@@ -607,14 +612,6 @@ fn compact_cwd() -> String {
 
 fn active_model(app: &App) -> &str {
     app.active_model()
-}
-
-fn mode_label(app: &App) -> &'static str {
-    match app.mode {
-        UiMode::Input => "input",
-        UiMode::Normal => "normal",
-        UiMode::Streaming => "streaming",
-    }
 }
 
 pub(crate) mod theme {
