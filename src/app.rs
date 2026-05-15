@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    agent::PrimaryAgent,
     auth::{AuthRecord, AuthStatus, AuthStore, GitHubDeviceFlowConfig},
     config::{AppConfig, CopilotConfig},
     providers::{
@@ -29,16 +30,32 @@ pub enum ThemeId {
     Gruvbox,
     Nord,
     Dracula,
+    Aura,
+    SolarizedDark,
+    OceanicNext,
+    RosePine,
+    Everforest,
+    Kanagawa,
+    AyuMirage,
+    NightOwl,
 }
 
 impl ThemeId {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 14] = [
         Self::MonokaiBlue,
         Self::TokyoNight,
         Self::CatppuccinMocha,
         Self::Gruvbox,
         Self::Nord,
         Self::Dracula,
+        Self::Aura,
+        Self::SolarizedDark,
+        Self::OceanicNext,
+        Self::RosePine,
+        Self::Everforest,
+        Self::Kanagawa,
+        Self::AyuMirage,
+        Self::NightOwl,
     ];
 
     pub fn name(self) -> &'static str {
@@ -49,6 +66,14 @@ impl ThemeId {
             Self::Gruvbox => "Gruvbox",
             Self::Nord => "Nord",
             Self::Dracula => "Dracula",
+            Self::Aura => "Aura",
+            Self::SolarizedDark => "Solarized Dark",
+            Self::OceanicNext => "Oceanic Next",
+            Self::RosePine => "Rose Pine",
+            Self::Everforest => "Everforest",
+            Self::Kanagawa => "Kanagawa",
+            Self::AyuMirage => "Ayu Mirage",
+            Self::NightOwl => "Night Owl",
         }
     }
 
@@ -60,6 +85,14 @@ impl ThemeId {
             Self::Gruvbox => "warm retro brown with gold accents",
             Self::Nord => "arctic blue-gray with frost accents",
             Self::Dracula => "dark purple with vivid pink and cyan",
+            Self::Aura => "vibrant purple with neon green accents",
+            Self::SolarizedDark => "classic low-contrast teal and yellow",
+            Self::OceanicNext => "deep sea blue with coral and mint",
+            Self::RosePine => "relaxed dusky pink and muted gold",
+            Self::Everforest => "soft organic green and warm earth tones",
+            Self::Kanagawa => "sophisticated old-world Japanese waves",
+            Self::AyuMirage => "modern minimal charcoal and orange",
+            Self::NightOwl => "accessible deep blue and vibrant neon",
         }
     }
 
@@ -81,6 +114,49 @@ pub enum Role {
 pub struct Message {
     pub role: Role,
     pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReasoningEffort {
+    Auto,
+    Low,
+    Medium,
+    High,
+    XHigh,
+}
+
+impl ReasoningEffort {
+    pub const AUTO_ONLY: [Self; 1] = [Self::Auto];
+    pub const STANDARD: [Self; 4] = [Self::Auto, Self::Low, Self::Medium, Self::High];
+    pub const EXTENDED: [Self; 5] = [Self::Auto, Self::Low, Self::Medium, Self::High, Self::XHigh];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::XHigh => "xhigh",
+        }
+    }
+
+    fn request_value(self) -> Option<String> {
+        match self {
+            Self::Auto => None,
+            _ => Some(self.label().to_owned()),
+        }
+    }
+
+    fn next_in(self, supported: &[Self]) -> Self {
+        if supported.is_empty() {
+            return Self::Auto;
+        }
+        let index = supported
+            .iter()
+            .position(|effort| *effort == self)
+            .unwrap_or(0);
+        supported[(index + 1) % supported.len()]
+    }
 }
 
 #[derive(Debug)]
@@ -108,7 +184,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 9] = [
+pub const SLASH_COMMANDS: [SlashCommand; 10] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -124,6 +200,10 @@ pub const SLASH_COMMANDS: [SlashCommand; 9] = [
     SlashCommand {
         name: "/statusline",
         description: "Configure statusline items",
+    },
+    SlashCommand {
+        name: "/agent",
+        description: "Switch between build and plan agents",
     },
     SlashCommand {
         name: "/login",
@@ -153,6 +233,9 @@ const FALLBACK_SPINNER_FRAME: &str = "•";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusLineItem {
     Model,
+    Agent,
+    Reasoning,
+    ProviderUsage,
     CurrentDir,
     ProjectName,
     GitBranch,
@@ -162,8 +245,11 @@ pub enum StatusLineItem {
 }
 
 impl StatusLineItem {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::Model,
+        Self::Agent,
+        Self::Reasoning,
+        Self::ProviderUsage,
         Self::CurrentDir,
         Self::ProjectName,
         Self::GitBranch,
@@ -175,6 +261,9 @@ impl StatusLineItem {
     pub fn label(self) -> &'static str {
         match self {
             Self::Model => "model",
+            Self::Agent => "agent",
+            Self::Reasoning => "reasoning",
+            Self::ProviderUsage => "usage",
             Self::CurrentDir => "current-dir",
             Self::ProjectName => "project-name",
             Self::GitBranch => "git-branch",
@@ -187,6 +276,9 @@ impl StatusLineItem {
     pub fn description(self) -> &'static str {
         match self {
             Self::Model => "Current model name",
+            Self::Agent => "Current agent profile",
+            Self::Reasoning => "Provider reasoning effort",
+            Self::ProviderUsage => "Current provider usage",
             Self::CurrentDir => "Current working directory",
             Self::ProjectName => "Project directory name",
             Self::GitBranch => "Current Git branch",
@@ -211,6 +303,7 @@ pub struct ModelOption {
     pub provider_id: String,
     pub provider_name: String,
     pub model: Option<String>,
+    pub hint: Option<String>,
 }
 
 impl ModelOption {
@@ -219,14 +312,16 @@ impl ModelOption {
             provider_id: provider_id.to_owned(),
             provider_name: provider_name.to_owned(),
             model: None,
+            hint: None,
         }
     }
 
-    fn model(provider_id: &str, provider_name: &str, model: String) -> Self {
+    fn model(provider_id: &str, provider_name: &str, model: String, hint: Option<String>) -> Self {
         Self {
             provider_id: provider_id.to_owned(),
             provider_name: provider_name.to_owned(),
             model: Some(model),
+            hint,
         }
     }
 
@@ -265,6 +360,8 @@ pub struct App {
     pub slash_cursor: usize,
     pub chat_scroll: u16,
     pub logo: &'static str,
+    pub active_agent: PrimaryAgent,
+    pub reasoning_effort: ReasoningEffort,
     pub theme: ThemeId,
     pub theme_picker_open: bool,
     pub theme_cursor: usize,
@@ -274,6 +371,8 @@ pub struct App {
     pub model_options: Vec<ModelOption>,
     pub login_picker_open: bool,
     pub login_cursor: usize,
+    pub agent_picker_open: bool,
+    pub agent_cursor: usize,
     pub statusline_open: bool,
     pub statusline_cursor: usize,
     pub statusline_enabled: [bool; StatusLineItem::ALL.len()],
@@ -303,6 +402,8 @@ impl App {
             slash_cursor: 0,
             chat_scroll: 0,
             logo: LOGO,
+            active_agent: PrimaryAgent::Build,
+            reasoning_effort: ReasoningEffort::Auto,
             theme: ThemeId::MonokaiBlue,
             theme_picker_open: false,
             theme_cursor: ThemeId::MonokaiBlue.index(),
@@ -312,6 +413,8 @@ impl App {
             model_options,
             login_picker_open: false,
             login_cursor: 0,
+            agent_picker_open: false,
+            agent_cursor: PrimaryAgent::Build.index(),
             statusline_open: false,
             statusline_cursor: 0,
             statusline_enabled: [true; StatusLineItem::ALL.len()],
@@ -325,12 +428,131 @@ impl App {
         }
     }
 
+    pub fn active_agent_name(&self) -> &'static str {
+        self.active_agent.name()
+    }
+
+    pub fn active_agent_id(&self) -> &'static str {
+        self.active_agent.id()
+    }
+
+    pub fn active_agent_description(&self) -> &'static str {
+        self.active_agent.description()
+    }
+
+    pub fn cycle_reasoning_effort(&mut self) {
+        if self.mode == UiMode::Streaming {
+            return;
+        }
+        self.reasoning_effort = self
+            .reasoning_effort
+            .next_in(&self.supported_reasoning_efforts());
+        self.status = format!(
+            "Reasoning effort: {} ({})",
+            self.reasoning_effort.label(),
+            self.config.default_provider
+        );
+    }
+
+    pub fn supported_reasoning_efforts(&self) -> Vec<ReasoningEffort> {
+        if self.config.default_provider == "copilot" {
+            if let Some(efforts) =
+                copilot_model_reasoning_efforts(self.auth_store.as_ref(), self.active_model())
+            {
+                return efforts;
+            }
+        }
+        provider_reasoning_efforts(&self.config.default_provider, self.active_model())
+    }
+
+    fn normalized_reasoning_effort(&self) -> ReasoningEffort {
+        if self
+            .supported_reasoning_efforts()
+            .contains(&self.reasoning_effort)
+        {
+            self.reasoning_effort
+        } else {
+            ReasoningEffort::Auto
+        }
+    }
+
+    pub fn cycle_agent(&mut self) {
+        if self.mode == UiMode::Streaming
+            || self.theme_picker_open
+            || self.model_picker_open
+            || self.login_picker_open
+            || self.statusline_open
+            || self.agent_picker_open
+            || !self.input.trim().is_empty()
+        {
+            return;
+        }
+
+        self.active_agent = if self.active_agent == PrimaryAgent::Build {
+            PrimaryAgent::Plan
+        } else {
+            PrimaryAgent::Build
+        };
+        self.agent_cursor = self.active_agent.index();
+        self.status = format!("Agent: {}", self.active_agent.id());
+    }
+
+    pub fn open_agent_picker(&mut self) {
+        self.theme_picker_open = false;
+        self.model_picker_open = false;
+        self.login_picker_open = false;
+        self.statusline_open = false;
+        self.agent_picker_open = true;
+        self.agent_cursor = self.active_agent.index();
+        self.mode = UiMode::Normal;
+        self.status = "Select an agent".to_owned();
+    }
+
+    pub fn next_agent(&mut self) {
+        if self.agent_picker_open {
+            self.agent_cursor = (self.agent_cursor + 1) % PrimaryAgent::ALL.len();
+        }
+    }
+
+    pub fn previous_agent(&mut self) {
+        if self.agent_picker_open {
+            self.agent_cursor =
+                (self.agent_cursor + PrimaryAgent::ALL.len() - 1) % PrimaryAgent::ALL.len();
+        }
+    }
+
+    pub fn select_agent(&mut self) {
+        if !self.agent_picker_open {
+            return;
+        }
+        self.active_agent = PrimaryAgent::ALL[self.agent_cursor];
+        self.agent_picker_open = false;
+        self.mode = UiMode::Input;
+        self.status = format!("Agent: {}", self.active_agent.id());
+    }
+
+    fn close_agent_picker(&mut self) {
+        self.agent_picker_open = false;
+        self.mode = UiMode::Input;
+        self.status = self.provider_status();
+    }
+
+    fn provider_status(&self) -> String {
+        format!(
+            "Provider: {} • Agent: {} • Reasoning: {}",
+            self.config.default_provider,
+            self.active_agent.id(),
+            self.reasoning_effort.label()
+        )
+    }
+
     pub fn edit_input(&mut self, action: InputAction) {
         if self.mode == UiMode::Streaming
             || self.theme_picker_open
             || self.model_picker_open
             || self.login_picker_open
             || self.statusline_open
+            || self.agent_picker_open
         {
             return;
         }
@@ -382,8 +604,19 @@ impl App {
             provider: Arc::clone(&self.provider),
             request: ModelRequest {
                 messages: self.transcript.clone(),
+                system_prompt: Some(self.system_prompt()),
+                reasoning_effort: self.normalized_reasoning_effort().request_value(),
             },
         }))
+    }
+
+    fn system_prompt(&self) -> String {
+        format!(
+            "You are artui, an interactive coding-agent CLI. You are not ChatGPT in this product UI. If asked who you are, identify as artui and state the active provider/model exactly as {}/{}. Do not claim you lack a model label.\n\n{}",
+            self.config.default_provider,
+            self.active_model(),
+            self.active_agent.system_prompt()
+        )
     }
 
     pub fn handle_event(&mut self, event: AppEvent) {
@@ -391,7 +624,7 @@ impl App {
             AppEvent::Model(ModelEvent::Token(token)) => self.append_assistant_token(&token),
             AppEvent::Model(ModelEvent::Done) => {
                 self.mode = UiMode::Input;
-                self.status = format!("Provider: {}", self.config.default_provider);
+                self.status = self.provider_status();
                 self.stop_thinking_animation();
             }
             AppEvent::Auth(AuthEvent::Status(status)) => {
@@ -478,6 +711,10 @@ impl App {
             self.close_statusline_picker();
             return;
         }
+        if self.agent_picker_open {
+            self.close_agent_picker();
+            return;
+        }
         if self.mode != UiMode::Streaming {
             self.input.clear();
             self.slash_cursor = 0;
@@ -489,6 +726,7 @@ impl App {
         self.statusline_open = false;
         self.model_picker_open = false;
         self.login_picker_open = false;
+        self.agent_picker_open = false;
         self.theme_picker_open = true;
         self.theme_cursor = self.theme.index();
         self.mode = UiMode::Normal;
@@ -519,13 +757,14 @@ impl App {
     fn close_theme_picker(&mut self) {
         self.theme_picker_open = false;
         self.mode = UiMode::Input;
-        self.status = format!("Provider: {}", self.config.default_provider);
+        self.status = self.provider_status();
     }
 
     pub fn open_statusline_picker(&mut self) {
         self.theme_picker_open = false;
         self.model_picker_open = false;
         self.login_picker_open = false;
+        self.agent_picker_open = false;
         self.statusline_open = true;
         self.statusline_cursor = self
             .statusline_cursor
@@ -565,13 +804,14 @@ impl App {
     fn close_statusline_picker(&mut self) {
         self.statusline_open = false;
         self.mode = UiMode::Input;
-        self.status = format!("Provider: {}", self.config.default_provider);
+        self.status = self.provider_status();
     }
 
     pub fn open_model_picker(&mut self) -> Option<AppRequest> {
         self.theme_picker_open = false;
         self.statusline_open = false;
         self.login_picker_open = false;
+        self.agent_picker_open = false;
         self.model_options = available_model_options(&self.config, self.auth_store.as_ref());
         let active_model = self.active_model().to_owned();
         self.model_cursor = self
@@ -648,6 +888,7 @@ impl App {
         self.theme_picker_open = false;
         self.model_picker_open = false;
         self.statusline_open = false;
+        self.agent_picker_open = false;
         self.login_picker_open = true;
         self.login_cursor = self.login_cursor.min(PROVIDERS.len().saturating_sub(1));
         self.mode = UiMode::Normal;
@@ -683,7 +924,7 @@ impl App {
     fn close_login_picker(&mut self) {
         self.login_picker_open = false;
         self.mode = UiMode::Input;
-        self.status = format!("Provider: {}", self.config.default_provider);
+        self.status = self.provider_status();
     }
 
     pub fn active_model(&self) -> &str {
@@ -708,6 +949,12 @@ impl App {
             Ok(provider) => {
                 self.config = next_config;
                 self.provider = provider;
+                if !self
+                    .supported_reasoning_efforts()
+                    .contains(&self.reasoning_effort)
+                {
+                    self.reasoning_effort = ReasoningEffort::Auto;
+                }
                 self.status = format!("Model: {provider_id}/{model}");
             }
             Err(error) => {
@@ -802,6 +1049,7 @@ impl App {
             && !self.model_picker_open
             && !self.login_picker_open
             && !self.statusline_open
+            && !self.agent_picker_open
             && !self.has_slash_command_matches()
     }
 
@@ -865,8 +1113,16 @@ impl App {
                 SlashCommandResult::Handled(None)
             }
             "/model" => SlashCommandResult::Handled(self.open_model_picker()),
+            "/model refresh" => {
+                self.status = "Refreshing GitHub Copilot models".to_owned();
+                SlashCommandResult::Handled(self.copilot_model_refresh_request())
+            }
             "/statusline" => {
                 self.open_statusline_picker();
+                SlashCommandResult::Handled(None)
+            }
+            "/agent" => {
+                self.open_agent_picker();
                 SlashCommandResult::Handled(None)
             }
             "/clear" => {
@@ -882,11 +1138,28 @@ impl App {
                 let model = command.trim_start_matches("/model").trim();
                 if model.is_empty() {
                     return SlashCommandResult::Handled(self.open_model_picker());
+                } else if model == "refresh" {
+                    self.status = "Refreshing GitHub Copilot models".to_owned();
+                    return SlashCommandResult::Handled(self.copilot_model_refresh_request());
                 } else {
                     self.switch_active_model(
                         self.config.default_provider.clone(),
                         model.to_owned(),
                     );
+                }
+                SlashCommandResult::Handled(None)
+            }
+            command if command.starts_with("/agent ") => {
+                let requested = command.trim_start_matches("/agent").trim();
+                match PrimaryAgent::from_id(requested) {
+                    Some(agent) => {
+                        self.active_agent = agent;
+                        self.agent_cursor = agent.index();
+                        self.status = format!("Agent: {}", agent.id());
+                    }
+                    None => {
+                        self.status = format!("Unknown agent: {requested}");
+                    }
                 }
                 SlashCommandResult::Handled(None)
             }
@@ -1107,6 +1380,43 @@ impl App {
         }
     }
 
+    pub fn context_usage_label(&self) -> String {
+        let used = self.estimated_context_tokens();
+        let Some(limit) = self.active_context_window_tokens() else {
+            return "ctx ?".to_owned();
+        };
+        let percent = used.saturating_mul(100) / limit.max(1);
+        format!("ctx {}%", percent.min(100))
+    }
+
+    fn estimated_context_tokens(&self) -> usize {
+        let chars = self.system_prompt().chars().count()
+            + self.input.chars().count()
+            + self
+                .transcript
+                .iter()
+                .map(|message| message.content.chars().count() + 8)
+                .sum::<usize>();
+        chars.div_ceil(4).max(1)
+    }
+
+    fn active_context_window_tokens(&self) -> Option<usize> {
+        if self.config.default_provider == "copilot" {
+            if let Some(tokens) =
+                copilot_model_context_window(self.auth_store.as_ref(), self.active_model())
+            {
+                return Some(tokens);
+            }
+        }
+        known_context_window_tokens(&self.config.default_provider, self.active_model())
+    }
+
+    pub fn provider_usage_label(&self) -> String {
+        registry::provider_metadata(&self.config.default_provider)
+            .map(|provider| provider.display_name.to_owned())
+            .unwrap_or_else(|| self.config.default_provider.clone())
+    }
+
     pub fn provider_status_label(&self, provider_id: &str) -> String {
         match registry::provider_metadata(provider_id).map(|provider| provider.auth_requirement) {
             Some(AuthRequirement::None) => "available".to_owned(),
@@ -1248,9 +1558,9 @@ fn git_branch() -> Option<String> {
 fn git_status_label() -> Option<String> {
     run_git(["status", "--porcelain"]).map(|status| {
         if status.is_empty() {
-            "working tree clean".to_owned()
+            "clean".to_owned()
         } else {
-            format!("{} changed", status.lines().count())
+            format!("{}", status.lines().count())
         }
     })
 }
@@ -1261,6 +1571,74 @@ fn run_git<const N: usize>(args: [&str; N]) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn known_context_window_tokens(provider_id: &str, model: &str) -> Option<usize> {
+    let model = model.to_ascii_lowercase();
+    let tokens = match provider_id {
+        "ollama" => {
+            if model.contains("nemotron") || model.contains("qwen3") {
+                128_000
+            } else {
+                32_000
+            }
+        }
+        "copilot" | "openai_account" | "openai_compat" => {
+            if model.contains("gpt-5") || model.contains("codex") {
+                400_000
+            } else if model.contains("gpt-4.1") {
+                1_000_000
+            } else if model.contains("gpt-4o")
+                || model.starts_with("o1")
+                || model.starts_with("o3")
+                || model.starts_with("o4")
+            {
+                128_000
+            } else if model.contains("claude") || model.contains("gemini") {
+                200_000
+            } else {
+                128_000
+            }
+        }
+        _ => return None,
+    };
+    Some(tokens)
+}
+
+fn provider_reasoning_efforts(provider_id: &str, model: &str) -> Vec<ReasoningEffort> {
+    let model = model.to_ascii_lowercase();
+    match provider_id {
+        // Ollama's native chat API does not expose a portable effort enum in artui yet.
+        "ollama" => ReasoningEffort::AUTO_ONLY.to_vec(),
+        // GitHub Copilot fallback when endpoint metadata is not cached yet.
+        "copilot" if model.contains("gpt-5.5") => ReasoningEffort::EXTENDED.to_vec(),
+        "copilot" if is_reasoning_model_name(&model) => ReasoningEffort::STANDARD.to_vec(),
+        "copilot" => ReasoningEffort::AUTO_ONLY.to_vec(),
+        // Account/API-backed OpenAI-compatible providers are model-dependent. Allow xhigh for
+        // model families documented or commonly gateway-normalized with extended effort support.
+        "openai_account" | "openai_compat" if supports_xhigh_reasoning(&model) => {
+            ReasoningEffort::EXTENDED.to_vec()
+        }
+        "openai_account" | "openai_compat" if is_reasoning_model_name(&model) => {
+            ReasoningEffort::STANDARD.to_vec()
+        }
+        "openai_account" | "openai_compat" => ReasoningEffort::AUTO_ONLY.to_vec(),
+        _ => ReasoningEffort::AUTO_ONLY.to_vec(),
+    }
+}
+
+fn supports_xhigh_reasoning(model: &str) -> bool {
+    model.contains("gpt-5.5") || model.contains("xhigh")
+}
+
+fn is_reasoning_model_name(model: &str) -> bool {
+    model.contains("codex")
+        || model.starts_with("gpt-5")
+        || model.starts_with("o1")
+        || model.starts_with("o3")
+        || model.starts_with("o4")
+        || model.contains("reason")
+        || model.contains("thinking")
 }
 
 fn active_model_from_config(config: &AppConfig) -> &str {
@@ -1348,10 +1726,12 @@ fn available_model_options(config: &AppConfig, auth_store: Option<&AuthStore>) -
         }
         options.push(ModelOption::header(provider.id, provider.display_name));
         for model in models {
+            let hint = model_hint(config, auth_store, provider.id, &model);
             options.push(ModelOption::model(
                 provider.id,
                 provider.display_name,
                 model,
+                hint,
             ));
         }
     }
@@ -1412,6 +1792,98 @@ fn stored_copilot_models(auth_store: Option<&AuthStore>) -> Option<Vec<String>> 
     let record = auth_store?.record("copilot").ok()??;
     let models = record.metadata.get("models")?;
     serde_json::from_str::<Vec<String>>(models).ok()
+}
+
+fn model_hint(
+    _config: &AppConfig,
+    auth_store: Option<&AuthStore>,
+    provider_id: &str,
+    model: &str,
+) -> Option<String> {
+    match provider_id {
+        "copilot" => copilot_model_hint(auth_store, model),
+        "ollama" => Some("local".to_owned()),
+        "openai_compat" => Some("api key".to_owned()),
+        "openai_account" => Some("account".to_owned()),
+        _ => None,
+    }
+}
+
+fn copilot_model_hint(auth_store: Option<&AuthStore>, model: &str) -> Option<String> {
+    let endpoint = stored_copilot_model_endpoint(auth_store, model)?;
+    Some(endpoint.label())
+}
+
+fn copilot_model_context_window(auth_store: Option<&AuthStore>, model: &str) -> Option<usize> {
+    stored_copilot_model_endpoint(auth_store, model)?.context_window_tokens
+}
+
+fn copilot_model_reasoning_efforts(
+    auth_store: Option<&AuthStore>,
+    model: &str,
+) -> Option<Vec<ReasoningEffort>> {
+    let endpoint = stored_copilot_model_endpoint(auth_store, model)?;
+    if endpoint.reasoning_efforts.is_empty() {
+        return None;
+    }
+    let mut efforts = vec![ReasoningEffort::Auto];
+    for effort in endpoint.reasoning_efforts {
+        let effort = match effort.as_str() {
+            "low" => ReasoningEffort::Low,
+            "medium" => ReasoningEffort::Medium,
+            "high" => ReasoningEffort::High,
+            "xhigh" => ReasoningEffort::XHigh,
+            _ => continue,
+        };
+        if !efforts.contains(&effort) {
+            efforts.push(effort);
+        }
+    }
+    Some(efforts)
+}
+
+fn stored_copilot_model_endpoint(
+    auth_store: Option<&AuthStore>,
+    model: &str,
+) -> Option<StoredModelEndpoint> {
+    let record = auth_store?.record("copilot").ok()??;
+    let metadata = record.metadata.get("model_endpoints")?;
+    let endpoints = serde_json::from_str::<Vec<StoredModelEndpoint>>(metadata).ok()?;
+    endpoints.into_iter().find(|endpoint| endpoint.id == model)
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct StoredModelEndpoint {
+    id: String,
+    api: String,
+    #[serde(default)]
+    supported_endpoints: Vec<String>,
+    #[serde(default)]
+    reasoning_efforts: Vec<String>,
+    #[serde(default)]
+    context_window_tokens: Option<usize>,
+}
+
+impl StoredModelEndpoint {
+    fn label(&self) -> String {
+        let mut labels = Vec::new();
+        match self.api.as_str() {
+            "responses" => labels.push("responses"),
+            "messages" => labels.push("messages"),
+            _ => labels.push("chat"),
+        }
+        if self.id.contains("codex") || self.id.starts_with("gpt-5") {
+            labels.push("reasoning");
+        }
+        if self
+            .supported_endpoints
+            .iter()
+            .any(|endpoint| endpoint.contains("embeddings"))
+        {
+            labels.push("embeddings");
+        }
+        labels.join(" • ")
+    }
 }
 
 fn copilot_current_model<'a>(config: &'a AppConfig, auth_store: Option<&AuthStore>) -> &'a str {
@@ -1518,6 +1990,38 @@ mod tests {
             })
             .unwrap();
         store
+    }
+
+    #[test]
+    fn context_window_is_provider_model_dependent() {
+        assert_eq!(
+            known_context_window_tokens("ollama", "gemma4:e2b"),
+            Some(32_000)
+        );
+        assert_eq!(
+            known_context_window_tokens("copilot", "gpt-5.2-codex"),
+            Some(400_000)
+        );
+        assert_eq!(
+            known_context_window_tokens("copilot", "gpt-4.1"),
+            Some(1_000_000)
+        );
+    }
+
+    #[test]
+    fn provider_reasoning_efforts_are_model_dependent() {
+        assert_eq!(
+            provider_reasoning_efforts("ollama", "qwen3:latest"),
+            ReasoningEffort::AUTO_ONLY.to_vec()
+        );
+        assert_eq!(
+            provider_reasoning_efforts("copilot", "gpt-5"),
+            ReasoningEffort::STANDARD.to_vec()
+        );
+        assert_eq!(
+            provider_reasoning_efforts("copilot", "gpt-5.5"),
+            ReasoningEffort::EXTENDED.to_vec()
+        );
     }
 
     #[test]

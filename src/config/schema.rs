@@ -179,6 +179,7 @@ pub struct CopilotConfig {
     pub github_oauth_scope: String,
     pub github_login_timeout_secs: u64,
     pub github_token_env: Vec<String>,
+    pub request_timeout_secs: u64,
     pub default_model: String,
 }
 
@@ -198,6 +199,7 @@ impl Default for CopilotConfig {
             github_oauth_scope: "read:user".to_owned(),
             github_login_timeout_secs: 900,
             github_token_env: vec!["GITHUB_TOKEN".to_owned(), "GH_TOKEN".to_owned()],
+            request_timeout_secs: 30,
             default_model: String::new(),
         }
     }

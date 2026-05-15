@@ -44,16 +44,26 @@ impl OllamaProvider {
 
     async fn stream_chat(&self, request: ModelRequest, tx: mpsc::Sender<AppEvent>) -> Result<()> {
         let messages = request
-            .messages
+            .system_prompt
             .into_iter()
-            .filter(|message| !message.content.is_empty())
-            .map(|message| OllamaMessage {
-                role: match message.role {
-                    Role::User => "user".to_owned(),
-                    Role::Assistant => "assistant".to_owned(),
-                },
-                content: message.content,
+            .filter(|content| !content.trim().is_empty())
+            .map(|content| OllamaMessage {
+                role: "system".to_owned(),
+                content,
             })
+            .chain(
+                request
+                    .messages
+                    .into_iter()
+                    .filter(|message| !message.content.is_empty())
+                    .map(|message| OllamaMessage {
+                        role: match message.role {
+                            Role::User => "user".to_owned(),
+                            Role::Assistant => "assistant".to_owned(),
+                        },
+                        content: message.content,
+                    }),
+            )
             .collect();
 
         let body = OllamaChatRequest {

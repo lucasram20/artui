@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod app;
 pub mod auth;
 pub mod config;
@@ -87,6 +88,8 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
     match (key.modifiers, key.code) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => app.should_quit = true,
         (KeyModifiers::CONTROL, KeyCode::Char('l')) => app.clear_transcript(),
+        (_, KeyCode::BackTab) => app.cycle_reasoning_effort(),
+        (KeyModifiers::SHIFT, KeyCode::Tab) => app.cycle_reasoning_effort(),
         (_, KeyCode::Esc) => app.cancel_input(),
         (_, KeyCode::Up) if app.model_picker_open => app.previous_model(),
         (_, KeyCode::Down) if app.model_picker_open => app.next_model(),
@@ -108,6 +111,11 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Char('j')) if app.statusline_open => app.next_statusline_item(),
         (_, KeyCode::Char(' ')) if app.statusline_open => app.toggle_statusline_item(),
         (_, KeyCode::Enter) if app.statusline_open => app.select_statusline(),
+        (_, KeyCode::Up) if app.agent_picker_open => app.previous_agent(),
+        (_, KeyCode::Down) if app.agent_picker_open => app.next_agent(),
+        (_, KeyCode::Char('k')) if app.agent_picker_open => app.previous_agent(),
+        (_, KeyCode::Char('j')) if app.agent_picker_open => app.next_agent(),
+        (_, KeyCode::Enter) if app.agent_picker_open => app.select_agent(),
         (_, KeyCode::Up) if app.has_slash_command_matches() => app.previous_slash_command(),
         (_, KeyCode::Down) if app.has_slash_command_matches() => app.next_slash_command(),
         (_, KeyCode::Char('k')) if app.has_slash_command_matches() => app.previous_slash_command(),
@@ -127,12 +135,14 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
                 && !app.theme_picker_open
                 && !app.model_picker_open
                 && !app.login_picker_open
-                && !app.statusline_open =>
+                && !app.statusline_open
+                && !app.agent_picker_open =>
         {
             app.should_quit = true
         }
         (_, KeyCode::Enter) if app.theme_picker_open => app.select_theme(),
-        (_, KeyCode::Tab) => app.complete_slash_command(),
+        (_, KeyCode::Tab) if app.has_slash_command_matches() => app.complete_slash_command(),
+        (_, KeyCode::Tab) => app.cycle_agent(),
         (_, KeyCode::Enter) if app.has_slash_command_matches() => {
             if let Some(request) = app.submit_slash_command_selection() {
                 spawn_app_request(request, event_tx);

@@ -1,4 +1,7 @@
-use std::{process::Command, time::Duration};
+use std::{
+    process::Command,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -36,51 +39,57 @@ impl CopilotProvider {
     async fn stream_chat(&self, request: ModelRequest, tx: mpsc::Sender<AppEvent>) -> Result<()> {
         let model = self.active_model();
         self.validate_active_model(&model)?;
-        let session = self.session_for_model(&model).await?;
-        let response = if session.api == CopilotApiKind::Messages {
-            match self
-                .send_messages_request(request.clone(), &session.session, &model)
-                .await
-            {
-                Ok(response) => response,
-                Err(error) => {
-                    self.handle_model_error(error, request, &session.session)
-                        .await?
-                }
+        let session = self.session_for_model(&model, false).await?;
+        let response = match self
+            .send_request_for_api(request.clone(), &session.session, &model, session.api)
+            .await
+        {
+            Ok(response) => response,
+            Err(error) if error.is_unauthorized_or_expired() => {
+                let refreshed = self.session_for_model(&model, true).await?;
+                self.send_request_for_api(request, &refreshed.session, &model, refreshed.api)
+                    .await
+                    .map_err(anyhow::Error::from)?
             }
-        } else if session.api == CopilotApiKind::Responses {
-            match self
-                .send_responses_request(request.clone(), &session.session, &model)
-                .await
-            {
-                Ok(response) => response,
-                Err(error) if error.is_unsupported_api_for_model() => {
-                    self.send_chat_request(request, &session.session, &model)
-                        .await?
-                }
-                Err(error) => {
-                    self.handle_model_error(error, request, &session.session)
-                        .await?
-                }
-            }
-        } else {
-            match self
-                .send_chat_request(request.clone(), &session.session, &model)
-                .await
-            {
-                Ok(response) => response,
-                Err(error) if error.is_unsupported_api_for_model() => {
-                    self.send_responses_request(request, &session.session, &model)
-                        .await?
-                }
-                Err(error) => {
-                    self.handle_model_error(error, request, &session.session)
-                        .await?
-                }
+            Err(error) => {
+                self.handle_model_error(error, request, &session.session)
+                    .await?
             }
         };
 
         stream_sse_response(response, &tx).await
+    }
+
+    async fn send_request_for_api(
+        &self,
+        request: ModelRequest,
+        session: &CopilotSession,
+        model: &str,
+        api: CopilotApiKind,
+    ) -> Result<reqwest::Response, CopilotRequestError> {
+        match api {
+            CopilotApiKind::Messages => self.send_messages_request(request, session, model).await,
+            CopilotApiKind::Responses => match self
+                .send_responses_request(request.clone(), session, model)
+                .await
+            {
+                Ok(response) => Ok(response),
+                Err(error) if error.is_unsupported_api_for_model() => {
+                    self.send_chat_request(request, session, model).await
+                }
+                Err(error) => Err(error),
+            },
+            CopilotApiKind::Chat => match self
+                .send_chat_request(request.clone(), session, model)
+                .await
+            {
+                Ok(response) => Ok(response),
+                Err(error) if error.is_unsupported_api_for_model() => {
+                    self.send_responses_request(request, session, model).await
+                }
+                Err(error) => Err(error),
+            },
+        }
     }
 
     async fn handle_model_error(
@@ -119,22 +128,16 @@ impl CopilotProvider {
         session: &CopilotSession,
         model: &str,
     ) -> Result<reqwest::Response, CopilotRequestError> {
-        let messages = request
-            .messages
-            .into_iter()
-            .filter(|message| !message.content.is_empty())
-            .map(|message| CopilotMessage {
-                role: match message.role {
-                    Role::User => "user".to_owned(),
-                    Role::Assistant => "assistant".to_owned(),
-                },
-                content: message.content,
-            })
-            .collect();
+        let system = request
+            .system_prompt
+            .clone()
+            .filter(|content| !content.trim().is_empty());
+        let messages = copilot_conversation_messages(request);
 
         let body = CopilotMessagesRequest {
             model: model.to_owned(),
             messages,
+            system,
             max_tokens: 4096,
             stream: true,
         };
@@ -157,6 +160,7 @@ impl CopilotProvider {
             ))
             .headers(headers)
             .json(&body)
+            .timeout(request_timeout(&self.config))
             .send()
             .await
             .map_err(|source| CopilotRequestError {
@@ -183,22 +187,13 @@ impl CopilotProvider {
         session: &CopilotSession,
         model: &str,
     ) -> Result<reqwest::Response, CopilotRequestError> {
-        let messages = request
-            .messages
-            .into_iter()
-            .filter(|message| !message.content.is_empty())
-            .map(|message| CopilotMessage {
-                role: match message.role {
-                    Role::User => "user".to_owned(),
-                    Role::Assistant => "assistant".to_owned(),
-                },
-                content: message.content,
-            })
-            .collect();
+        let reasoning_effort = request.reasoning_effort.clone();
+        let messages = copilot_chat_messages(request);
 
         let body = CopilotChatRequest {
             model: model.to_owned(),
             messages,
+            reasoning_effort,
             stream: true,
         };
         let response = self
@@ -216,6 +211,7 @@ impl CopilotProvider {
                 })?,
             )
             .json(&body)
+            .timeout(request_timeout(&self.config))
             .send()
             .await
             .map_err(|source| CopilotRequestError {
@@ -242,22 +238,21 @@ impl CopilotProvider {
         session: &CopilotSession,
         model: &str,
     ) -> Result<reqwest::Response, CopilotRequestError> {
-        let input = request
-            .messages
-            .into_iter()
-            .filter(|message| !message.content.is_empty())
-            .map(|message| CopilotResponseInput {
-                role: match message.role {
-                    Role::User => "user".to_owned(),
-                    Role::Assistant => "assistant".to_owned(),
-                },
-                content: message.content,
-            })
-            .collect();
+        let instructions = request
+            .system_prompt
+            .clone()
+            .filter(|content| !content.trim().is_empty());
+        let reasoning = request
+            .reasoning_effort
+            .clone()
+            .map(|effort| CopilotReasoning { effort });
+        let input = copilot_response_input(request);
 
         let body = CopilotResponsesRequest {
             model: model.to_owned(),
             input,
+            instructions,
+            reasoning,
             stream: true,
         };
         let response = self
@@ -275,6 +270,7 @@ impl CopilotProvider {
                 })?,
             )
             .json(&body)
+            .timeout(request_timeout(&self.config))
             .send()
             .await
             .map_err(|source| CopilotRequestError {
@@ -317,12 +313,24 @@ impl CopilotProvider {
         configured.to_owned()
     }
 
-    async fn session_for_model(&self, model: &str) -> Result<ResolvedCopilotSession> {
+    async fn session_for_model(
+        &self,
+        model: &str,
+        force_refresh: bool,
+    ) -> Result<ResolvedCopilotSession> {
         let candidates = token_candidates(&self.config, self.store.as_ref())?;
         let mut fallback = None;
         let mut last_error = None;
         for candidate in candidates {
-            match exchange_github_token(&self.client, &self.config, &candidate.token).await {
+            match exchange_token_candidate(
+                &self.client,
+                &self.config,
+                self.store.as_ref(),
+                &candidate,
+                force_refresh,
+            )
+            .await
+            {
                 Ok(session) => {
                     match fetch_models_with_session(&self.client, &self.config, &session).await {
                         Ok(models) => {
@@ -412,17 +420,18 @@ pub async fn fetch_copilot_models(
 ) -> Result<Vec<String>> {
     let client = reqwest::Client::new();
     let candidates = token_candidates(config, Some(store))?;
-    let mut best = None;
+    let mut selected = None;
     let mut last_error = None;
     for candidate in candidates {
-        match exchange_github_token(&client, config, &candidate.token).await {
+        match exchange_token_candidate(&client, config, Some(store), &candidate, false).await {
             Ok(session) => match fetch_models_with_session(&client, config, &session).await {
                 Ok(models) => {
-                    if best
-                        .as_ref()
-                        .is_none_or(|known: &Vec<CopilotModel>| models.len() > known.len())
-                    {
-                        best = Some(models);
+                    if selected.as_ref().is_none_or(
+                        |(_, known): &(TokenCandidate, Vec<CopilotModel>)| {
+                            models.len() > known.len()
+                        },
+                    ) {
+                        selected = Some((candidate, models));
                     }
                 }
                 Err(error) => last_error = Some(format!("{}: {error}", candidate.label)),
@@ -431,15 +440,78 @@ pub async fn fetch_copilot_models(
         }
     }
 
-    best.map(|models| models.into_iter().map(|model| model.id).collect::<Vec<_>>())
-        .with_context(|| {
-            format!(
-                "No GitHub Copilot token could fetch models. {}",
-                last_error.unwrap_or_else(|| {
-                    "Run /login copilot or configure GH_TOKEN/GITHUB_TOKEN.".to_owned()
-                })
-            )
-        })
+    let (candidate, models) = selected.with_context(|| {
+        format!(
+            "No GitHub Copilot token could fetch models. {}",
+            last_error.unwrap_or_else(|| {
+                "Run /login copilot or configure GH_TOKEN/GITHUB_TOKEN.".to_owned()
+            })
+        )
+    })?;
+    if let Some(mut record) = store.record("copilot")? {
+        record.metadata.insert(
+            "model_endpoints".to_owned(),
+            serde_json::to_string(&model_endpoint_metadata(&models))?,
+        );
+        record
+            .metadata
+            .insert("model_source".to_owned(), candidate.label.clone());
+        if let Some(usage) = fetch_copilot_usage(&client, config, &candidate)
+            .await
+            .ok()
+            .flatten()
+        {
+            record
+                .metadata
+                .insert("usage_label".to_owned(), usage.label());
+        }
+        store.upsert(record)?;
+    }
+    Ok(models.into_iter().map(|model| model.id).collect::<Vec<_>>())
+}
+
+async fn fetch_copilot_usage(
+    client: &reqwest::Client,
+    config: &CopilotConfig,
+    candidate: &TokenCandidate,
+) -> Result<Option<CopilotUsage>> {
+    let response = client
+        .get("https://api.github.com/copilot_internal/user")
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, user_agent())
+        .header("X-GitHub-Api-Version", "2025-05-01")
+        .bearer_auth(&candidate.token)
+        .timeout(request_timeout(config))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        return Ok(None);
+    }
+    let usage = response
+        .json::<CopilotUsageResponse>()
+        .await
+        .context("failed to parse GitHub Copilot usage response")?;
+    Ok(CopilotUsage::from_response(usage))
+}
+
+async fn exchange_token_candidate(
+    client: &reqwest::Client,
+    config: &CopilotConfig,
+    store: Option<&AuthStore>,
+    candidate: &TokenCandidate,
+    force_refresh: bool,
+) -> Result<CopilotSession> {
+    if candidate.cacheable && !force_refresh {
+        if let Some(session) = cached_copilot_session(store)? {
+            return Ok(session);
+        }
+    }
+
+    let session = exchange_github_token(client, config, &candidate.token).await?;
+    if candidate.cacheable {
+        save_cached_copilot_session(store, &session)?;
+    }
+    Ok(session)
 }
 
 async fn exchange_github_token(
@@ -456,7 +528,7 @@ async fn exchange_github_token(
             reqwest::header::AUTHORIZATION,
             format!("token {github_token}"),
         )
-        .timeout(Duration::from_secs(5))
+        .timeout(request_timeout(config))
         .send()
         .await
         .context("failed to exchange GitHub token for a Copilot session token")?;
@@ -471,6 +543,7 @@ async fn exchange_github_token(
             return Ok(CopilotSession {
                 token: github_token.to_owned(),
                 api_base_url: config.api_base_url.clone(),
+                expires_at: None,
             });
         }
         bail!(
@@ -497,6 +570,9 @@ async fn exchange_github_token(
     Ok(CopilotSession {
         token: session_token,
         api_base_url,
+        expires_at: token
+            .expires_at
+            .or_else(|| unix_timestamp().checked_add(25 * 60)),
     })
 }
 
@@ -515,6 +591,7 @@ async fn fetch_models_with_session(
     let response = client
         .get(models_url.trim())
         .headers(copilot_api_headers(config, &session.token)?)
+        .timeout(request_timeout(config))
         .send()
         .await
         .context("failed to fetch GitHub Copilot models")?;
@@ -536,6 +613,7 @@ async fn fetch_models_with_session(
     let models = body
         .data
         .into_iter()
+        .chain(body.models)
         .filter(|model| model.is_selectable())
         .filter_map(|mut model| {
             model.id = model.id.trim().to_owned();
@@ -630,6 +708,61 @@ fn stream_event_text(event: &serde_json::Value) -> Vec<String> {
     tokens
 }
 
+fn copilot_chat_messages(request: ModelRequest) -> Vec<CopilotMessage> {
+    request
+        .system_prompt
+        .into_iter()
+        .filter(|content| !content.trim().is_empty())
+        .map(|content| CopilotMessage {
+            role: "system".to_owned(),
+            content,
+        })
+        .chain(
+            request
+                .messages
+                .into_iter()
+                .filter(|message| !message.content.is_empty())
+                .map(|message| CopilotMessage {
+                    role: match message.role {
+                        Role::User => "user".to_owned(),
+                        Role::Assistant => "assistant".to_owned(),
+                    },
+                    content: message.content,
+                }),
+        )
+        .collect()
+}
+
+fn copilot_conversation_messages(request: ModelRequest) -> Vec<CopilotMessage> {
+    request
+        .messages
+        .into_iter()
+        .filter(|message| !message.content.is_empty())
+        .map(|message| CopilotMessage {
+            role: match message.role {
+                Role::User => "user".to_owned(),
+                Role::Assistant => "assistant".to_owned(),
+            },
+            content: message.content,
+        })
+        .collect()
+}
+
+fn copilot_response_input(request: ModelRequest) -> Vec<CopilotResponseInput> {
+    request
+        .messages
+        .into_iter()
+        .filter(|message| !message.content.is_empty())
+        .map(|message| CopilotResponseInput {
+            role: match message.role {
+                Role::User => "user".to_owned(),
+                Role::Assistant => "assistant".to_owned(),
+            },
+            content: message.content,
+        })
+        .collect()
+}
+
 fn copilot_api_headers(config: &CopilotConfig, token: &str) -> Result<reqwest::header::HeaderMap> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(reqwest::header::ACCEPT, "application/json".parse()?);
@@ -668,6 +801,78 @@ fn is_default_models_url(value: &str) -> bool {
     value.trim().trim_end_matches('/') == "https://api.githubcopilot.com/models"
 }
 
+fn request_timeout(config: &CopilotConfig) -> Duration {
+    Duration::from_secs(config.request_timeout_secs.max(1))
+}
+
+fn cached_copilot_session(store: Option<&AuthStore>) -> Result<Option<CopilotSession>> {
+    let Some(record) = store
+        .map(|store| store.record("copilot"))
+        .transpose()
+        .context("failed to read cached GitHub Copilot session")?
+        .flatten()
+    else {
+        return Ok(None);
+    };
+    let Some(token) = record.metadata.get("copilot_session_token") else {
+        return Ok(None);
+    };
+    if token.trim().is_empty() {
+        return Ok(None);
+    }
+    let expires_at = record
+        .metadata
+        .get("copilot_session_expires_at")
+        .and_then(|value| value.parse::<u64>().ok());
+    if expires_at.is_some_and(|expires_at| expires_at <= unix_timestamp().saturating_add(60)) {
+        return Ok(None);
+    }
+    let api_base_url = record
+        .metadata
+        .get("copilot_session_api_base_url")
+        .cloned()
+        .unwrap_or_default();
+    if api_base_url.trim().is_empty() {
+        return Ok(None);
+    }
+    validate_https_url(&api_base_url, "cached GitHub Copilot api base URL")?;
+    Ok(Some(CopilotSession {
+        token: token.clone(),
+        api_base_url,
+        expires_at,
+    }))
+}
+
+fn save_cached_copilot_session(store: Option<&AuthStore>, session: &CopilotSession) -> Result<()> {
+    let Some(store) = store else {
+        return Ok(());
+    };
+    let Some(mut record) = store.record("copilot")? else {
+        return Ok(());
+    };
+    record
+        .metadata
+        .insert("copilot_session_token".to_owned(), session.token.clone());
+    record.metadata.insert(
+        "copilot_session_api_base_url".to_owned(),
+        session.api_base_url.clone(),
+    );
+    if let Some(expires_at) = session.expires_at {
+        record.metadata.insert(
+            "copilot_session_expires_at".to_owned(),
+            expires_at.to_string(),
+        );
+    }
+    store.upsert(record)
+}
+
+fn unix_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
 fn configured_header(value: &str, fallback: &str) -> String {
     let value = value.trim();
     if value.is_empty() {
@@ -698,6 +903,7 @@ fn token_candidates(
             candidates.push(TokenCandidate {
                 label: "artui auth store".to_owned(),
                 token,
+                cacheable: true,
             });
         }
     }
@@ -708,6 +914,7 @@ fn token_candidates(
                 candidates.push(TokenCandidate {
                     label: format!("env {env_name}"),
                     token,
+                    cacheable: false,
                 });
             }
         }
@@ -717,6 +924,7 @@ fn token_candidates(
         candidates.push(TokenCandidate {
             label: "gh auth token".to_owned(),
             token,
+            cacheable: false,
         });
     }
 
@@ -789,10 +997,27 @@ impl CopilotRequestError {
         self.status == Some(reqwest::StatusCode::BAD_REQUEST)
             && self.body.contains("unsupported_api_for_model")
     }
+
+    fn is_unauthorized_or_expired(&self) -> bool {
+        self.status == Some(reqwest::StatusCode::UNAUTHORIZED)
+            || self.body.to_ascii_lowercase().contains("expired")
+    }
+
+    fn is_session_rate_limit(&self) -> bool {
+        self.status == Some(reqwest::StatusCode::TOO_MANY_REQUESTS)
+            && self.body.to_ascii_lowercase().contains("5 hour session")
+    }
 }
 
 impl std::fmt::Display for CopilotRequestError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_session_rate_limit() {
+            return write!(
+                formatter,
+                "GitHub Copilot returned HTTP 429 rate limit from the provider. Raw response: {}",
+                truncate_body(&self.body)
+            );
+        }
         match self.status {
             Some(status) => write!(
                 formatter,
@@ -814,6 +1039,7 @@ impl std::error::Error for CopilotRequestError {}
 struct CopilotSession {
     token: String,
     api_base_url: String,
+    expires_at: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -833,11 +1059,13 @@ enum CopilotApiKind {
 struct TokenCandidate {
     label: String,
     token: String,
+    cacheable: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct CopilotTokenResponse {
     token: Option<String>,
+    expires_at: Option<u64>,
     endpoints: Option<CopilotEndpoints>,
 }
 
@@ -850,6 +1078,8 @@ struct CopilotEndpoints {
 struct CopilotChatRequest {
     model: String,
     messages: Vec<CopilotMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
     stream: bool,
 }
 
@@ -857,6 +1087,8 @@ struct CopilotChatRequest {
 struct CopilotMessagesRequest {
     model: String,
     messages: Vec<CopilotMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
     max_tokens: u32,
     stream: bool,
 }
@@ -871,7 +1103,16 @@ struct CopilotMessage {
 struct CopilotResponsesRequest {
     model: String,
     input: Vec<CopilotResponseInput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<CopilotReasoning>,
     stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CopilotReasoning {
+    effort: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -884,6 +1125,76 @@ struct CopilotResponseInput {
 struct CopilotModelsResponse {
     #[serde(default)]
     data: Vec<CopilotModel>,
+    #[serde(default)]
+    models: Vec<CopilotModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CopilotUsageResponse {
+    quota_snapshots: Option<CopilotQuotaSnapshots>,
+    limited_user_quotas: Option<std::collections::BTreeMap<String, u64>>,
+    monthly_quotas: Option<std::collections::BTreeMap<String, u64>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CopilotQuotaSnapshots {
+    premium_interactions: Option<CopilotQuotaSnapshot>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CopilotQuotaSnapshot {
+    entitlement: Option<u64>,
+    remaining: Option<u64>,
+    percent_remaining: Option<f64>,
+}
+
+struct CopilotUsage {
+    label: String,
+}
+
+impl CopilotUsage {
+    fn from_response(response: CopilotUsageResponse) -> Option<Self> {
+        if let Some(snapshot) = response
+            .quota_snapshots
+            .and_then(|snapshots| snapshots.premium_interactions)
+        {
+            let remaining = snapshot.remaining.or_else(|| {
+                snapshot.entitlement.zip(snapshot.percent_remaining).map(
+                    |(entitlement, percent_remaining)| {
+                        ((entitlement as f64) * percent_remaining / 100.0).round() as u64
+                    },
+                )
+            });
+            if let Some(remaining) = remaining {
+                let entitlement = snapshot.entitlement.unwrap_or(300);
+                return Some(Self {
+                    label: format!("{remaining}/{entitlement} prem"),
+                });
+            }
+        }
+
+        if let Some(quotas) = response.limited_user_quotas {
+            let chat = quotas.get("chat").copied();
+            let max_chat = response
+                .monthly_quotas
+                .as_ref()
+                .and_then(|quotas| quotas.get("chat"))
+                .copied();
+            if let Some(chat) = chat {
+                return Some(Self {
+                    label: match max_chat {
+                        Some(max_chat) => format!("{chat}/{max_chat} chat"),
+                        None => format!("{chat} chat"),
+                    },
+                });
+            }
+        }
+        None
+    }
+
+    fn label(self) -> String {
+        self.label
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -895,6 +1206,8 @@ struct CopilotModel {
     supported_endpoints: Vec<String>,
     #[serde(default)]
     policy: Option<CopilotModelPolicy>,
+    #[serde(default)]
+    capabilities: Option<CopilotModelCapabilities>,
 }
 
 impl CopilotModel {
@@ -927,6 +1240,26 @@ struct CopilotModelPolicy {
     state: Option<String>,
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct CopilotModelCapabilities {
+    #[serde(default)]
+    supports: CopilotModelSupports,
+    #[serde(default)]
+    limits: Option<CopilotModelLimits>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct CopilotModelLimits {
+    max_context_window_tokens: Option<usize>,
+    max_prompt_tokens: Option<usize>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct CopilotModelSupports {
+    #[serde(default)]
+    reasoning_effort: Vec<String>,
+}
+
 fn default_model_picker_enabled() -> bool {
     true
 }
@@ -936,6 +1269,8 @@ struct CopilotModelEndpointMetadata {
     id: String,
     api: CopilotApiKind,
     supported_endpoints: Vec<String>,
+    reasoning_efforts: Vec<String>,
+    context_window_tokens: Option<usize>,
 }
 
 fn model_endpoint_metadata(models: &[CopilotModel]) -> Vec<CopilotModelEndpointMetadata> {
@@ -945,6 +1280,18 @@ fn model_endpoint_metadata(models: &[CopilotModel]) -> Vec<CopilotModelEndpointM
             id: model.id.clone(),
             api: model.api_kind(),
             supported_endpoints: model.supported_endpoints.clone(),
+            reasoning_efforts: model
+                .capabilities
+                .as_ref()
+                .map(|capabilities| capabilities.supports.reasoning_effort.clone())
+                .unwrap_or_default(),
+            context_window_tokens: model.capabilities.as_ref().and_then(|capabilities| {
+                capabilities.limits.as_ref().and_then(|limits| {
+                    limits
+                        .max_prompt_tokens
+                        .or(limits.max_context_window_tokens)
+                })
+            }),
         })
         .collect()
 }
@@ -1024,6 +1371,17 @@ mod tests {
     }
 
     #[test]
+    fn explains_copilot_session_rate_limit() {
+        let error = CopilotRequestError {
+            status: Some(reqwest::StatusCode::TOO_MANY_REQUESTS),
+            body: "Sorry, you've exceeded your 5 hour session limits.".to_owned(),
+        };
+
+        assert!(error.is_session_rate_limit());
+        assert!(error.to_string().contains("HTTP 429 rate limit"));
+    }
+
+    #[test]
     fn routes_copilot_codex_models_to_responses() {
         assert!(should_use_responses_api("gpt-5.4-mini"));
         assert!(should_use_responses_api("gpt-5.2-codex"));
@@ -1038,6 +1396,7 @@ mod tests {
             model_picker_enabled: true,
             supported_endpoints: vec!["/v1/messages".to_owned()],
             policy: None,
+            capabilities: None,
         };
 
         assert_eq!(model.api_kind(), CopilotApiKind::Messages);
@@ -1050,6 +1409,7 @@ mod tests {
             model_picker_enabled: true,
             supported_endpoints: Vec::new(),
             policy: None,
+            capabilities: None,
         }
         .is_selectable());
         assert!(!CopilotModel {
@@ -1057,6 +1417,7 @@ mod tests {
             model_picker_enabled: false,
             supported_endpoints: Vec::new(),
             policy: None,
+            capabilities: None,
         }
         .is_selectable());
         assert!(!CopilotModel {
@@ -1066,6 +1427,7 @@ mod tests {
             policy: Some(CopilotModelPolicy {
                 state: Some("disabled".to_owned()),
             }),
+            capabilities: None,
         }
         .is_selectable());
     }

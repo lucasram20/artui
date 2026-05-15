@@ -61,16 +61,16 @@ src/providers/
 - [x] Prefer official GitHub OAuth / Copilot SDK guidance for user authentication.
 - [x] Support token discovery from environment variables only as explicit fallback, e.g. `GITHUB_TOKEN` / `GH_TOKEN` when documented.
 - [x] If using a Copilot-token exchange compatibility path, make the token endpoint and API base URL configurable.
-- [ ] Refresh Copilot access tokens before expiry and retry once on `401`.
+- [x] Refresh Copilot access tokens before expiry and retry once on `401`.
 - [x] Fetch or configure available Copilot models dynamically when possible; avoid freezing a long hardcoded list in core UI.
 - [x] Route Copilot models by discovered endpoint metadata, including OpenAI-compatible chat, Responses API, and Anthropic-compatible messages paths.
 - [x] Filter Copilot model picker results using backend picker flags and disabled policy state.
 - [x] Add unit coverage for Copilot stream parsing, API routing heuristics, model filtering, and endpoint validation.
 - [ ] Add integration tests with mocked token exchange, model listing, streaming, expiry, and refresh failure.
-- [ ] Persist token exchange expiry metadata and avoid exchanging a GitHub token on every Copilot request when a session token is still valid.
-- [ ] Retry Copilot requests once with a fresh session token after `401` or an expired Copilot session token response.
-- [ ] Surface model-specific capability hints in `/model`, such as messages/responses routing, context window, vision, and reasoning support.
-- [ ] Add a configurable Copilot request timeout for model discovery and streaming setup.
+- [x] Persist token exchange expiry metadata and avoid exchanging a GitHub token on every Copilot request when a session token is still valid.
+- [x] Retry Copilot requests once with a fresh session token after `401` or an expired Copilot session token response.
+- [x] Surface model-specific capability hints in `/model`, such as messages/responses routing, context window, vision, and reasoning support.
+- [x] Add a configurable Copilot request timeout for model discovery and streaming setup.
 
 ### Phase 4 — OpenAI account-backed provider
 
@@ -87,7 +87,7 @@ src/providers/
 - [x] Add actionable error messages for expired auth, missing browser, denied OAuth, and unsupported subscription provider.
 - [ ] Add docs for setup, logout, and how to delete local auth state manually.
 - [ ] Show Copilot entitlement or model-unavailable errors with a direct hint to refresh `/model` and check GitHub Copilot plan settings.
-- [ ] Add a manual `/model refresh` command for account-backed providers.
+- [x] Add a manual `/model refresh` command for account-backed providers.
 - [ ] Add statusline copy that distinguishes API-key providers from account-backed subscription providers.
 
 ## Security checklist

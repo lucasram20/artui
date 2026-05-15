@@ -7,13 +7,18 @@ use ratatui::{
 };
 
 use crate::{
+    agent::PrimaryAgent,
     app::{App, StatusLineItem, ThemeId},
     providers::registry::{AuthRequirement, PROVIDERS},
     ui::layout::theme,
 };
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
-    if app.theme_picker_open || app.model_picker_open || app.login_picker_open {
+    if app.theme_picker_open
+        || app.model_picker_open
+        || app.login_picker_open
+        || app.agent_picker_open
+    {
         draw_modal_backdrop(frame, app);
     }
     if app.theme_picker_open {
@@ -24,6 +29,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     if app.login_picker_open {
         draw_login_picker(frame, app);
+    }
+    if app.agent_picker_open {
+        draw_agent_picker(frame, app);
     }
     if app.statusline_open {
         draw_statusline_picker(frame, app);
@@ -290,11 +298,13 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
                 } else {
                     Style::default().fg(palette.muted)
                 };
+                let model = option.model.clone().unwrap_or_default();
+                let hint = option.hint.clone().unwrap_or_default();
                 ListItem::new(Line::from(vec![
                     Span::styled(selector_pointer(is_selected), item_style),
                     Span::styled(selected_mark(is_active), item_style),
-                    Span::styled("  ", item_style),
-                    Span::styled(option.model.clone().unwrap_or_default(), item_style),
+                    Span::styled(format!("{model:<28}"), item_style),
+                    Span::styled(hint, Style::default().fg(palette.subtle)),
                 ]))
             })
             .collect::<Vec<_>>()
@@ -302,6 +312,79 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(List::new(items), rows[1]);
 
     draw_selector_help(frame, app, rows[2], "switch");
+}
+
+fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {
+    let item_count = PrimaryAgent::ALL.len() as u16;
+    let area = selector_area(frame.area(), 76, item_count.saturating_add(8));
+    render_popup_surface(frame, app, area);
+
+    let palette = theme::palette(app.theme);
+    let block = selector_block(app, "Select Agent", "/agent");
+    let inner = block.inner(area).inner(Margin {
+        vertical: 1,
+        horizontal: 2,
+    });
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(item_count),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                "Choose the primary agent behavior for the next turn.",
+                Style::default().fg(palette.text),
+            )),
+            Line::from(vec![
+                Span::styled("Current ", Style::default().fg(palette.muted)),
+                Span::styled(app.active_agent.name(), Style::default().fg(palette.accent)),
+            ]),
+        ])
+        .style(Style::default().bg(palette.bg)),
+        rows[0],
+    );
+
+    let items = PrimaryAgent::ALL
+        .iter()
+        .enumerate()
+        .map(|(index, agent)| {
+            let is_selected = index == app.agent_cursor;
+            let is_active = *agent == app.active_agent;
+            let item_style = if is_selected {
+                Style::default()
+                    .fg(palette.accent)
+                    .bg(palette.rule)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_active {
+                Style::default()
+                    .fg(palette.text)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            let description_style = if is_selected {
+                Style::default().fg(palette.text).bg(palette.rule)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(selector_pointer(is_selected), item_style),
+                Span::styled(selected_mark(is_active), item_style),
+                Span::styled(format!("{:<10}", agent.name()), item_style),
+                Span::styled(agent.description(), description_style),
+            ]))
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(List::new(items), rows[1]);
+
+    draw_selector_help(frame, app, rows[2], "select");
 }
 
 fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
@@ -484,7 +567,7 @@ fn shadow_area(area: Rect, bounds: Rect) -> Option<Rect> {
 
 const MAX_SELECTOR_WIDTH: u16 = 82;
 const MIN_SELECTOR_HEIGHT: u16 = 10;
-const MAX_SELECTOR_HEIGHT: u16 = 22;
+const MAX_SELECTOR_HEIGHT: u16 = 34;
 const POPUP_SHADOW_OFFSET: u16 = 1;
 
 fn centered(area: Rect, width: u16, height: u16) -> Rect {

@@ -7,12 +7,12 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, Role, UiMode},
+    app::{App, Role, ThemeId, UiMode},
     ui::layout::theme,
 };
 
-pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let palette = theme::palette(app.theme);
+pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
+    let palette = theme::palette(theme_id);
     let mut lines = Vec::new();
 
     for message in &app.transcript {
@@ -22,7 +22,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
         };
 
         if message.content.is_empty() {
-            lines.push(thinking_line(app, marker, color));
+            lines.push(thinking_line(app, theme_id, marker, color));
         } else {
             for (index, segment) in display_segments(message.content.as_str())
                 .into_iter()
@@ -36,7 +36,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 } else {
                     Span::raw("  ")
                 };
-                let text_style = segment_style(segment.kind, app);
+                let text_style = segment_style(segment.kind, theme_id);
                 lines.push(Line::from(vec![
                     prefix,
                     Span::styled(segment.text, text_style),
@@ -54,8 +54,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-fn thinking_line(app: &App, marker: &str, marker_color: ratatui::style::Color) -> Line<'static> {
-    let palette = theme::palette(app.theme);
+fn thinking_line(app: &App, theme_id: ThemeId, marker: &str, marker_color: ratatui::style::Color) -> Line<'static> {
+    let palette = theme::palette(theme_id);
     let elapsed = app
         .thinking_elapsed()
         .map(|duration| format!(" ({}s • esc to interrupt)", duration.as_secs()))
@@ -227,8 +227,8 @@ fn strip_inline_markdown(text: &str) -> String {
         .to_owned()
 }
 
-fn segment_style(kind: SegmentKind, app: &App) -> Style {
-    let palette = theme::palette(app.theme);
+fn segment_style(kind: SegmentKind, theme_id: ThemeId) -> Style {
+    let palette = theme::palette(theme_id);
     match kind {
         SegmentKind::Body => Style::default().fg(palette.text),
         SegmentKind::Heading => Style::default()

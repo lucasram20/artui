@@ -18,6 +18,8 @@ pub use openai_compat::OpenAiCompatProvider;
 #[derive(Debug, Clone)]
 pub struct ModelRequest {
     pub messages: Vec<Message>,
+    pub system_prompt: Option<String>,
+    pub reasoning_effort: Option<String>,
 }
 
 #[derive(Debug)]

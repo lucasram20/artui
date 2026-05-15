@@ -16,6 +16,22 @@ All notable changes to artui will be documented in this file.
 - Added Copilot stream parsing for OpenAI chat deltas, Responses API deltas, and Anthropic-style `content_block_delta` events.
 - Added Copilot model endpoint metadata caching while keeping the `/model` UI grouped by simple provider/model names.
 - Added OAuth provider support todos under `docs/todos/` for future OpenAI account and GitHub Copilot subscription provider work.
+- Added Copilot session-token caching with expiry metadata, once-per-request `401` refresh retry, and configurable request timeouts.
+- Added `/model refresh` for manual GitHub Copilot model discovery refresh.
+- Added stronger artui identity prompts with exact active provider/model disclosure.
+- Added `/model` capability hints from Copilot endpoint metadata.
+- Added Shift+Tab reasoning effort control with provider request wiring for OpenAI-compatible Copilot routes.
+- Added provider usage statusline item with Copilot premium/free quota caching, Ollama local/cloud labels, and API/account fallbacks.
+- Changed the bottom status UX to a compact prompt-frame style with context/provider name in the left title, model/reasoning in the right title, and workspace/git state below.
+- Added color-coded reasoning effort in the prompt title and prompt border: auto muted, low green, medium yellow, high pink/bold, xhigh purple/bold.
+- Made Shift+Tab reasoning cycling provider/model-aware so unsupported efforts are skipped and xhigh is only offered for extended reasoning model families.
+- Stabilized GitHub Copilot model refresh by selecting the richest available Copilot credential, then keeping model discovery, endpoint metadata, and usage tied to that same credential instead of mixing sources.
+- Persisted Copilot endpoint-advertised reasoning effort metadata so model-specific low/medium/high/xhigh support can be honored when available.
+- Fixed context usage display to estimate tokens against the active provider/model context window instead of comparing chat characters to the tool-output character limit; sub-1% usage now displays as `ctx 0%`.
+- Changed GitHub Copilot HTTP 429 display to a neutral provider rate-limit message.
+- Replaced prompt-title provider usage/quota text with the provider display name, e.g. `ctx 0% · GitHub Copilot`.
+- Added Copilot endpoint context-window metadata support with provider/model fallback windows for local, OpenAI-compatible, account, and Copilot models.
+- Expanded `/model` popup height and model discovery parsing so more plan-available Copilot models are visible.
 - Added a configurable streaming/loading animation with spinner frames and rotating catch phrases for empty assistant responses.
 - Added configurable reasoning-only loading phrases that are used only when the active model matches user-defined reasoning model patterns.
 - Added the short `art` binary alongside `artui` so installed builds can be launched without `cargo run`.
