@@ -393,6 +393,8 @@ pub struct App {
     pub thinking_started_at: Option<Instant>,
     pub last_thinking_frame_at: Instant,
     pub last_thinking_phrase_at: Instant,
+    pub eye_frame: usize,
+    pub last_eye_frame_at: Instant,
     pub quote: Option<Quote>,
 }
 
@@ -436,6 +438,8 @@ impl App {
             thinking_started_at: None,
             last_thinking_frame_at: now,
             last_thinking_phrase_at: now,
+            eye_frame: 0,
+            last_eye_frame_at: now,
             quote: None,
         }
     }
@@ -985,11 +989,25 @@ impl App {
     }
 
     pub fn advance_thinking_animation(&mut self) {
+        let now = Instant::now();
+
+        // Eye animation (always active, context-aware)
+        let interval = match self.mode {
+            UiMode::Streaming => Duration::from_millis(250),
+            UiMode::Input if !self.input.is_empty() => Duration::from_millis(200),
+            _ => Duration::from_millis(400),
+        };
+
+        if now.duration_since(self.last_eye_frame_at) >= interval {
+            let frames = self.active_eye_frames();
+            self.eye_frame = next_wrapped_index(self.eye_frame, frames.len());
+            self.last_eye_frame_at = now;
+        }
+
         if self.mode != UiMode::Streaming {
             return;
         }
 
-        let now = Instant::now();
         if now.duration_since(self.last_thinking_frame_at) >= self.spinner_interval() {
             self.thinking_frame =
                 next_wrapped_index(self.thinking_frame, self.spinner_frame_count());
@@ -1000,6 +1018,30 @@ impl App {
             self.thinking_phrase =
                 next_wrapped_index(self.thinking_phrase, self.thinking_phrase_count());
             self.last_thinking_phrase_at = now;
+        }
+    }
+
+    pub fn eye_frame(&self) -> &str {
+        let frames = self.active_eye_frames();
+        frames[self.eye_frame.min(frames.len() - 1)]
+    }
+
+    fn active_eye_frames(&self) -> &'static [&'static str] {
+        match self.mode {
+            UiMode::Streaming => {
+                if self
+                    .transcript
+                    .last()
+                    .map(|m| m.content.is_empty())
+                    .unwrap_or(true)
+                {
+                    EYE_THINKING
+                } else {
+                    EYE_STREAMING
+                }
+            }
+            UiMode::Input if !self.input.is_empty() => EYE_TYPING,
+            _ => EYE_IDLE,
         }
     }
 
@@ -1971,6 +2013,24 @@ const CHAT_SCROLL_STEP: u16 = 3;
 const CHAT_PAGE_SCROLL_STEP: u16 = 10;
 
 const LOGO: &str = "┌────────┐\n│  >_  ●●│\n└────────┘";
+
+const EYE_IDLE: &[&str] = &[
+    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●",
+    "◡◡", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●",
+    "◕◕", "●●", "●●", "●●", "◔◔", "●●", "●●", "●●", "◡◡", "●●", "●●", "●●", "●●", "●●", "●●",
+];
+
+const EYE_TYPING: &[&str] = &[
+    "●●", "··", "●●", "··", "●●", "··", "●●", "··",
+];
+
+const EYE_THINKING: &[&str] = &[
+    "◔◔", "●●", "◕◕", "●●", "◔◔", "●●", "◕◕", "●●", "⚆⚆", "●●", "◡◡", "●●",
+];
+
+const EYE_STREAMING: &[&str] = &[
+    "⚆⚆", "●●", "⚆⚆", "●●", "⚆⚆", "●●", "◡◡", "●●",
+];
 
 #[cfg(test)]
 mod tests {

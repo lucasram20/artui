@@ -551,12 +551,31 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
         return;
     }
     let palette = theme::palette(theme);
+
+    // Left side: Eye animation
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
+            Span::styled(
+                app.eye_frame(),
+                Style::default().fg(palette.accent).bg(palette.bg),
+            ),
+            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
+        ])),
+        Rect {
+            x: area.x.saturating_add(2),
+            y: area.y,
+            width: 4,
+            height: 1,
+        },
+    );
+
     let provider = app.provider_usage_label().to_lowercase();
     let model = active_model(app);
     let reasoning = app.reasoning_effort.label();
 
     let full_text = format!("{} · {} · {}", provider, model, reasoning);
-    let trimmed = trim_to_width(&full_text, area.width.saturating_sub(4) as usize);
+    let trimmed = trim_to_width(&full_text, area.width.saturating_sub(10) as usize);
     let right_area_width = (trimmed.chars().count() + 2) as u16;
 
     frame.render_widget(
