@@ -460,7 +460,9 @@ fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
             let is_connected = matches!(
                 provider.auth_requirement,
                 AuthRequirement::None | AuthRequirement::ApiKey
-            ) || app.provider_status_label(provider.id) == "connected";
+            ) || app
+                .provider_status_label(provider.id)
+                .starts_with("connected");
             let item_style = if is_selected {
                 Style::default()
                     .fg(palette.accent)
@@ -478,10 +480,11 @@ fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
             } else {
                 Style::default().fg(palette.muted)
             };
+            let short_name = truncate_provider_name(provider.display_name);
             ListItem::new(Line::from(vec![
                 Span::styled(selector_pointer(is_selected), item_style),
                 Span::styled(selected_mark(is_connected), item_style),
-                Span::styled(format!("{:<18}", provider.display_name), item_style),
+                Span::styled(format!("{:<18}", short_name), item_style),
                 Span::styled(
                     login_status_short(app, provider.id, is_connected),
                     description_style,
@@ -510,6 +513,14 @@ fn login_status_short(app: &App, provider_id: &str, is_connected: bool) -> Strin
         } else {
             status
         }
+    }
+}
+
+fn truncate_provider_name(name: &str) -> &str {
+    match name {
+        "OpenAI-compatible API" => "OpenAI-compat",
+        "OpenAI account" => "OpenAI",
+        other => other,
     }
 }
 
