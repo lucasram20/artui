@@ -538,13 +538,13 @@ async fn exchange_github_token(
             .text()
             .await
             .context("failed to read GitHub Copilot token exchange error")?;
-        if !github_token.starts_with("ghu_") {
-            validate_https_url(&config.api_base_url, "providers.copilot.api_base_url")?;
-            return Ok(CopilotSession {
-                token: github_token.to_owned(),
-                api_base_url: config.api_base_url.clone(),
-                expires_at: None,
-            });
+        // Reject PATs (ghp_) — they don't work with Copilot's /chat/completions endpoint.
+        // Only ghu_ (device flow) tokens are valid for token exchange.
+        if github_token.starts_with("ghp_") {
+            bail!(
+                "Personal Access Tokens (ghp_) are not supported for GitHub Copilot. \
+                 Run `/login copilot` to authenticate via device flow."
+            );
         }
         bail!(
             "GitHub Copilot token exchange returned HTTP {status}: {}",
