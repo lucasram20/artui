@@ -73,7 +73,11 @@ impl Tool for ReadFileTool {
         };
 
         // Reject path traversal outside workspace
-        if !canonical.starts_with(&ctx.workspace_root) {
+        let canonical_workspace = ctx
+            .workspace_root
+            .canonicalize()
+            .unwrap_or(ctx.workspace_root.clone());
+        if !canonical.starts_with(&canonical_workspace) {
             return ToolResult::error(
                 ctx.call_id,
                 format!("path '{}' is outside the workspace", path_str),

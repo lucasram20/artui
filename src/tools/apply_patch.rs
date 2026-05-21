@@ -61,6 +61,10 @@ impl Tool for ApplyPatchTool {
         }
 
         // Validate all paths are within workspace
+        let canonical_workspace = ctx
+            .workspace_root
+            .canonicalize()
+            .unwrap_or(ctx.workspace_root.clone());
         for op in &operations {
             let path = op.path();
             if path.is_absolute() || path.starts_with("..") {
@@ -71,7 +75,7 @@ impl Tool for ApplyPatchTool {
             }
             let resolved = ctx.workspace_root.join(path);
             if let Ok(canonical) = resolved.canonicalize() {
-                if !canonical.starts_with(&ctx.workspace_root) {
+                if !canonical.starts_with(&canonical_workspace) {
                     return ToolResult::error(
                         ctx.call_id,
                         format!("path '{}' resolves outside the workspace", path.display()),
