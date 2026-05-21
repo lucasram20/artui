@@ -154,6 +154,10 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Down) if app.has_slash_command_matches() => app.next_slash_command(),
         (_, KeyCode::Char('k')) if app.has_slash_command_matches() => app.previous_slash_command(),
         (_, KeyCode::Char('j')) if app.has_slash_command_matches() => app.next_slash_command(),
+        (_, KeyCode::Up) if app.has_file_mention_matches() => app.previous_file_mention(),
+        (_, KeyCode::Down) if app.has_file_mention_matches() => app.next_file_mention(),
+        (_, KeyCode::Char('k')) if app.has_file_mention_matches() => app.previous_file_mention(),
+        (_, KeyCode::Char('j')) if app.has_file_mention_matches() => app.next_file_mention(),
         (_, KeyCode::Up) if app.theme_picker_open => app.previous_theme(),
         (_, KeyCode::Down) if app.theme_picker_open => app.next_theme(),
         (_, KeyCode::Char('k')) if app.theme_picker_open => app.previous_theme(),
@@ -176,12 +180,14 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         }
         (_, KeyCode::Enter) if app.theme_picker_open => app.select_theme(),
         (_, KeyCode::Tab) if app.has_slash_command_matches() => app.complete_slash_command(),
+        (_, KeyCode::Tab) if app.has_file_mention_matches() => app.complete_file_mention(),
         (_, KeyCode::Tab) => app.cycle_agent(),
         (_, KeyCode::Enter) if app.has_slash_command_matches() => {
             if let Some(request) = app.submit_slash_command_selection() {
                 spawn_app_request(request, event_tx);
             }
         }
+        (_, KeyCode::Enter) if app.has_file_mention_matches() => app.complete_file_mention(),
         (_, KeyCode::Enter) => {
             if let Some(request) = app.submit_input() {
                 spawn_app_request(request, event_tx);

@@ -77,8 +77,11 @@ fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let composer_height = input_height(app, area.width).saturating_add(2);
     let suggestions = visible_slash_commands(app);
     let suggestions_height = slash_commands_height(&suggestions);
-    let footer_height = if suggestions.is_empty() { 1 } else { 0 };
-    let reserved_height = composer_height + footer_height + suggestions_height;
+    let file_mentions = visible_file_mentions(app);
+    let file_mentions_height = file_mentions_popup_height(&file_mentions);
+    let popup_height = suggestions_height + file_mentions_height;
+    let footer_height = if popup_height == 0 { 1 } else { 0 };
+    let reserved_height = composer_height + footer_height + popup_height;
     let max_history_height = area.height.saturating_sub(reserved_height);
     let history_height = conversation_anchor_height(app, area.width, max_history_height);
     let rows = Layout::default()
@@ -86,7 +89,7 @@ fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         .constraints([
             Constraint::Length(history_height),
             Constraint::Length(composer_height),
-            Constraint::Length(suggestions_height),
+            Constraint::Length(popup_height),
             Constraint::Length(footer_height),
             Constraint::Min(0),
         ])
@@ -96,8 +99,10 @@ fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     draw_input(frame, app, theme, rows[1]);
     if !suggestions.is_empty() {
         draw_slash_commands(frame, app, theme, rows[2], &suggestions);
+    } else if !file_mentions.is_empty() {
+        draw_file_mentions(frame, app, theme, rows[2], &file_mentions);
     }
-    if suggestions.is_empty() {
+    if popup_height == 0 {
         draw_footer(frame, app, theme, rows[3]);
     }
 }
@@ -113,10 +118,7 @@ fn draw_compact_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: R
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  v", Style::default().fg(palette.muted)),
-            Span::styled(
-                env!("CARGO_PKG_VERSION"),
-                Style::default().fg(palette.text),
-            ),
+            Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(palette.text)),
         ]),
         Line::from(vec![
             Span::styled(active_model(app), Style::default().fg(palette.text)),
@@ -168,7 +170,11 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         frame.render_widget(
             Paragraph::new("Welcome back!")
                 .alignment(Alignment::Center)
-                .style(Style::default().fg(palette.text).add_modifier(Modifier::BOLD)),
+                .style(
+                    Style::default()
+                        .fg(palette.text)
+                        .add_modifier(Modifier::BOLD),
+                ),
             Rect {
                 x: content.x,
                 y: content.y + 1,
@@ -195,7 +201,9 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
                 Span::styled("Agent: ", Style::default().fg(palette.muted)),
                 Span::styled(
                     app.active_agent_name(),
-                    Style::default().fg(palette.accent).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(palette.accent)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!(" ({})", app.active_agent_id()),
@@ -223,7 +231,9 @@ fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
     let mut text = vec![
         Line::from(Span::styled(
             "Tips for getting started",
-            Style::default().fg(palette.accent).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette.accent)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "Use / for commands or describe the change directly.",
@@ -232,7 +242,9 @@ fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
         Line::from(""),
         Line::from(Span::styled(
             "Quotes of the day",
-            Style::default().fg(palette.accent).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette.accent)
+                .add_modifier(Modifier::BOLD),
         )),
     ];
 
@@ -301,7 +313,9 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     frame.render_widget(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(reasoning_effort_color(palette, app.reasoning_effort)))
+            .border_style(
+                Style::default().fg(reasoning_effort_color(palette, app.reasoning_effort)),
+            )
             .style(Style::default().bg(palette.bg)),
         area,
     );
@@ -473,7 +487,9 @@ fn draw_slash_commands(
         .map(|(index, command)| {
             let selected = index == app.slash_cursor.min(commands.len().saturating_sub(1));
             let command_style = if selected {
-                Style::default().fg(palette.accent).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette.muted)
             };
@@ -499,7 +515,83 @@ fn draw_slash_commands(
     )));
     lines.extend(rows);
 
-    frame.render_widget(Paragraph::new(lines).style(Style::default().bg(palette.bg)), area);
+    frame.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(palette.bg)),
+        area,
+    );
+}
+
+// ── File mention suggestions ───────────────────────────────────────────
+
+const FILE_MENTION_MAX_VISIBLE: usize = 8;
+
+fn visible_file_mentions(app: &App) -> Vec<String> {
+    if app.mode == UiMode::Streaming
+        || app.theme_picker_open
+        || app.model_picker_open
+        || app.login_picker_open
+        || app.statusline_open
+        || app.agent_picker_open
+    {
+        return Vec::new();
+    }
+
+    app.file_mention_matches()
+}
+
+fn file_mentions_popup_height(mentions: &[String]) -> u16 {
+    if mentions.is_empty() {
+        0
+    } else {
+        mentions.len().min(FILE_MENTION_MAX_VISIBLE) as u16 + 1
+    }
+}
+
+fn draw_file_mentions(
+    frame: &mut Frame<'_>,
+    app: &App,
+    theme: ThemeId,
+    area: Rect,
+    mentions: &[String],
+) {
+    let palette = theme::palette(theme);
+    let max_visible = area.height.saturating_sub(1) as usize;
+    let rows = mentions
+        .iter()
+        .take(max_visible)
+        .enumerate()
+        .map(|(index, path)| {
+            let selected = index == app.file_mention_cursor.min(mentions.len().saturating_sub(1));
+            let is_dir = path.ends_with('/');
+            let icon = if is_dir { "\u{1F4C1} " } else { "\u{1F4C4} " };
+            let style = if selected {
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette.muted)
+            };
+            Line::from(vec![
+                Span::styled(icon, style),
+                Span::styled(
+                    trim_to_width(path, area.width.saturating_sub(4) as usize),
+                    style,
+                ),
+            ])
+        })
+        .collect::<Vec<_>>();
+
+    let mut lines = Vec::with_capacity(rows.len() + 1);
+    lines.push(Line::from(Span::styled(
+        "─".repeat(area.width as usize),
+        Style::default().fg(palette.border),
+    )));
+    lines.extend(rows);
+
+    frame.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(palette.bg)),
+        area,
+    );
 }
 
 fn trim_to_width(value: &str, width: usize) -> String {
@@ -517,12 +609,18 @@ fn trim_to_width(value: &str, width: usize) -> String {
 
 fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let palette = theme::palette(theme);
-    let mut spans = vec![Span::styled(compact_cwd(), Style::default().fg(palette.muted))];
+    let mut spans = vec![Span::styled(
+        compact_cwd(),
+        Style::default().fg(palette.muted),
+    )];
 
     if app.git_branch_label != "no-git" {
         spans.push(Span::raw(" "));
         spans.push(Span::styled("(", Style::default().fg(palette.muted)));
-        spans.push(Span::styled(&app.git_branch_label, Style::default().fg(palette.muted)));
+        spans.push(Span::styled(
+            &app.git_branch_label,
+            Style::default().fg(palette.muted),
+        ));
 
         if app.git_status_label != "clean" && app.git_status_label != "unknown" {
             spans.push(Span::styled(" ±", Style::default().fg(palette.muted)));
@@ -536,7 +634,10 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     }
 
     spans.push(Span::styled(" | ", Style::default().fg(palette.subtle)));
-    spans.push(Span::styled(app.context_usage_label(), Style::default().fg(palette.muted)));
+    spans.push(Span::styled(
+        app.context_usage_label(),
+        Style::default().fg(palette.muted),
+    ));
 
     frame.render_widget(
         Paragraph::new(Line::from(spans))
@@ -583,7 +684,10 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
             Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
             Span::styled(provider, Style::default().fg(palette.muted).bg(palette.bg)),
             Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
-            Span::styled(model.to_owned(), Style::default().fg(palette.text).bg(palette.bg)),
+            Span::styled(
+                model.to_owned(),
+                Style::default().fg(palette.text).bg(palette.bg),
+            ),
             Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
             Span::styled(
                 reasoning.to_owned(),
@@ -592,7 +696,9 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
             Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
         ])),
         Rect {
-            x: area.right().saturating_sub(right_area_width.saturating_add(1)),
+            x: area
+                .right()
+                .saturating_sub(right_area_width.saturating_add(1)),
             y: area.y,
             width: right_area_width,
             height: 1,
@@ -601,7 +707,9 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
 }
 
 fn reasoning_effort_style(palette: theme::Palette, effort: ReasoningEffort) -> Style {
-    let style = Style::default().fg(reasoning_effort_color(palette, effort)).bg(palette.bg);
+    let style = Style::default()
+        .fg(reasoning_effort_color(palette, effort))
+        .bg(palette.bg);
     if matches!(effort, ReasoningEffort::High | ReasoningEffort::XHigh) {
         style.add_modifier(Modifier::BOLD)
     } else {
@@ -609,7 +717,10 @@ fn reasoning_effort_style(palette: theme::Palette, effort: ReasoningEffort) -> S
     }
 }
 
-fn reasoning_effort_color(palette: theme::Palette, effort: ReasoningEffort) -> ratatui::style::Color {
+fn reasoning_effort_color(
+    palette: theme::Palette,
+    effort: ReasoningEffort,
+) -> ratatui::style::Color {
     match effort {
         ReasoningEffort::Auto => palette.border,
         ReasoningEffort::Low => palette.green,

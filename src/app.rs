@@ -369,6 +369,7 @@ pub struct App {
     pub status: String,
     pub should_quit: bool,
     pub slash_cursor: usize,
+    pub file_mention_cursor: usize,
     pub chat_scroll: u16,
     pub logo: &'static str,
     pub active_agent: PrimaryAgent,
@@ -417,6 +418,7 @@ impl App {
             input: String::new(),
             should_quit: false,
             slash_cursor: 0,
+            file_mention_cursor: 0,
             chat_scroll: 0,
             logo: LOGO,
             active_agent: PrimaryAgent::Build,
@@ -584,6 +586,7 @@ impl App {
             InputAction::Insert(ch) => {
                 self.input.push(ch);
                 self.clamp_slash_cursor();
+                self.file_mention_cursor = 0;
             }
             InputAction::Backspace => {
                 // Delete atomic tags ([Pasted text #N ...] or [Image #N]) as a unit
@@ -615,6 +618,7 @@ impl App {
                     self.input.pop();
                 }
                 self.clamp_slash_cursor();
+                self.file_mention_cursor = 0;
             }
         }
     }
@@ -631,6 +635,7 @@ impl App {
         if let SlashCommandResult::Handled(request) = self.run_slash_command(&content) {
             self.input.clear();
             self.slash_cursor = 0;
+            self.file_mention_cursor = 0;
             return request;
         }
 
@@ -1236,6 +1241,7 @@ impl App {
             && !self.statusline_open
             && !self.agent_picker_open
             && !self.has_slash_command_matches()
+            && !self.has_file_mention_matches()
     }
 
     pub fn complete_slash_command(&mut self) {
@@ -1285,6 +1291,52 @@ impl App {
         } else {
             self.slash_cursor = self.slash_cursor.min(matches.len() - 1);
         }
+    }
+
+    // ── File mention autocomplete ──────────────────────────────────────
+
+    /// Returns true when the input has an active `@` mention being typed.
+    pub fn has_file_mention_matches(&self) -> bool {
+        !self.file_mention_matches().is_empty()
+    }
+
+    /// List workspace files matching the partial path after the last `@`.
+    pub fn file_mention_matches(&self) -> Vec<String> {
+        file_mention_matches(&self.input)
+    }
+
+    pub fn next_file_mention(&mut self) {
+        let matches = self.file_mention_matches();
+        if !matches.is_empty() {
+            self.file_mention_cursor = (self.file_mention_cursor + 1) % matches.len();
+        }
+    }
+
+    pub fn previous_file_mention(&mut self) {
+        let matches = self.file_mention_matches();
+        if !matches.is_empty() {
+            self.file_mention_cursor =
+                (self.file_mention_cursor + matches.len() - 1) % matches.len();
+        }
+    }
+
+    /// Insert the selected file path into the input, replacing the partial `@...` token.
+    pub fn complete_file_mention(&mut self) {
+        let matches = self.file_mention_matches();
+        if matches.is_empty() {
+            return;
+        }
+        let index = self.file_mention_cursor.min(matches.len() - 1);
+        let selected = &matches[index];
+
+        // Find the last `@` token in input and replace it
+        if let Some(at_pos) = self.input.rfind('@') {
+            self.input.truncate(at_pos);
+            self.input.push('@');
+            self.input.push_str(selected.trim_end_matches('/'));
+            self.input.push(' ');
+        }
+        self.file_mention_cursor = 0;
     }
 
     fn run_slash_command(&mut self, content: &str) -> SlashCommandResult {
@@ -1769,6 +1821,78 @@ pub fn slash_command_matches(input: &str) -> Vec<&'static SlashCommand> {
         .iter()
         .filter(|command| command.name.starts_with(input))
         .collect()
+}
+
+/// Return workspace file paths matching the partial token after the last `@`.
+pub fn file_mention_matches(input: &str) -> Vec<String> {
+    let partial = match extract_at_mention_partial(input) {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
+    let workspace = std::env::current_dir().unwrap_or_default();
+    collect_workspace_files(&workspace, partial)
+}
+
+/// Extract the partial path typed after the last `@` trigger character.
+/// Returns `None` if there's no active mention context.
+fn extract_at_mention_partial(input: &str) -> Option<&str> {
+    let at_pos = input.rfind('@')?;
+    // `@` must be at start or preceded by whitespace
+    if at_pos > 0 && input.as_bytes()[at_pos - 1] != b' ' {
+        return None;
+    }
+    let partial = &input[at_pos + 1..];
+    // Space after partial means mention is already completed
+    if partial.contains(' ') {
+        return None;
+    }
+    Some(partial)
+}
+
+const FILE_MENTION_MAX_RESULTS: usize = 15;
+const FILE_MENTION_WALK_DEPTH: usize = 4;
+
+/// Walk workspace files respecting .gitignore and filter by partial path.
+fn collect_workspace_files(workspace: &std::path::Path, partial: &str) -> Vec<String> {
+    let walker = ignore::WalkBuilder::new(workspace)
+        .hidden(false)
+        .git_ignore(true)
+        .max_depth(Some(FILE_MENTION_WALK_DEPTH))
+        .build();
+
+    let partial_lower = partial.to_lowercase();
+    let mut results: Vec<String> = Vec::new();
+
+    for entry in walker.flatten() {
+        let Ok(rel) = entry.path().strip_prefix(workspace) else {
+            continue;
+        };
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let rel_str = rel.to_string_lossy();
+        // Skip hidden top-level entries (.git, .env, etc.)
+        if rel_str.starts_with('.') {
+            continue;
+        }
+        let display = if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+            format!("{rel_str}/")
+        } else {
+            rel_str.to_string()
+        };
+
+        if partial.is_empty() || display.to_lowercase().contains(&partial_lower) {
+            results.push(display);
+        }
+        if results.len() >= FILE_MENTION_MAX_RESULTS {
+            break;
+        }
+    }
+
+    results.sort();
+    results.truncate(FILE_MENTION_MAX_RESULTS);
+    results
 }
 
 impl From<ModelEvent> for AppEvent {
