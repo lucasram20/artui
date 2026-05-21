@@ -74,15 +74,11 @@ pub async fn run() -> Result<()> {
                     tachyonfx::fx::repeating(shimmer),
                 );
             }
-            // Replace shimmer with coalesce when streaming ends
+            // Stop shimmer when streaming ends
             if app.mode != UiMode::Streaming && was_streaming {
                 effects.add_unique_effect(
                     "thinking",
                     tachyonfx::fx::sleep(0),
-                );
-                effects.add_unique_effect(
-                    "materialize",
-                    tachyonfx::fx::coalesce((350, tachyonfx::Interpolation::QuintIn)),
                 );
             }
             was_streaming = app.mode == UiMode::Streaming;
