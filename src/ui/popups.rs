@@ -311,7 +311,30 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
     };
     frame.render_widget(List::new(items), rows[1]);
 
-    draw_selector_help(frame, app, rows[2], "switch");
+    draw_model_selector_help(frame, app, rows[2]);
+}
+
+fn draw_model_selector_help(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let palette = theme::palette(app.theme);
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("↑/↓", Style::default().fg(palette.accent)),
+            Span::styled(" or ", Style::default().fg(palette.subtle)),
+            Span::styled("j/k", Style::default().fg(palette.accent)),
+            Span::styled(" move   ", Style::default().fg(palette.subtle)),
+            Span::styled("enter", Style::default().fg(palette.accent)),
+            Span::styled(" switch   ", Style::default().fg(palette.subtle)),
+            Span::styled("L", Style::default().fg(palette.accent)),
+            Span::styled(" login   ", Style::default().fg(palette.subtle)),
+            Span::styled("D", Style::default().fg(palette.accent)),
+            Span::styled(" disconnect   ", Style::default().fg(palette.subtle)),
+            Span::styled("esc", Style::default().fg(palette.accent)),
+            Span::styled(" close", Style::default().fg(palette.subtle)),
+        ]))
+        .alignment(Alignment::Center)
+        .style(Style::default().bg(palette.bg)),
+        area,
+    );
 }
 
 fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {

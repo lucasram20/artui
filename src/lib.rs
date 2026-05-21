@@ -105,6 +105,14 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Char('k')) if app.model_picker_open => app.previous_model(),
         (_, KeyCode::Char('j')) if app.model_picker_open => app.next_model(),
         (_, KeyCode::Enter) if app.model_picker_open => app.select_model(),
+        (_, KeyCode::Char('l') | KeyCode::Char('L')) if app.model_picker_open => {
+            if let Some(request) = app.login_current_model_provider() {
+                spawn_app_request(request, event_tx);
+            }
+        }
+        (_, KeyCode::Char('d') | KeyCode::Char('D')) if app.model_picker_open => {
+            app.logout_current_model_provider();
+        }
         (_, KeyCode::Up) if app.login_picker_open => app.previous_login_provider(),
         (_, KeyCode::Down) if app.login_picker_open => app.next_login_provider(),
         (_, KeyCode::Char('k')) if app.login_picker_open => app.previous_login_provider(),

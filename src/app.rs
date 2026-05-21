@@ -1442,10 +1442,46 @@ impl App {
         };
 
         match store.remove(&provider_id) {
-            Ok(true) => self.status = format!("Logged out of {provider_id}"),
+            Ok(true) => {
+                self.status = format!("Logged out of {provider_id}");
+                // Clear cached models so they disappear from the picker
+                if provider_id == "copilot" {
+                    self.config.providers.copilot.models.clear();
+                    self.model_options =
+                        available_model_options(&self.config, self.auth_store.as_ref());
+                }
+            }
             Ok(false) => self.status = format!("{provider_id} was not connected"),
             Err(error) => self.status = format!("Logout failed: {error}"),
         }
+    }
+
+    /// Login the provider under the current model picker cursor.
+    pub fn login_current_model_provider(&mut self) -> Option<AppRequest> {
+        let provider_id = self
+            .model_options
+            .get(self.model_cursor)
+            .map(|o| o.provider_id.clone())?;
+        self.model_picker_open = false;
+        self.mode = UiMode::Input;
+        self.login_provider(&provider_id)
+    }
+
+    /// Logout the provider under the current model picker cursor.
+    pub fn logout_current_model_provider(&mut self) {
+        let Some(provider_id) = self
+            .model_options
+            .get(self.model_cursor)
+            .map(|o| o.provider_id.clone())
+        else {
+            return;
+        };
+        self.logout_provider(&provider_id);
+        // Refresh model list in picker
+        self.model_options = available_model_options(&self.config, self.auth_store.as_ref());
+        self.model_cursor = self
+            .model_cursor
+            .min(self.model_options.len().saturating_sub(1));
     }
 
     pub fn context_usage_label(&self) -> String {
