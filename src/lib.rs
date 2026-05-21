@@ -10,7 +10,7 @@ pub mod tools;
 pub mod ui;
 pub mod util;
 
-use std::{io, panic, sync::Arc, time::Duration};
+use std::{io, panic, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::Result;
 use app::{App, AppEvent, AppRequest, InputAction, UiMode};
@@ -20,6 +20,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use tachyonfx::EffectManager;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
@@ -42,10 +43,49 @@ pub async fn run() -> Result<()> {
     spawn_app_request(AppRequest::FetchQuote, event_tx.clone());
 
     let mut terminal = setup_terminal()?;
+    let mut effects: EffectManager<&'static str> = EffectManager::default();
+    let mut last_frame = Instant::now();
+    let mut was_streaming = false;
+
     let result = async {
         loop {
+            let elapsed = last_frame.elapsed();
+            last_frame = Instant::now();
+
             app.advance_thinking_animation();
-            terminal.draw(|frame| ui::draw(frame, &app))?;
+            terminal.draw(|frame| {
+                ui::draw(frame, &app);
+                let screen = frame.area();
+                effects.process_effects(
+                    tachyonfx::Duration::from_millis(elapsed.as_millis() as u32),
+                    frame.buffer_mut(),
+                    screen,
+                );
+            })?;
+
+            // Trigger shimmer effect when streaming starts
+            if app.mode == UiMode::Streaming && !was_streaming {
+                let shimmer = tachyonfx::fx::hsl_shift_fg(
+                    [30.0, 0.0, 8.0],
+                    (1200, tachyonfx::Interpolation::SineInOut),
+                );
+                effects.add_unique_effect(
+                    "thinking",
+                    tachyonfx::fx::repeating(shimmer),
+                );
+            }
+            // Replace shimmer with coalesce when streaming ends
+            if app.mode != UiMode::Streaming && was_streaming {
+                effects.add_unique_effect(
+                    "thinking",
+                    tachyonfx::fx::sleep(0),
+                );
+                effects.add_unique_effect(
+                    "materialize",
+                    tachyonfx::fx::coalesce((350, tachyonfx::Interpolation::QuintIn)),
+                );
+            }
+            was_streaming = app.mode == UiMode::Streaming;
 
             while let Ok(event) = event_rx.try_recv() {
                 app.handle_event(event);
