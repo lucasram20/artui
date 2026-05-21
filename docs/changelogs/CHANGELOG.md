@@ -30,6 +30,12 @@ All notable changes to artui will be documented in this file.
 - Extended `ModelRequest` with `tools`, `tool_choice`, and `max_output_tokens` fields.
 - Changed `spawn_app_request` to route provider requests through the agent loop instead of direct `stream_turn`.
 - Wired `ToolRegistry` into `App` so `ModelRequest.tools` is populated from registered tools on every turn.
+- Added `SessionStore` (rusqlite, WAL mode, ULID keys, 0o600 perms) with sessions, messages, and memory tables. Supports create/list/resume/delete sessions, append/load messages, flag interrupted tool calls, and scoped memory CRUD.
+- Added `agent::compaction` module with token estimation (chars/4), compaction threshold (0.835), and `compact_messages` that summarizes oldest 60% of context via a dedicated compaction sub-prompt.
+- Added `PermissionEngine` agent-aware classification: read-only tools always allowed, write tools (apply_patch, shell) allowed in Build mode, denied in Plan mode.
+- Added `src/sandbox/mod.rs` with bubblewrap (`bwrap`) command builder: read-only system mounts, writable workspace, optional network isolation, die-with-parent, graceful fallback when bwrap unavailable.
+- Added `task` subagent tool that spawns isolated child agent loops with `explore` (read-only) or `general` (full minus task) tool sets. Prevents recursion by excluding task tool from subagent registries.
+- Added `rusqlite` (bundled) and `ulid` dependencies.
 
 ## 2026-05-14
 

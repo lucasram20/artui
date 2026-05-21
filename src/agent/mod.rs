@@ -1,3 +1,4 @@
+pub mod compaction;
 pub mod r#loop;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

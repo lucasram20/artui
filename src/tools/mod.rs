@@ -6,6 +6,7 @@ pub mod read_file;
 pub mod registry;
 pub mod search;
 pub mod shell;
+pub mod task;
 
 use std::path::PathBuf;
 

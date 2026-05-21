@@ -18,7 +18,7 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    /// Create a registry with the default tool set.
+    /// Create a registry with the full tool set (for Build agent).
     pub fn new() -> Self {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
         let read_file = Arc::new(ReadFileTool);
@@ -31,7 +31,35 @@ impl ToolRegistry {
         tools.insert(apply_patch.spec().name.clone(), apply_patch);
         let shell = Arc::new(ShellTool);
         tools.insert(shell.spec().name.clone(), shell);
+        // Note: `task` tool is registered separately via `with_task_tool`
+        // because it needs a provider reference.
         Self { tools }
+    }
+
+    /// Create a registry for subagents. No `task` tool (prevents recursion).
+    /// If `read_only`, only includes read_file, glob, search.
+    pub fn for_subagent(read_only: bool) -> Self {
+        let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
+        let read_file = Arc::new(ReadFileTool);
+        tools.insert(read_file.spec().name.clone(), read_file);
+        let glob = Arc::new(GlobTool);
+        tools.insert(glob.spec().name.clone(), glob);
+        let search = Arc::new(SearchTool);
+        tools.insert(search.spec().name.clone(), search);
+
+        if !read_only {
+            let apply_patch = Arc::new(ApplyPatchTool);
+            tools.insert(apply_patch.spec().name.clone(), apply_patch);
+            let shell = Arc::new(ShellTool);
+            tools.insert(shell.spec().name.clone(), shell);
+        }
+
+        Self { tools }
+    }
+
+    /// Add a tool to the registry (used for task tool which needs provider ref).
+    pub fn register(&mut self, tool: Arc<dyn Tool>) {
+        self.tools.insert(tool.spec().name.clone(), tool);
     }
 
     /// Return specs for all registered tools (for populating `ModelRequest.tools`).
@@ -115,5 +143,23 @@ mod tests {
         let registry = ToolRegistry::new();
         let specs = registry.specs();
         assert!(specs.iter().any(|s| s.name == "read_file"));
+    }
+
+    #[test]
+    fn subagent_read_only_has_three_tools() {
+        let registry = ToolRegistry::for_subagent(true);
+        let specs = registry.specs();
+        assert_eq!(specs.len(), 3);
+        assert!(specs
+            .iter()
+            .all(|s| ["read_file", "glob", "search"].contains(&s.name.as_str())));
+    }
+
+    #[test]
+    fn subagent_general_has_no_task() {
+        let registry = ToolRegistry::for_subagent(false);
+        let specs = registry.specs();
+        assert!(specs.iter().any(|s| s.name == "apply_patch"));
+        assert!(!specs.iter().any(|s| s.name == "task"));
     }
 }

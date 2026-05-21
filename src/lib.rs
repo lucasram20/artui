@@ -4,6 +4,8 @@ pub mod auth;
 pub mod config;
 pub mod permissions;
 pub mod providers;
+pub mod sandbox;
+pub mod session;
 pub mod tools;
 pub mod ui;
 pub mod util;
