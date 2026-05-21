@@ -2434,7 +2434,13 @@ fn ollama_model_options() -> Vec<String> {
 const CHAT_SCROLL_STEP: u16 = 3;
 const CHAT_PAGE_SCROLL_STEP: u16 = 10;
 
-const LOGO: &str = "ART";
+const LOGO: &str = "\
+ █████╗ ██████╗ ████████╗\n\
+██╔══██╗██╔══██╗╚══██╔══╝\n\
+███████║██████╔╝   ██║\n\
+██╔══██║██╔══██╗   ██║\n\
+██║  ██║██║  ██║   ██║\n\
+╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝";
 
 // Eye glyph indices into EYE_GLYPHS
 const EYE_OPEN: usize = 0;
