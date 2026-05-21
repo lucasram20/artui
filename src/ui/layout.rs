@@ -39,7 +39,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
 }
 
 fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    if area.width < 76 || area.height < 8 {
+    if area.width < 76 || area.height < 6 {
         draw_compact_header(frame, app, theme, area);
         return;
     }
