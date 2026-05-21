@@ -36,6 +36,23 @@ All notable changes to artui will be documented in this file.
 - Added `src/sandbox/mod.rs` with bubblewrap (`bwrap`) command builder: read-only system mounts, writable workspace, optional network isolation, die-with-parent, graceful fallback when bwrap unavailable.
 - Added `task` subagent tool that spawns isolated child agent loops with `explore` (read-only) or `general` (full minus task) tool sets. Prevents recursion by excluding task tool from subagent registries.
 - Added `rusqlite` (bundled) and `ulid` dependencies.
+- Added zero-config Copilot OAuth with hard-coded artui client_id (`Ov23liSsh5cnZv6yAz4X`) — no user OAuth App registration needed.
+- Added VSCode-shaped Copilot API headers (`vscode/1.99.2`, `copilot-chat/0.26.3`, `Copilot-Integration-Id: vscode-chat`).
+- Added `L` (login) and `D` (disconnect) keybinds to the `/model` picker for inline provider management.
+- Added token source labels to `/login` picker (e.g. "connected via github-device-flow").
+- Added `@file` mentions in chat input — type `@path/to/file` to attach file content on submit.
+- Added bracketed paste support with smart content handling: large pastes (>5 lines) show as `[Pasted text #N +M lines]` tag, short pastes inline directly.
+- Added `[Image #N]` tag display for pasted images (stored for future multimodal API support).
+- Added Windows PowerShell support to shell tool: prefers `pwsh` (PS7+) → `powershell.exe` → `cmd.exe /C` fallback.
+
+### Fixed
+
+- Fixed Copilot login on student/free plans: use OAuth token directly when `/copilot_internal/v2/token` exchange returns 404 (matches opencode's approach).
+- Fixed macOS CI failures: canonicalize workspace_root before path traversal comparison (resolves `/private` symlink).
+- Fixed login picker text overlap: truncated long provider names, shortened status labels to "ready"/"key needed"/"sign in needed".
+- Fixed `/logout copilot` not clearing cached models from `/model` picker.
+- Fixed Copilot `is_connected` detection after adding token source labels.
+- Removed silent PAT (`ghp_`) fallback — now rejects with friendly error pointing to `/login copilot`.
 
 ## 2026-05-14
 
