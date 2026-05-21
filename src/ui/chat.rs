@@ -129,6 +129,9 @@ enum SegmentKind {
     Bullet,
     CodeBlock,
     BlankLine,
+    DiffAdd,
+    DiffRemove,
+    DiffHeader,
 }
 
 enum InlineChunk {
@@ -241,6 +244,32 @@ fn parse_markdown(content: &str) -> Vec<DisplaySegment> {
             continue;
         }
 
+        // Diff lines: detect unified diff format
+        if is_diff_header(trimmed) {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::DiffHeader,
+                chunks: vec![InlineChunk::Plain(trimmed.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::DiffAdd,
+                chunks: vec![InlineChunk::Plain(trimmed.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+        if trimmed.starts_with('-') && !trimmed.starts_with("---") && !trimmed.starts_with("- ") {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::DiffRemove,
+                chunks: vec![InlineChunk::Plain(trimmed.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+
         // Regular body text
         segments.push(DisplaySegment {
             kind: SegmentKind::Body,
@@ -250,6 +279,11 @@ fn parse_markdown(content: &str) -> Vec<DisplaySegment> {
     }
 
     segments
+}
+
+/// Check if a line is a diff header (---, +++, @@).
+fn is_diff_header(line: &str) -> bool {
+    line.starts_with("--- ") || line.starts_with("+++ ") || line.starts_with("@@ ")
 }
 
 /// Check if a line starts with a number followed by ". "
@@ -358,6 +392,30 @@ fn render_segment(segment: &DisplaySegment, theme_id: ThemeId) -> Vec<Span<'stat
             .map(|chunk| {
                 let text = chunk_text(chunk);
                 Span::styled(text, Style::default().fg(palette.muted))
+            })
+            .collect(),
+        SegmentKind::DiffAdd => segment
+            .chunks
+            .iter()
+            .map(|chunk| {
+                let text = chunk_text(chunk);
+                Span::styled(text, Style::default().fg(palette.green))
+            })
+            .collect(),
+        SegmentKind::DiffRemove => segment
+            .chunks
+            .iter()
+            .map(|chunk| {
+                let text = chunk_text(chunk);
+                Span::styled(text, Style::default().fg(palette.pink))
+            })
+            .collect(),
+        SegmentKind::DiffHeader => segment
+            .chunks
+            .iter()
+            .map(|chunk| {
+                let text = chunk_text(chunk);
+                Span::styled(text, Style::default().fg(palette.accent))
             })
             .collect(),
         SegmentKind::Body | SegmentKind::Bullet => segment

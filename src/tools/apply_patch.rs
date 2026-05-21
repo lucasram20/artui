@@ -180,9 +180,21 @@ impl Tool for ApplyPatchTool {
         let summary = changes
             .iter()
             .map(|c| match c {
-                FileChange::Create { path, .. } => format!("+ {}", path.display()),
+                FileChange::Create { path, content } => {
+                    let header = format!("+ {}", path.display());
+                    let diff = generate_create_diff(path, content);
+                    format!("{header}\n{diff}")
+                }
                 FileChange::Delete { path, .. } => format!("- {}", path.display()),
-                FileChange::Update { path, .. } => format!("~ {}", path.display()),
+                FileChange::Update {
+                    path,
+                    original,
+                    new_content,
+                } => {
+                    let header = format!("~ {}", path.display());
+                    let diff = generate_unified_diff(path, original, new_content);
+                    format!("{header}\n{diff}")
+                }
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -466,6 +478,234 @@ fn rollback_change(change: &FileChange) -> Result<(), String> {
         FileChange::Update { path, original, .. } => fs::write(path, original)
             .map_err(|e| format!("rollback failed for '{}': {e}", path.display())),
     }
+}
+
+// ── Diff generation ────────────────────────────────────────────────────
+
+/// Maximum number of diff lines to include per file in the output.
+const DIFF_MAX_LINES_PER_FILE: usize = 50;
+/// Number of context lines around each change in the unified diff.
+const DIFF_CONTEXT_LINES: usize = 3;
+/// Maximum lines to show for newly created files.
+const DIFF_NEW_FILE_PREVIEW_LINES: usize = 20;
+
+/// Generate a unified diff between original and new content for a file.
+fn generate_unified_diff(
+    path: &std::path::Path,
+    original: &str,
+    new_content: &str,
+) -> String {
+    let old_lines: Vec<&str> = original.lines().collect();
+    let new_lines: Vec<&str> = new_content.lines().collect();
+
+    let rel = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+    let mut output = Vec::new();
+    output.push(format!("--- a/{rel}"));
+    output.push(format!("+++ b/{rel}"));
+
+    // Find changed line ranges using simple sequential comparison
+    let edits = compute_edits(&old_lines, &new_lines);
+    if edits.is_empty() {
+        return String::new();
+    }
+
+    // Group edits into hunks with context
+    for hunk in build_hunks(&edits, &old_lines, &new_lines) {
+        output.push(hunk);
+        if output.len() >= DIFF_MAX_LINES_PER_FILE {
+            output.truncate(DIFF_MAX_LINES_PER_FILE);
+            output.push("... (diff truncated)".to_owned());
+            break;
+        }
+    }
+
+    output.join("\n")
+}
+
+/// Generate a preview diff for a newly created file.
+fn generate_create_diff(path: &std::path::Path, content: &str) -> String {
+    let rel = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+    let mut output = Vec::new();
+    output.push(format!("+++ b/{rel} (new file)"));
+
+    for line in content.lines().take(DIFF_NEW_FILE_PREVIEW_LINES) {
+        output.push(format!("+{line}"));
+    }
+    let total_lines = content.lines().count();
+    if total_lines > DIFF_NEW_FILE_PREVIEW_LINES {
+        output.push(format!(
+            "... ({} more lines)",
+            total_lines - DIFF_NEW_FILE_PREVIEW_LINES
+        ));
+    }
+
+    output.join("\n")
+}
+
+// ── Simple Myers-like diff ─────────────────────────────────────────────
+
+#[derive(Clone, Copy)]
+enum Edit {
+    Keep(usize, usize),   // old_idx, new_idx
+    Remove(usize),        // old_idx
+    Insert(usize),        // new_idx
+}
+
+/// Compute edits between old and new lines using LCS for small files,
+/// or a simplified approach for large ones.
+fn compute_edits(old: &[&str], new: &[&str]) -> Vec<Edit> {
+    const LCS_THRESHOLD: usize = 2000;
+
+    if old.len() > LCS_THRESHOLD || new.len() > LCS_THRESHOLD {
+        // For large files, just show all removals then all additions
+        let mut edits = Vec::new();
+        for i in 0..old.len() {
+            edits.push(Edit::Remove(i));
+        }
+        for j in 0..new.len() {
+            edits.push(Edit::Insert(j));
+        }
+        return edits;
+    }
+
+    let m = old.len();
+    let n = new.len();
+    let mut dp = vec![vec![0u16; n + 1]; m + 1];
+
+    for i in 1..=m {
+        for j in 1..=n {
+            dp[i][j] = if old[i - 1] == new[j - 1] {
+                dp[i - 1][j - 1] + 1
+            } else {
+                dp[i - 1][j].max(dp[i][j - 1])
+            };
+        }
+    }
+
+    // Backtrack
+    let mut edits = Vec::new();
+    let mut i = m;
+    let mut j = n;
+
+    while i > 0 || j > 0 {
+        if i > 0 && j > 0 && old[i - 1] == new[j - 1] {
+            edits.push(Edit::Keep(i - 1, j - 1));
+            i -= 1;
+            j -= 1;
+        } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
+            edits.push(Edit::Insert(j - 1));
+            j -= 1;
+        } else {
+            edits.push(Edit::Remove(i - 1));
+            i -= 1;
+        }
+    }
+
+    edits.reverse();
+    edits
+}
+
+/// Build unified diff hunk lines from edits with context.
+fn build_hunks(edits: &[Edit], old: &[&str], new: &[&str]) -> Vec<String> {
+    // Find change regions
+    let mut regions: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < edits.len() {
+        if !matches!(edits[i], Edit::Keep(_, _)) {
+            let start = i;
+            while i < edits.len() && !matches!(edits[i], Edit::Keep(_, _)) {
+                i += 1;
+            }
+            regions.push((start, i));
+        } else {
+            i += 1;
+        }
+    }
+
+    // Merge nearby regions (within 2*context distance)
+    let merge_distance = DIFF_CONTEXT_LINES * 2;
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for region in &regions {
+        if let Some(last) = merged.last_mut() {
+            if region.0.saturating_sub(last.1) <= merge_distance {
+                last.1 = region.1;
+            } else {
+                merged.push(*region);
+            }
+        } else {
+            merged.push(*region);
+        }
+    }
+
+    let mut output = Vec::new();
+
+    for (start, end) in &merged {
+        // Determine context boundaries
+        let ctx_before = start.saturating_sub(DIFF_CONTEXT_LINES);
+        let ctx_after = (*end + DIFF_CONTEXT_LINES).min(edits.len());
+
+        // Calculate line numbers for hunk header
+        let old_start = match &edits[ctx_before] {
+            Edit::Keep(oi, _) | Edit::Remove(oi) => *oi,
+            Edit::Insert(_) => {
+                // Find nearest old line
+                edits[..ctx_before]
+                    .iter()
+                    .rev()
+                    .find_map(|e| match e {
+                        Edit::Keep(oi, _) | Edit::Remove(oi) => Some(*oi + 1),
+                        _ => None,
+                    })
+                    .unwrap_or(0)
+            }
+        };
+        let new_start = match &edits[ctx_before] {
+            Edit::Keep(_, ni) | Edit::Insert(ni) => *ni,
+            Edit::Remove(_) => {
+                edits[..ctx_before]
+                    .iter()
+                    .rev()
+                    .find_map(|e| match e {
+                        Edit::Keep(_, ni) | Edit::Insert(ni) => Some(*ni + 1),
+                        _ => None,
+                    })
+                    .unwrap_or(0)
+            }
+        };
+
+        let mut old_count = 0usize;
+        let mut new_count = 0usize;
+        let mut lines = Vec::new();
+
+        for edit in edits.iter().take(ctx_after).skip(ctx_before) {
+            match edit {
+                Edit::Keep(oi, _) => {
+                    lines.push(format!(" {}", old[*oi]));
+                    old_count += 1;
+                    new_count += 1;
+                }
+                Edit::Remove(oi) => {
+                    lines.push(format!("-{}", old[*oi]));
+                    old_count += 1;
+                }
+                Edit::Insert(ni) => {
+                    lines.push(format!("+{}", new[*ni]));
+                    new_count += 1;
+                }
+            }
+        }
+
+        output.push(format!(
+            "@@ -{},{} +{},{} @@",
+            old_start + 1,
+            old_count,
+            new_start + 1,
+            new_count,
+        ));
+        output.extend(lines);
+    }
+
+    output
 }
 
 #[cfg(test)]

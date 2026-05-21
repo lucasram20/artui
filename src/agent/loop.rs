@@ -221,14 +221,19 @@ pub async fn run_turn(
 }
 
 fn format_tool_result(tool_name: &str, result: &ToolResult) -> String {
+    /// Tools whose output should not be truncated (e.g. diffs).
+    const FULL_OUTPUT_TOOLS: &[&str] = &["apply_patch"];
+    /// Default preview length for other tool results.
+    const DEFAULT_PREVIEW_LEN: usize = 200;
+
     if let Some(err) = &result.error {
         format!("\n⚠ {tool_name}: {err}\n")
     } else {
         let content = &result.content;
-        let preview = if content.len() > 200 {
-            format!("{}...", &content[..200])
-        } else {
+        let preview = if FULL_OUTPUT_TOOLS.contains(&tool_name) || content.len() <= DEFAULT_PREVIEW_LEN {
             content.clone()
+        } else {
+            format!("{}...", &content[..DEFAULT_PREVIEW_LEN])
         };
         format!("\n📄 {tool_name}:\n{preview}\n")
     }
