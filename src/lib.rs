@@ -58,7 +58,19 @@ pub async fn run() -> Result<()> {
             if event::poll(Duration::from_millis(25))? {
                 match event::read()? {
                     Event::Key(key) => handle_key(key, &mut app, event_tx.clone()),
-                    Event::Paste(text) => app.paste_text(&text),
+                    Event::Paste(text) => {
+                        // If pasted text is an image file path, read as image
+                        let trimmed = text.trim();
+                        if is_image_path(trimmed) && std::path::Path::new(trimmed).is_file() {
+                            if let Ok(data) = std::fs::read(trimmed) {
+                                app.paste_image(data);
+                            } else {
+                                app.paste_text(&text);
+                            }
+                        } else {
+                            app.paste_text(&text);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -203,7 +215,7 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
 /// Supports Wayland (wl-paste), X11 (xclip), and macOS (pbpaste).
 /// Windows clipboard image requires win32 API — deferred.
 fn try_clipboard_image() -> Option<Vec<u8>> {
-    // Wayland
+    // Wayland — try raw PNG first
     if let Ok(output) = std::process::Command::new("wl-paste")
         .args(["--type", "image/png", "--no-newline"])
         .output()
@@ -211,6 +223,11 @@ fn try_clipboard_image() -> Option<Vec<u8>> {
         if output.status.success() && !output.stdout.is_empty() {
             return Some(output.stdout);
         }
+    }
+
+    // Wayland — try file URI list (e.g. copied image file)
+    if let Some(data) = try_clipboard_image_from_file_uri("wl-paste") {
+        return Some(data);
     }
 
     // X11
@@ -221,6 +238,11 @@ fn try_clipboard_image() -> Option<Vec<u8>> {
         if output.status.success() && !output.stdout.is_empty() {
             return Some(output.stdout);
         }
+    }
+
+    // X11 — try file URI
+    if let Some(data) = try_clipboard_image_from_xclip_uri() {
+        return Some(data);
     }
 
     // macOS — pbpaste doesn't support binary image; use osascript
@@ -242,6 +264,59 @@ fn try_clipboard_image() -> Option<Vec<u8>> {
     }
 
     None
+}
+
+/// Try reading an image file path from clipboard URI list (Wayland).
+fn try_clipboard_image_from_file_uri(paste_cmd: &str) -> Option<Vec<u8>> {
+    let output = std::process::Command::new(paste_cmd)
+        .args(["--type", "text/uri-list", "--no-newline"])
+        .output()
+        .ok()?;
+    if !output.status.success() || output.stdout.is_empty() {
+        return None;
+    }
+    read_image_from_uri_output(&output.stdout)
+}
+
+/// Try reading an image file path from clipboard URI list (X11).
+fn try_clipboard_image_from_xclip_uri() -> Option<Vec<u8>> {
+    let output = std::process::Command::new("xclip")
+        .args(["-selection", "clipboard", "-target", "text/uri-list", "-o"])
+        .output()
+        .ok()?;
+    if !output.status.success() || output.stdout.is_empty() {
+        return None;
+    }
+    read_image_from_uri_output(&output.stdout)
+}
+
+/// Parse URI list output and read the first image file found.
+fn read_image_from_uri_output(raw: &[u8]) -> Option<Vec<u8>> {
+    let text = String::from_utf8_lossy(raw);
+    for line in text.lines() {
+        let path = line
+            .trim()
+            .strip_prefix("file://")
+            .unwrap_or(line.trim());
+        if path.is_empty() {
+            continue;
+        }
+        if is_image_path(path) {
+            return std::fs::read(path).ok();
+        }
+    }
+    None
+}
+
+/// Check if a file path looks like a supported image format.
+fn is_image_path(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".gif")
+        || lower.ends_with(".webp")
+        || lower.ends_with(".bmp")
 }
 
 fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
