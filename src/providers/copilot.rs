@@ -769,7 +769,7 @@ fn copilot_response_input(request: ModelRequest) -> Vec<CopilotResponseInput> {
                 Role::User => "user".to_owned(),
                 Role::Assistant => "assistant".to_owned(),
             },
-            content: build_openai_content(&message.content, &message.images),
+            content: build_responses_content(&message.content, &message.images),
         })
         .collect()
 }
@@ -824,6 +824,27 @@ pub(crate) fn build_anthropic_content(text: &str, images: &[Vec<u8>]) -> serde_j
         "type": "text",
         "text": text,
     }));
+    serde_json::Value::Array(parts)
+}
+
+/// Build OpenAI Responses API content: uses `input_text`/`input_image` types.
+fn build_responses_content(text: &str, images: &[Vec<u8>]) -> serde_json::Value {
+    if images.is_empty() {
+        return serde_json::Value::String(text.to_owned());
+    }
+
+    let mut parts = Vec::with_capacity(images.len() + 1);
+    parts.push(serde_json::json!({
+        "type": "input_text",
+        "text": text,
+    }));
+    for image_data in images {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(image_data);
+        parts.push(serde_json::json!({
+            "type": "input_image",
+            "image_url": format!("data:image/png;base64,{b64}"),
+        }));
+    }
     serde_json::Value::Array(parts)
 }
 
