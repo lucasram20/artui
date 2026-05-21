@@ -660,13 +660,14 @@ impl App {
         }
 
         // Expand @file mentions: resolve paths and inject file content
-        let mut content = self.expand_file_mentions(&content);
+        let display_content = self.display_file_mentions(&content);
+        let mut model_content = self.expand_file_mentions(&content);
 
         // Expand pasted content references
         if !self.pasted_contents.is_empty() {
             for (i, paste) in self.pasted_contents.iter().enumerate() {
                 let lines = paste.lines().count();
-                content.push_str(&format!(
+                model_content.push_str(&format!(
                     "\n\n<pasted_text id={} lines={lines}>\n{paste}\n</pasted_text>",
                     i + 1
                 ));
@@ -678,20 +679,26 @@ impl App {
         self.input.clear();
         self.slash_cursor = 0;
         self.chat_scroll = 0;
+        // Display version shows short tags, model version has full file content
         self.transcript.push(Message::with_images(
             Role::User,
-            content.clone(),
-            images,
+            display_content,
+            images.clone(),
         ));
         self.transcript.push(Message::new(Role::Assistant, ""));
         self.mode = UiMode::Streaming;
         self.status = "Streaming response".to_owned();
         self.start_thinking_animation();
 
+        // Build model messages: replace the last user message with expanded content
+        let mut model_messages = self.transcript.clone();
+        let user_msg_idx = model_messages.len() - 2; // second to last
+        model_messages[user_msg_idx] = Message::with_images(Role::User, model_content, images);
+
         Some(AppRequest::Provider(ProviderRequest {
             provider: Arc::clone(&self.provider),
             request: ModelRequest {
-                messages: self.transcript.clone(),
+                messages: model_messages,
                 system_prompt: Some(self.system_prompt()),
                 reasoning_effort: self.normalized_reasoning_effort().request_value(),
                 tools: self.tool_registry.specs(),
@@ -742,6 +749,28 @@ impl App {
         if !attachments.is_empty() {
             result.push_str("\n\n");
             result.push_str(&attachments.join("\n\n"));
+        }
+
+        result
+    }
+
+    /// Format @file mentions for display only — replaces `@path` with `[path]`
+    /// without injecting file content.
+    fn display_file_mentions(&self, input: &str) -> String {
+        let workspace = std::env::current_dir().unwrap_or_default();
+        let mut result = input.to_owned();
+
+        let words: Vec<&str> = input.split_whitespace().collect();
+        for word in &words {
+            if let Some(path_str) = word.strip_prefix('@') {
+                if path_str.is_empty() {
+                    continue;
+                }
+                let path = workspace.join(path_str);
+                if path.is_file() {
+                    result = result.replace(word, &format!("[{path_str}]"));
+                }
+            }
         }
 
         result
