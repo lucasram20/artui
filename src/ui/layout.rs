@@ -194,36 +194,6 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         Paragraph::new(app.logo).style(Style::default().fg(palette.accent).bg(palette.bg)),
         logo_area,
     );
-
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled("Agent: ", Style::default().fg(palette.muted)),
-                Span::styled(
-                    app.active_agent_name(),
-                    Style::default()
-                        .fg(palette.accent)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" ({})", app.active_agent_id()),
-                    Style::default().fg(palette.muted),
-                ),
-            ]),
-            Line::from(Span::styled(
-                trim_to_width(app.active_agent_description(), content.width as usize),
-                Style::default().fg(palette.muted),
-            )),
-        ])
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(palette.text).bg(palette.bg)),
-        Rect {
-            x: content.x,
-            y: logo_area.bottom() + u16::from(content.height >= 8),
-            width: content.width,
-            height: 2,
-        },
-    );
 }
 
 fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
@@ -648,6 +618,13 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     spans.push(Span::styled(
         app.context_usage_label(),
         Style::default().fg(palette.muted),
+    ));
+    spans.push(Span::styled(" | ", Style::default().fg(palette.subtle)));
+    spans.push(Span::styled(
+        app.active_agent_name(),
+        Style::default()
+            .fg(palette.accent)
+            .add_modifier(Modifier::BOLD),
     ));
 
     frame.render_widget(

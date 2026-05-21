@@ -58,6 +58,7 @@ pub async fn run() -> Result<()> {
             if event::poll(Duration::from_millis(25))? {
                 match event::read()? {
                     Event::Key(key) => handle_key(key, &mut app, event_tx.clone()),
+                    Event::Mouse(mouse) => handle_mouse(mouse, &mut app),
                     Event::Paste(text) => {
                         // If pasted text is an image file path, read as image
                         let trimmed = text.trim();
@@ -90,7 +91,8 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     execute!(
         stdout,
         EnterAlternateScreen,
-        crossterm::event::EnableBracketedPaste
+        crossterm::event::EnableBracketedPaste,
+        crossterm::event::EnableMouseCapture
     )?;
     Terminal::new(CrosstermBackend::new(stdout)).map_err(Into::into)
 }
@@ -99,6 +101,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
+        crossterm::event::DisableMouseCapture,
         crossterm::event::DisableBracketedPaste,
         LeaveAlternateScreen
     )?;
@@ -113,6 +116,15 @@ fn install_panic_hook() {
         let _ = execute!(io::stdout(), LeaveAlternateScreen);
         original_hook(panic_info);
     }));
+}
+
+fn handle_mouse(mouse: crossterm::event::MouseEvent, app: &mut App) {
+    use crossterm::event::MouseEventKind;
+    match mouse.kind {
+        MouseEventKind::ScrollUp => app.scroll_chat_up(),
+        MouseEventKind::ScrollDown => app.scroll_chat_down(),
+        _ => {}
+    }
 }
 
 fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {

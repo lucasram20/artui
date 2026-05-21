@@ -24,10 +24,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
         if message.content.is_empty() {
             lines.push(thinking_line(app, theme_id, marker, color));
         } else {
-            for (index, segment) in display_segments(message.content.as_str())
-                .into_iter()
-                .enumerate()
-            {
+            let segments = parse_markdown(&message.content);
+            for (index, segment) in segments.iter().enumerate() {
                 let prefix = if index == 0 {
                     Span::styled(
                         format!("{marker} "),
@@ -36,11 +34,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
                 } else {
                     Span::raw("  ")
                 };
-                let text_style = segment_style(segment.kind, theme_id);
-                lines.push(Line::from(vec![
-                    prefix,
-                    Span::styled(segment.text, text_style),
-                ]));
+
+                let mut spans = vec![prefix];
+                spans.extend(render_segment(segment, theme_id));
+                lines.push(Line::from(spans));
             }
         }
         lines.push(Line::from(""));
@@ -105,7 +102,7 @@ pub fn transcript_visual_height(app: &App, width: usize) -> usize {
 }
 
 pub fn message_visual_height(content: &str, width: usize) -> usize {
-    let segments = display_segments(content);
+    let segments = parse_markdown(content);
     let content_height = if segments.is_empty() {
         1
     } else {
@@ -113,7 +110,8 @@ pub fn message_visual_height(content: &str, width: usize) -> usize {
             .iter()
             .map(|segment| {
                 let prefix_width = 2;
-                let line_width = segment.text.chars().count() + prefix_width;
+                let text_len = segment_text_len(segment);
+                let line_width = text_len + prefix_width;
                 line_width.max(1).div_ceil(width.max(1))
             })
             .sum::<usize>()
@@ -122,123 +120,269 @@ pub fn message_visual_height(content: &str, width: usize) -> usize {
     content_height + 1
 }
 
-#[derive(Clone, Copy)]
+// ── Markdown parsing ───────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq)]
 enum SegmentKind {
     Body,
     Heading,
     Bullet,
+    CodeBlock,
+    BlankLine,
+}
+
+enum InlineChunk {
+    Plain(String),
+    Bold(String),
+    Code(String),
 }
 
 struct DisplaySegment {
     kind: SegmentKind,
-    text: String,
+    chunks: Vec<InlineChunk>,
 }
 
-fn display_segments(content: &str) -> Vec<DisplaySegment> {
-    normalize_markdown_flow(content)
-        .lines()
-        .flat_map(segment_from_line)
-        .collect()
+fn segment_text_len(segment: &DisplaySegment) -> usize {
+    segment
+        .chunks
+        .iter()
+        .map(|chunk| match chunk {
+            InlineChunk::Plain(t) | InlineChunk::Bold(t) | InlineChunk::Code(t) => {
+                t.chars().count()
+            }
+        })
+        .sum()
 }
 
-fn segment_from_line(line: &str) -> Vec<DisplaySegment> {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-
-    if let Some(text) = trimmed.strip_prefix("###") {
-        return vec![DisplaySegment {
-            kind: SegmentKind::Heading,
-            text: strip_inline_markdown(text.trim()).to_owned(),
-        }];
-    }
-
-    if let Some(text) = trimmed.strip_prefix("##") {
-        return vec![DisplaySegment {
-            kind: SegmentKind::Heading,
-            text: strip_inline_markdown(text.trim()).to_owned(),
-        }];
-    }
-
-    if let Some(text) = trimmed.strip_prefix("#") {
-        return vec![DisplaySegment {
-            kind: SegmentKind::Heading,
-            text: strip_inline_markdown(text.trim()).to_owned(),
-        }];
-    }
-
-    if let Some(text) = trimmed.strip_prefix("- ") {
-        return vec![DisplaySegment {
-            kind: SegmentKind::Bullet,
-            text: format!("• {}", strip_inline_markdown(text.trim())),
-        }];
-    }
-
-    vec![DisplaySegment {
-        kind: SegmentKind::Body,
-        text: strip_inline_markdown(trimmed).to_owned(),
-    }]
-}
-
-fn normalize_markdown_flow(content: &str) -> String {
+/// Parse markdown content into display segments with inline formatting.
+fn parse_markdown(content: &str) -> Vec<DisplaySegment> {
     let normalized = content.replace("\r\n", "\n").replace('\r', "\n");
-    let mut out = String::with_capacity(normalized.len() + 16);
-    let chars: Vec<char> = normalized.chars().collect();
+    let lines: Vec<&str> = normalized.lines().collect();
+    let mut segments = Vec::new();
+    let mut in_code_block = false;
     let mut i = 0;
 
-    while i < chars.len() {
-        if starts_with(&chars, i, "###") || starts_with(&chars, i, "## ") {
-            push_break_if_needed(&mut out);
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Code fence detection
+        if line.trim_start().starts_with("```") {
+            in_code_block = !in_code_block;
+            i += 1;
+            continue;
         }
 
-        if starts_with(&chars, i, "- ") && !line_is_empty(&out) {
-            push_break_if_needed(&mut out);
+        if in_code_block {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::CodeBlock,
+                chunks: vec![InlineChunk::Code(format!("  {line}"))],
+            });
+            i += 1;
+            continue;
         }
 
-        out.push(chars[i]);
+        let trimmed = line.trim();
+
+        // Blank lines → visual spacing
+        if trimmed.is_empty() {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::BlankLine,
+                chunks: vec![InlineChunk::Plain(String::new())],
+            });
+            i += 1;
+            continue;
+        }
+
+        // Headings
+        if let Some(text) = trimmed.strip_prefix("### ") {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::Heading,
+                chunks: vec![InlineChunk::Bold(text.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+        if let Some(text) = trimmed.strip_prefix("## ") {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::Heading,
+                chunks: vec![InlineChunk::Bold(text.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+        if let Some(text) = trimmed.strip_prefix("# ") {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::Heading,
+                chunks: vec![InlineChunk::Bold(text.to_owned())],
+            });
+            i += 1;
+            continue;
+        }
+
+        // Bullet lists (- or *)
+        if let Some(text) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+            segments.push(DisplaySegment {
+                kind: SegmentKind::Bullet,
+                chunks: parse_inline(&format!("• {text}")),
+            });
+            i += 1;
+            continue;
+        }
+
+        // Numbered lists (1. 2. etc.)
+        if is_numbered_list(trimmed) {
+            let text = trimmed.split(". ").nth(1).unwrap_or(trimmed);
+            let num = trimmed.split('.').next().unwrap_or("1");
+            segments.push(DisplaySegment {
+                kind: SegmentKind::Bullet,
+                chunks: parse_inline(&format!("{num}. {text}")),
+            });
+            i += 1;
+            continue;
+        }
+
+        // Regular body text
+        segments.push(DisplaySegment {
+            kind: SegmentKind::Body,
+            chunks: parse_inline(trimmed),
+        });
         i += 1;
     }
 
-    out
+    segments
 }
 
-fn starts_with(chars: &[char], start: usize, pattern: &str) -> bool {
-    pattern
-        .chars()
-        .enumerate()
-        .all(|(offset, expected)| chars.get(start + offset) == Some(&expected))
+/// Check if a line starts with a number followed by ". "
+fn is_numbered_list(line: &str) -> bool {
+    let mut chars = line.chars();
+    if !chars.next().is_some_and(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    for ch in chars.by_ref() {
+        if ch == '.' {
+            return chars.next() == Some(' ');
+        }
+        if !ch.is_ascii_digit() {
+            return false;
+        }
+    }
+    false
 }
 
-fn push_break_if_needed(out: &mut String) {
-    if !out.is_empty() && !out.ends_with('\n') {
-        out.push('\n');
+/// Parse inline markdown: **bold**, `code`, and plain text.
+fn parse_inline(text: &str) -> Vec<InlineChunk> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        // Bold: **text**
+        if i + 1 < chars.len() && chars[i] == '*' && chars[i + 1] == '*' {
+            if !current.is_empty() {
+                chunks.push(InlineChunk::Plain(std::mem::take(&mut current)));
+            }
+            i += 2;
+            let mut bold_text = String::new();
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '*') {
+                bold_text.push(chars[i]);
+                i += 1;
+            }
+            if i + 1 < chars.len() {
+                i += 2; // skip closing **
+            }
+            if !bold_text.is_empty() {
+                chunks.push(InlineChunk::Bold(bold_text));
+            }
+            continue;
+        }
+
+        // Inline code: `text`
+        if chars[i] == '`' {
+            if !current.is_empty() {
+                chunks.push(InlineChunk::Plain(std::mem::take(&mut current)));
+            }
+            i += 1;
+            let mut code_text = String::new();
+            while i < chars.len() && chars[i] != '`' {
+                code_text.push(chars[i]);
+                i += 1;
+            }
+            if i < chars.len() {
+                i += 1; // skip closing `
+            }
+            if !code_text.is_empty() {
+                chunks.push(InlineChunk::Code(code_text));
+            }
+            continue;
+        }
+
+        current.push(chars[i]);
+        i += 1;
+    }
+
+    if !current.is_empty() {
+        chunks.push(InlineChunk::Plain(current));
+    }
+
+    if chunks.is_empty() {
+        chunks.push(InlineChunk::Plain(String::new()));
+    }
+
+    chunks
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────
+
+fn render_segment(segment: &DisplaySegment, theme_id: ThemeId) -> Vec<Span<'static>> {
+    let palette = theme::palette(theme_id);
+
+    match segment.kind {
+        SegmentKind::BlankLine => vec![Span::raw("")],
+        SegmentKind::Heading => segment
+            .chunks
+            .iter()
+            .map(|chunk| {
+                let text = chunk_text(chunk);
+                Span::styled(
+                    text,
+                    Style::default()
+                        .fg(palette.accent)
+                        .add_modifier(Modifier::BOLD),
+                )
+            })
+            .collect(),
+        SegmentKind::CodeBlock => segment
+            .chunks
+            .iter()
+            .map(|chunk| {
+                let text = chunk_text(chunk);
+                Span::styled(text, Style::default().fg(palette.muted))
+            })
+            .collect(),
+        SegmentKind::Body | SegmentKind::Bullet => segment
+            .chunks
+            .iter()
+            .map(|chunk| match chunk {
+                InlineChunk::Plain(t) => {
+                    Span::styled(t.clone(), Style::default().fg(palette.text))
+                }
+                InlineChunk::Bold(t) => Span::styled(
+                    t.clone(),
+                    Style::default()
+                        .fg(palette.text)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                InlineChunk::Code(t) => {
+                    Span::styled(format!("`{t}`"), Style::default().fg(palette.muted))
+                }
+            })
+            .collect(),
     }
 }
 
-fn line_is_empty(out: &str) -> bool {
-    out.rsplit('\n')
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .is_empty()
-}
-
-fn strip_inline_markdown(text: &str) -> String {
-    text.replace("**", "")
-        .replace("__", "")
-        .replace('`', "")
-        .trim()
-        .to_owned()
-}
-
-fn segment_style(kind: SegmentKind, theme_id: ThemeId) -> Style {
-    let palette = theme::palette(theme_id);
-    match kind {
-        SegmentKind::Body => Style::default().fg(palette.text),
-        SegmentKind::Heading => Style::default()
-            .fg(palette.accent)
-            .add_modifier(Modifier::BOLD),
-        SegmentKind::Bullet => Style::default().fg(palette.text),
+fn chunk_text(chunk: &InlineChunk) -> String {
+    match chunk {
+        InlineChunk::Plain(t) | InlineChunk::Bold(t) | InlineChunk::Code(t) => t.clone(),
     }
 }
