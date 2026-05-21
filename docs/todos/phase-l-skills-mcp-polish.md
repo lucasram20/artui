@@ -4,11 +4,25 @@ Next batch of features for artui.
 
 ## L1: Skills Integration
 
-- Define a skill manifest format (YAML/TOML) for reusable prompt templates
+- Define a skill manifest format compatible with Vercel AI SDK agent skills
+- Support community skill packages (npm-style registry or git URLs)
 - Skills can be loaded from `~/.config/artui/skills/` or workspace `.artui/skills/`
-- `/skill` slash command to list and invoke skills
+- `/skill` slash command to list, install, and invoke skills
 - Skills can define: system prompt overrides, tool restrictions, output format hints
-- Research how Claude Code skills and opencode plugins work for reference
+- Skill manifest fields: name, description, version, author, triggers, prompt, tools
+- Support skill composition (skills can depend on other skills)
+- Research Vercel agent skills format, Claude Code skills, and opencode plugins for compatibility
+
+## L1b: Plugin System
+
+- Define a plugin API for extending artui with custom functionality
+- Plugins can register: new tools, slash commands, UI panels, providers
+- Plugin discovery from `~/.config/artui/plugins/` or workspace `.artui/plugins/`
+- Support WASM-based plugins for sandboxed execution
+- Support native Rust plugins (dynamic loading via cdylib)
+- `/plugin` slash command to list, enable, disable plugins
+- Plugin lifecycle hooks: on_init, on_message, on_tool_call, on_response
+- Community plugin registry support (install from URL or registry)
 
 ## L2: MCP (Model Context Protocol) Integration
 
