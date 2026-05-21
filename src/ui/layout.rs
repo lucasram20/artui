@@ -159,7 +159,7 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         height: area.height,
     };
 
-    let logo_width = 16.min(content.width);
+    let logo_width = 5.min(content.width);
     let logo_y = if content.height >= 8 {
         content.y + 2
     } else {
