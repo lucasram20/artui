@@ -55,10 +55,9 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         .constraints([Constraint::Length(27), Constraint::Min(20)])
         .split(area);
 
-    // Left: ASCII art logo
+    // Left: ASCII art logo (no wrap, no centering — pre-formatted)
     frame.render_widget(
         Paragraph::new(app.logo)
-            .alignment(Alignment::Center)
             .style(Style::default().fg(palette.accent).bg(palette.bg)),
         columns[0],
     );
