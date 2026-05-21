@@ -1728,7 +1728,7 @@ impl App {
         };
         let percent = used.saturating_mul(100) / limit.max(1);
         format!(
-            "ctx {}/{}  {}%",
+            "ctx {}/{} {}%",
             format_token_count(used),
             format_token_count(limit),
             percent.min(100),
@@ -2049,7 +2049,7 @@ fn known_context_window_tokens(provider_id: &str, model: &str) -> Option<usize> 
     Some(tokens)
 }
 
-/// Format a token count for display: 1234 → "1.2k", 128000 → "128k", 1000000 → "1M".
+/// Format a token count for display: 102 → "0.1k", 1234 → "1.2k", 128000 → "128k", 1000000 → "1M".
 fn format_token_count(tokens: usize) -> String {
     if tokens >= 1_000_000 {
         format!("{}M", tokens / 1_000_000)
@@ -2063,7 +2063,7 @@ fn format_token_count(tokens: usize) -> String {
             format!("{:.1}k", k)
         }
     } else {
-        tokens.to_string()
+        format!("{tokens}")
     }
 }
 
