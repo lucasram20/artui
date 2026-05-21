@@ -61,3 +61,11 @@ Next batch of features for artui.
 - Add `cargo install artui` as alternative
 - npx support: `npx artui` for one-off usage without global install
 - Update README with installation section covering all methods
+
+## L6: Domain & Landing Page
+
+- Register domain: `artui.dev` or `artui.sh` (GitHub Student Dev Pack free domain or Cloudflare)
+- Point domain to GitHub Pages for install scripts and landing page
+- Host `install.sh` and `install.ps1` at domain root for clean URLs
+- Simple landing page: what artui is, install command, screenshot/demo GIF
+- Cloudflare DNS for fast global resolution
