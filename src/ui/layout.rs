@@ -556,12 +556,23 @@ fn draw_file_mentions(
 ) {
     let palette = theme::palette(theme);
     let max_visible = area.height.saturating_sub(1) as usize;
+    let cursor = app.file_mention_cursor.min(mentions.len().saturating_sub(1));
+
+    // Scroll window so cursor is always visible
+    let scroll_offset = if cursor >= max_visible {
+        cursor - max_visible + 1
+    } else {
+        0
+    };
+
     let rows = mentions
         .iter()
+        .skip(scroll_offset)
         .take(max_visible)
         .enumerate()
         .map(|(index, path)| {
-            let selected = index == app.file_mention_cursor.min(mentions.len().saturating_sub(1));
+            let actual_index = index + scroll_offset;
+            let selected = actual_index == cursor;
             let is_dir = path.ends_with('/');
             let icon = if is_dir { "\u{1F4C1} " } else { "\u{1F4C4} " };
             let style = if selected {
