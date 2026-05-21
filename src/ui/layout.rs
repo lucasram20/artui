@@ -47,30 +47,62 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let palette = theme::palette(theme);
     frame.render_widget(
         Block::default()
-            .borders(Borders::ALL)
-            .title(Line::from(vec![
-                Span::styled(" artui ", Style::default().fg(palette.accent)),
-                Span::styled(
-                    format!("v{} ", env!("CARGO_PKG_VERSION")),
-                    Style::default().fg(palette.muted),
-                ),
-            ]))
-            .border_style(Style::default().fg(palette.accent))
             .style(Style::default().bg(palette.bg)),
         area,
     );
 
-    let inner = area.inner(Margin {
-        vertical: 1,
-        horizontal: 2,
-    });
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
-        .split(inner);
+        .constraints([Constraint::Length(28), Constraint::Min(20)])
+        .split(area);
 
-    draw_brand(frame, app, theme, columns[0]);
-    draw_header_notes(frame, app, theme, columns[1]);
+    // Left: ASCII art logo
+    frame.render_widget(
+        Paragraph::new(app.logo)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(palette.accent).bg(palette.bg)),
+        columns[0],
+    );
+
+    // Right: version + quote
+    let mut info_lines = vec![
+        Line::from(vec![
+            Span::styled(
+                "artui",
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" v{}", env!("CARGO_PKG_VERSION")),
+                Style::default().fg(palette.muted),
+            ),
+        ]),
+        Line::from(""),
+    ];
+
+    if let Some(quote) = &app.quote {
+        info_lines.push(Line::from(Span::styled(
+            format!("\"{}\"", quote.text),
+            Style::default().fg(palette.text),
+        )));
+        info_lines.push(Line::from(Span::styled(
+            format!("— {}", quote.author),
+            Style::default().fg(palette.muted),
+        )));
+    }
+
+    frame.render_widget(
+        Paragraph::new(info_lines)
+            .wrap(Wrap { trim: false })
+            .style(Style::default().fg(palette.text).bg(palette.bg)),
+        Rect {
+            x: columns[1].x,
+            y: columns[1].y + 1,
+            width: columns[1].width,
+            height: columns[1].height.saturating_sub(1),
+        },
+    );
 }
 
 fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
@@ -142,118 +174,6 @@ fn draw_compact_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: R
     );
 }
 
-fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    let palette = theme::palette(theme);
-    frame.render_widget(
-        Block::default()
-            .borders(Borders::RIGHT)
-            .border_style(Style::default().fg(palette.border))
-            .style(Style::default().fg(palette.text).bg(palette.bg)),
-        area,
-    );
-
-    let content = Rect {
-        x: area.x,
-        y: area.y,
-        width: area.width.saturating_sub(1),
-        height: area.height,
-    };
-
-    let logo_width = 26.min(content.width);
-    let logo_y = if content.height >= 8 {
-        content.y + 2
-    } else {
-        content.y + 1
-    };
-
-    if content.height >= 8 {
-        frame.render_widget(
-            Paragraph::new("Welcome back!")
-                .alignment(Alignment::Center)
-                .style(
-                    Style::default()
-                        .fg(palette.text)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            Rect {
-                x: content.x,
-                y: content.y + 1,
-                width: content.width,
-                height: 1,
-            },
-        );
-    }
-
-    let logo_area = Rect {
-        x: content.x + content.width.saturating_sub(logo_width) / 2,
-        y: logo_y,
-        width: logo_width,
-        height: 6,
-    };
-    frame.render_widget(
-        Paragraph::new(app.logo).style(Style::default().fg(palette.accent).bg(palette.bg)),
-        logo_area,
-    );
-}
-
-fn draw_header_notes(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    let palette = theme::palette(theme);
-    let mut text = vec![
-        Line::from(Span::styled(
-            "Tips for getting started",
-            Style::default()
-                .fg(palette.accent)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            "Use / for commands or describe the change directly.",
-            Style::default().fg(palette.text),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Quotes of the day",
-            Style::default()
-                .fg(palette.accent)
-                .add_modifier(Modifier::BOLD),
-        )),
-    ];
-
-    if let Some(quote) = &app.quote {
-        text.push(Line::from(Span::styled(
-            format!("\"{}\"", quote.text),
-            Style::default().fg(palette.cyan),
-        )));
-        text.push(Line::from(Span::styled(
-            format!("— {}", quote.author),
-            Style::default().fg(palette.muted),
-        )));
-    } else {
-        text.push(Line::from(Span::styled(
-            "Fetching wisdom...",
-            Style::default().fg(palette.muted),
-        )));
-    }
-
-    if app.mode == UiMode::Streaming {
-        text.push(Line::from(""));
-        text.push(Line::from(Span::styled(
-            "Streaming response...",
-            Style::default().fg(palette.cyan),
-        )));
-    }
-
-    let vertical_margin = u16::from(area.height >= 10);
-    frame.render_widget(
-        Paragraph::new(text)
-            .style(Style::default().bg(palette.bg))
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true }),
-        area.inner(Margin {
-            vertical: vertical_margin,
-            horizontal: 2,
-        }),
-    );
-}
 
 fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let prompt = if app.mode == UiMode::Streaming {
@@ -773,6 +693,7 @@ pub(crate) mod theme {
         pub accent: Color,
         pub green: Color,
         pub pink: Color,
+        #[allow(dead_code)]
         pub cyan: Color,
         #[allow(dead_code)]
         pub purple: Color,
