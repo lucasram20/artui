@@ -1536,13 +1536,24 @@ impl App {
                     format!("missing env {env_name}")
                 }
             }
-            Some(AuthRequirement::Account) => self
-                .auth_store
-                .as_ref()
-                .and_then(|store| store.status(provider_id).ok())
-                .unwrap_or(AuthStatus::NotConnected)
-                .label()
-                .to_owned(),
+            Some(AuthRequirement::Account) => {
+                let Some(store) = &self.auth_store else {
+                    return "not connected".to_owned();
+                };
+                let record = store.record(provider_id).ok().flatten();
+                match record {
+                    Some(rec) => {
+                        let status = rec.status();
+                        let source = rec
+                            .metadata
+                            .get("source")
+                            .map(|s| format!(" via {s}"))
+                            .unwrap_or_default();
+                        format!("{}{source}", status.label())
+                    }
+                    None => "not connected".to_owned(),
+                }
+            }
             None => "unknown".to_owned(),
         }
     }
