@@ -32,10 +32,10 @@ impl OllamaProvider {
         let event: OllamaChatResponse =
             serde_json::from_str(line).context("failed to parse Ollama stream event")?;
         if let Some(message) = event.message {
-            Self::send_event(tx, ModelEvent::Token(message.content)).await;
+            Self::send_event(tx, ModelEvent::TextDelta(message.content)).await;
         }
         if event.done {
-            Self::send_event(tx, ModelEvent::Done).await;
+            Self::send_event(tx, ModelEvent::Done { end_turn: true }).await;
             return Ok(true);
         }
 
@@ -115,7 +115,7 @@ impl OllamaProvider {
             return Ok(());
         }
 
-        Self::send_event(&tx, ModelEvent::Done).await;
+        Self::send_event(&tx, ModelEvent::Done { end_turn: true }).await;
         Ok(())
     }
 }

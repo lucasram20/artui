@@ -649,7 +649,7 @@ async fn stream_sse_response(
     if !line.trim().is_empty() && handle_sse_line(tx, line.trim()).await? {
         return Ok(());
     }
-    CopilotProvider::send_event(tx, ModelEvent::Done).await;
+    CopilotProvider::send_event(tx, ModelEvent::Done { end_turn: true }).await;
     Ok(())
 }
 
@@ -659,13 +659,13 @@ async fn handle_sse_line(tx: &mpsc::Sender<AppEvent>, line: &str) -> Result<bool
     };
     let data = data.trim();
     if data == "[DONE]" {
-        CopilotProvider::send_event(tx, ModelEvent::Done).await;
+        CopilotProvider::send_event(tx, ModelEvent::Done { end_turn: true }).await;
         return Ok(true);
     }
     let event: serde_json::Value =
         serde_json::from_str(data).context("failed to parse GitHub Copilot stream event")?;
     for content in stream_event_text(&event) {
-        CopilotProvider::send_event(tx, ModelEvent::Token(content)).await;
+        CopilotProvider::send_event(tx, ModelEvent::TextDelta(content)).await;
     }
     Ok(false)
 }
@@ -1313,11 +1313,11 @@ mod tests {
 
         assert!(matches!(
             rx.recv().await.unwrap(),
-            AppEvent::Model(ModelEvent::Token(content)) if content == "hello"
+            AppEvent::Model(ModelEvent::TextDelta(content)) if content == "hello"
         ));
         assert!(matches!(
             rx.recv().await.unwrap(),
-            AppEvent::Model(ModelEvent::Done)
+            AppEvent::Model(ModelEvent::Done { .. })
         ));
     }
 

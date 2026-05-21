@@ -2,11 +2,13 @@ pub mod agent;
 pub mod app;
 pub mod auth;
 pub mod config;
+pub mod permissions;
 pub mod providers;
+pub mod tools;
 pub mod ui;
 pub mod util;
 
-use std::{io, panic, time::Duration};
+use std::{io, panic, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use app::{App, AppEvent, AppRequest, InputAction, UiMode};
@@ -17,6 +19,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<()> {
@@ -31,7 +34,9 @@ pub async fn run() -> Result<()> {
     let provider = providers::build_provider(&config)?;
     let (event_tx, mut event_rx) = mpsc::channel(64);
     let mut app = App::new(config, provider);
-    let _ = event_tx.send(AppEvent::Auth(app::AuthEvent::Status("Ready".to_owned()))).await;
+    let _ = event_tx
+        .send(AppEvent::Auth(app::AuthEvent::Status("Ready".to_owned())))
+        .await;
     spawn_app_request(AppRequest::FetchQuote, event_tx.clone());
 
     let mut terminal = setup_terminal()?;
@@ -165,10 +170,18 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
     tokio::spawn(async move {
         match request {
             AppRequest::Provider(request) => {
-                request
-                    .provider
-                    .stream_turn(request.request, event_tx)
-                    .await;
+                let cancel = CancellationToken::new();
+                let registry = Arc::new(tools::registry::ToolRegistry::new());
+                let config = agent::r#loop::AgentLoopConfig::default();
+                agent::r#loop::run_turn(
+                    request.provider,
+                    registry,
+                    request.request,
+                    event_tx,
+                    cancel,
+                    &config,
+                )
+                .await;
             }
             AppRequest::GitHubDeviceLogin {
                 config,
@@ -196,11 +209,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
             }
             AppRequest::FetchQuote => {
                 let client = reqwest::Client::new();
-                if let Ok(response) = client
-                    .get("https://zenquotes.io/api/random")
-                    .send()
-                    .await
-                {
+                if let Ok(response) = client.get("https://zenquotes.io/api/random").send().await {
                     if let Ok(quotes) = response.json::<Vec<crate::app::Quote>>().await {
                         if let Some(quote) = quotes.into_iter().next() {
                             let _ = event_tx.send(AppEvent::Quote(quote)).await;

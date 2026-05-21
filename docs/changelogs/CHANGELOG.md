@@ -2,6 +2,35 @@
 
 All notable changes to artui will be documented in this file.
 
+## 2026-05-21
+
+### Added
+
+- Added `ModelEvent` tool-call arms: `ToolCallStart`, `ToolCallArgsDelta`, `ToolCallEnd`, `ReasoningDelta`, `Usage` for streaming tool-call support from any provider.
+- Added `ToolSpec`, `ToolChoice`, and `ToolCall` types to the provider protocol.
+- Added per-provider tool serialization (`tool_serialization.rs`) for OpenAI Chat, OpenAI Responses, Anthropic Messages, and Ollama formats.
+- Added full OpenAI-compatible SSE streaming implementation with tool-call parsing in `openai_compat.rs`.
+- Added `Tool` trait, `ToolContext`, `ToolResult` types in `src/tools/mod.rs`.
+- Added `ToolRegistry` with dispatch-by-name and spec collection for `ModelRequest.tools`.
+- Added `read_file` tool with line numbers, line range, path traversal rejection, binary detection, and output truncation.
+- Added `glob` tool using `ignore::WalkBuilder` with .gitignore respect and max_results cap.
+- Added `search` tool wrapping ripgrep with case sensitivity, file glob filter, context lines, and output caps.
+- Added `apply_patch` tool implementing V4A patch format (Add/Delete/Update File operations) with atomic rollback, fuzzy hunk matching, and context-aware error messages.
+- Added `shell` tool with command classifier (denies sudo, rm -rf /, curl-pipe injection patterns), output caps (30k chars), timeout support, stderr capture, and kill_on_drop.
+- Added `PermissionEngine` scaffold classifying read-only tools as Allow and write tools as Ask.
+- Added `agent::loop::run_turn` — multi-step agent loop that streams model responses, collects tool calls, dispatches them, feeds results back, and iterates up to `max_steps_per_turn` (25).
+- Added `CancellationToken` (tokio-util) threading through the agent loop for clean Esc cancellation.
+- Added `tokio-util`, `ignore`, `glob`, `which` dependencies; added `process` feature to tokio.
+- Added `tempfile` dev-dependency for tool tests.
+
+### Changed
+
+- Renamed `ModelEvent::Token` to `ModelEvent::TextDelta` across all providers.
+- Changed `ModelEvent::Done` to `ModelEvent::Done { end_turn: bool }` for codex-compatible semantics.
+- Extended `ModelRequest` with `tools`, `tool_choice`, and `max_output_tokens` fields.
+- Changed `spawn_app_request` to route provider requests through the agent loop instead of direct `stream_turn`.
+- Wired `ToolRegistry` into `App` so `ModelRequest.tools` is populated from registered tools on every turn.
+
 ## 2026-05-14
 
 ### Added

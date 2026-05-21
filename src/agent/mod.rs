@@ -1,3 +1,5 @@
+pub mod r#loop;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimaryAgent {
     Build,

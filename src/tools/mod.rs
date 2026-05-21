@@ -1,0 +1,69 @@
+//! Tool trait, context, result types, and registry.
+
+pub mod apply_patch;
+pub mod glob;
+pub mod read_file;
+pub mod registry;
+pub mod search;
+pub mod shell;
+
+use std::path::PathBuf;
+
+use async_trait::async_trait;
+use serde_json::Value;
+use tokio::sync::mpsc;
+
+use crate::app::AppEvent;
+use crate::providers::ToolSpec;
+
+/// Context passed to every tool execution.
+#[derive(Clone)]
+pub struct ToolContext {
+    pub call_id: String,
+    pub workspace_root: PathBuf,
+    pub cwd: PathBuf,
+    pub events: mpsc::Sender<AppEvent>,
+    pub max_read_file_chars: usize,
+    // pub permissions: Arc<PermissionEngine>,  // Phase D
+    // pub cancel: CancellationToken,           // Phase C
+}
+
+/// Result of a tool execution.
+#[derive(Debug, Clone)]
+pub struct ToolResult {
+    pub call_id: String,
+    pub content: String,
+    pub error: Option<String>,
+    pub artifact_path: Option<PathBuf>,
+}
+
+impl ToolResult {
+    pub fn ok(call_id: String, content: String) -> Self {
+        Self {
+            call_id,
+            content,
+            error: None,
+            artifact_path: None,
+        }
+    }
+
+    pub fn error(call_id: String, error: String) -> Self {
+        Self {
+            call_id,
+            content: String::new(),
+            error: Some(error),
+            artifact_path: None,
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.error.is_some()
+    }
+}
+
+/// Trait that all tools implement.
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn spec(&self) -> ToolSpec;
+    async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult;
+}

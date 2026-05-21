@@ -362,6 +362,7 @@ pub struct App {
     pub config: AppConfig,
     pub provider: Arc<dyn LlmProvider>,
     pub auth_store: Option<AuthStore>,
+    pub tool_registry: crate::tools::registry::ToolRegistry,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -408,6 +409,7 @@ impl App {
             config,
             provider,
             auth_store,
+            tool_registry: crate::tools::registry::ToolRegistry::new(),
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -622,6 +624,9 @@ impl App {
                 messages: self.transcript.clone(),
                 system_prompt: Some(self.system_prompt()),
                 reasoning_effort: self.normalized_reasoning_effort().request_value(),
+                tools: self.tool_registry.specs(),
+                tool_choice: crate::providers::ToolChoice::Auto,
+                max_output_tokens: None,
             },
         }))
     }
@@ -637,8 +642,8 @@ impl App {
 
     pub fn handle_event(&mut self, event: AppEvent) {
         match event {
-            AppEvent::Model(ModelEvent::Token(token)) => self.append_assistant_token(&token),
-            AppEvent::Model(ModelEvent::Done) => {
+            AppEvent::Model(ModelEvent::TextDelta(token)) => self.append_assistant_token(&token),
+            AppEvent::Model(ModelEvent::Done { .. }) => {
                 self.mode = UiMode::Input;
                 self.status = self.provider_status();
                 self.stop_thinking_animation();
@@ -707,6 +712,12 @@ impl App {
                 self.status = "Provider error".to_owned();
                 self.stop_thinking_animation();
             }
+            // Tool-call and metadata events — no-op until agent loop (Phase C)
+            AppEvent::Model(ModelEvent::ToolCallStart { .. })
+            | AppEvent::Model(ModelEvent::ToolCallArgsDelta { .. })
+            | AppEvent::Model(ModelEvent::ToolCallEnd { .. })
+            | AppEvent::Model(ModelEvent::ReasoningDelta(_))
+            | AppEvent::Model(ModelEvent::Usage { .. }) => {}
             AppEvent::Quote(quote) => {
                 self.quote = Some(quote);
             }
@@ -2015,22 +2026,18 @@ const CHAT_PAGE_SCROLL_STEP: u16 = 10;
 const LOGO: &str = "┌────────┐\n│  >_  ●●│\n└────────┘";
 
 const EYE_IDLE: &[&str] = &[
-    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●",
-    "◡◡", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●",
-    "◕◕", "●●", "●●", "●●", "◔◔", "●●", "●●", "●●", "◡◡", "●●", "●●", "●●", "●●", "●●", "●●",
+    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "◡◡",
+    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "◕◕", "●●",
+    "●●", "●●", "◔◔", "●●", "●●", "●●", "◡◡", "●●", "●●", "●●", "●●", "●●", "●●",
 ];
 
-const EYE_TYPING: &[&str] = &[
-    "●●", "··", "●●", "··", "●●", "··", "●●", "··",
-];
+const EYE_TYPING: &[&str] = &["●●", "··", "●●", "··", "●●", "··", "●●", "··"];
 
 const EYE_THINKING: &[&str] = &[
     "◔◔", "●●", "◕◕", "●●", "◔◔", "●●", "◕◕", "●●", "⚆⚆", "●●", "◡◡", "●●",
 ];
 
-const EYE_STREAMING: &[&str] = &[
-    "⚆⚆", "●●", "⚆⚆", "●●", "⚆⚆", "●●", "◡◡", "●●",
-];
+const EYE_STREAMING: &[&str] = &["⚆⚆", "●●", "⚆⚆", "●●", "⚆⚆", "●●", "◡◡", "●●"];
 
 #[cfg(test)]
 mod tests {
