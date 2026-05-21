@@ -62,6 +62,31 @@ impl Tool for ReadFileTool {
             ctx.workspace_root.join(requested)
         };
 
+        // Early rejection: if the path contains ".." components that escape workspace
+        if path_str.contains("..") {
+            let normalized = resolved
+                .components()
+                .fold(std::path::PathBuf::new(), |mut acc, c| {
+                    match c {
+                        std::path::Component::ParentDir => {
+                            acc.pop();
+                        }
+                        _ => acc.push(c),
+                    }
+                    acc
+                });
+            let canonical_workspace = ctx
+                .workspace_root
+                .canonicalize()
+                .unwrap_or(ctx.workspace_root.clone());
+            if !normalized.starts_with(&canonical_workspace) {
+                return ToolResult::error(
+                    ctx.call_id,
+                    format!("path '{}' is outside the workspace", path_str),
+                );
+            }
+        }
+
         let canonical = match resolved.canonicalize() {
             Ok(p) => p,
             Err(e) => {

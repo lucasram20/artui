@@ -136,9 +136,11 @@ mod tests {
         let result = tool.execute(json!({"pattern": "**/*.rs"}), ctx).await;
 
         assert!(result.error.is_none());
-        assert!(result.content.contains("src/main.rs"));
-        assert!(result.content.contains("src/lib.rs"));
-        assert!(!result.content.contains("README.md"));
+        // Normalize path separators for cross-platform (Windows uses \)
+        let content = result.content.replace('\\', "/");
+        assert!(content.contains("src/main.rs"));
+        assert!(content.contains("src/lib.rs"));
+        assert!(!content.contains("README.md"));
     }
 
     #[tokio::test]

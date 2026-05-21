@@ -1212,22 +1212,33 @@ impl App {
         let seed = self.last_eye_frame_at.elapsed().subsec_nanos() as usize;
         match self.mode {
             UiMode::Streaming => {
-                let is_thinking = self
-                    .transcript
-                    .last()
-                    .is_some_and(|m| m.content.is_empty());
+                let is_thinking = self.transcript.last().is_some_and(|m| m.content.is_empty());
                 if is_thinking {
                     // Rapid look-around while thinking
-                    [EYE_LOOK_LEFT, EYE_OPEN, EYE_LOOK_RIGHT, EYE_OPEN, EYE_WIDE, EYE_OPEN]
-                        [seed % 6]
+                    [
+                        EYE_LOOK_LEFT,
+                        EYE_OPEN,
+                        EYE_LOOK_RIGHT,
+                        EYE_OPEN,
+                        EYE_WIDE,
+                        EYE_OPEN,
+                    ][seed % 6]
                 } else {
                     // Streaming text — focused with occasional blinks
-                    if seed.is_multiple_of(8) { EYE_BLINK } else { EYE_OPEN }
+                    if seed.is_multiple_of(8) {
+                        EYE_BLINK
+                    } else {
+                        EYE_OPEN
+                    }
                 }
             }
             UiMode::Input if !self.input.is_empty() => {
                 // Typing — attentive with quick blinks
-                if seed.is_multiple_of(5) { EYE_BLINK } else { EYE_OPEN }
+                if seed.is_multiple_of(5) {
+                    EYE_BLINK
+                } else {
+                    EYE_OPEN
+                }
             }
             _ => {
                 // Idle — mostly open, occasional blink/look

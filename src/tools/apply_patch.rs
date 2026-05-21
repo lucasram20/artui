@@ -490,15 +490,14 @@ const DIFF_CONTEXT_LINES: usize = 3;
 const DIFF_NEW_FILE_PREVIEW_LINES: usize = 20;
 
 /// Generate a unified diff between original and new content for a file.
-fn generate_unified_diff(
-    path: &std::path::Path,
-    original: &str,
-    new_content: &str,
-) -> String {
+fn generate_unified_diff(path: &std::path::Path, original: &str, new_content: &str) -> String {
     let old_lines: Vec<&str> = original.lines().collect();
     let new_lines: Vec<&str> = new_content.lines().collect();
 
-    let rel = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+    let rel = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
     let mut output = Vec::new();
     output.push(format!("--- a/{rel}"));
     output.push(format!("+++ b/{rel}"));
@@ -524,7 +523,10 @@ fn generate_unified_diff(
 
 /// Generate a preview diff for a newly created file.
 fn generate_create_diff(path: &std::path::Path, content: &str) -> String {
-    let rel = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+    let rel = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
     let mut output = Vec::new();
     output.push(format!("+++ b/{rel} (new file)"));
 
@@ -546,9 +548,9 @@ fn generate_create_diff(path: &std::path::Path, content: &str) -> String {
 
 #[derive(Clone, Copy)]
 enum Edit {
-    Keep(usize, usize),   // old_idx, new_idx
-    Remove(usize),        // old_idx
-    Insert(usize),        // new_idx
+    Keep(usize, usize), // old_idx, new_idx
+    Remove(usize),      // old_idx
+    Insert(usize),      // new_idx
 }
 
 /// Compute edits between old and new lines using LCS for small files,
@@ -661,16 +663,14 @@ fn build_hunks(edits: &[Edit], old: &[&str], new: &[&str]) -> Vec<String> {
         };
         let new_start = match &edits[ctx_before] {
             Edit::Keep(_, ni) | Edit::Insert(ni) => *ni,
-            Edit::Remove(_) => {
-                edits[..ctx_before]
-                    .iter()
-                    .rev()
-                    .find_map(|e| match e {
-                        Edit::Keep(_, ni) | Edit::Insert(ni) => Some(*ni + 1),
-                        _ => None,
-                    })
-                    .unwrap_or(0)
-            }
+            Edit::Remove(_) => edits[..ctx_before]
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    Edit::Keep(_, ni) | Edit::Insert(ni) => Some(*ni + 1),
+                    _ => None,
+                })
+                .unwrap_or(0),
         };
 
         let mut old_count = 0usize;

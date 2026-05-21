@@ -10,7 +10,11 @@ pub mod tools;
 pub mod ui;
 pub mod util;
 
-use std::{io, panic, sync::Arc, time::{Duration, Instant}};
+use std::{
+    io, panic,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use app::{App, AppEvent, AppRequest, InputAction, UiMode};
@@ -47,9 +51,7 @@ pub async fn run() -> Result<()> {
             if let Some(ctx) =
                 providers::ollama::fetch_ollama_context_window(&ollama_config, &model).await
             {
-                let _ = ctx_tx
-                    .send(AppEvent::OllamaContextWindow(ctx))
-                    .await;
+                let _ = ctx_tx.send(AppEvent::OllamaContextWindow(ctx)).await;
             }
         });
     }
@@ -86,17 +88,11 @@ pub async fn run() -> Result<()> {
                     [30.0, 0.0, 8.0],
                     (1200, tachyonfx::Interpolation::SineInOut),
                 );
-                effects.add_unique_effect(
-                    "thinking",
-                    tachyonfx::fx::repeating(shimmer),
-                );
+                effects.add_unique_effect("thinking", tachyonfx::fx::repeating(shimmer));
             }
             // Stop shimmer when streaming ends
             if app.mode != UiMode::Streaming && was_streaming {
-                effects.add_unique_effect(
-                    "thinking",
-                    tachyonfx::fx::sleep(0),
-                );
+                effects.add_unique_effect("thinking", tachyonfx::fx::sleep(0));
             }
             was_streaming = app.mode == UiMode::Streaming;
 
@@ -359,10 +355,7 @@ fn try_clipboard_image_from_xclip_uri() -> Option<Vec<u8>> {
 fn read_image_from_uri_output(raw: &[u8]) -> Option<Vec<u8>> {
     let text = String::from_utf8_lossy(raw);
     for line in text.lines() {
-        let path = line
-            .trim()
-            .strip_prefix("file://")
-            .unwrap_or(line.trim());
+        let path = line.trim().strip_prefix("file://").unwrap_or(line.trim());
         if path.is_empty() {
             continue;
         }

@@ -158,7 +158,9 @@ pub async fn run_turn(
         // Record assistant message with tool calls in transcript
         if !assistant_text.is_empty() {
             extra_messages.push(Message::new(Role::Assistant, assistant_text.clone()));
-            request.messages.push(Message::new(Role::Assistant, assistant_text));
+            request
+                .messages
+                .push(Message::new(Role::Assistant, assistant_text));
         }
 
         // Dispatch tool calls and collect results
@@ -230,11 +232,12 @@ fn format_tool_result(tool_name: &str, result: &ToolResult) -> String {
         format!("\n⚠ {tool_name}: {err}\n")
     } else {
         let content = &result.content;
-        let preview = if FULL_OUTPUT_TOOLS.contains(&tool_name) || content.len() <= DEFAULT_PREVIEW_LEN {
-            content.clone()
-        } else {
-            format!("{}...", &content[..DEFAULT_PREVIEW_LEN])
-        };
+        let preview =
+            if FULL_OUTPUT_TOOLS.contains(&tool_name) || content.len() <= DEFAULT_PREVIEW_LEN {
+                content.clone()
+            } else {
+                format!("{}...", &content[..DEFAULT_PREVIEW_LEN])
+            };
         format!("\n📄 {tool_name}:\n{preview}\n")
     }
 }

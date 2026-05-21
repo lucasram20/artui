@@ -223,7 +223,10 @@ fn parse_markdown(content: &str) -> Vec<DisplaySegment> {
         }
 
         // Bullet lists (- or *)
-        if let Some(text) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+        if let Some(text) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
             segments.push(DisplaySegment {
                 kind: SegmentKind::Bullet,
                 chunks: parse_inline(&format!("• {text}")),
@@ -422,9 +425,7 @@ fn render_segment(segment: &DisplaySegment, theme_id: ThemeId) -> Vec<Span<'stat
             .chunks
             .iter()
             .map(|chunk| match chunk {
-                InlineChunk::Plain(t) => {
-                    Span::styled(t.clone(), Style::default().fg(palette.text))
-                }
+                InlineChunk::Plain(t) => Span::styled(t.clone(), Style::default().fg(palette.text)),
                 InlineChunk::Bold(t) => Span::styled(
                     t.clone(),
                     Style::default()

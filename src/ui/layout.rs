@@ -46,8 +46,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     let palette = theme::palette(theme);
     frame.render_widget(
-        Block::default()
-            .style(Style::default().bg(palette.bg)),
+        Block::default().style(Style::default().bg(palette.bg)),
         area,
     );
 
@@ -183,7 +182,6 @@ fn draw_compact_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: R
         area,
     );
 }
-
 
 fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let prompt = if app.mode == UiMode::Streaming {
@@ -456,7 +454,9 @@ fn draw_file_mentions(
 ) {
     let palette = theme::palette(theme);
     let max_visible = area.height.saturating_sub(1) as usize;
-    let cursor = app.file_mention_cursor.min(mentions.len().saturating_sub(1));
+    let cursor = app
+        .file_mention_cursor
+        .min(mentions.len().saturating_sub(1));
 
     // Scroll window so cursor is always visible
     let scroll_offset = if cursor >= max_visible {

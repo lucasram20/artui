@@ -2,6 +2,42 @@
 
 All notable changes to artui will be documented in this file.
 
+## 2026-05-22
+
+### Added
+
+- Added live file autocomplete popup when typing `@` in the input — shows workspace files filtered by partial path, navigable with ↑/↓/j/k, selectable with Tab/Enter.
+- Added multimodal image support: pasted images are now sent to LLM providers as base64 content parts (OpenAI vision format, Anthropic format, Ollama native images field).
+- Added clipboard image detection from file URI lists (Wayland `text/uri-list`, X11 `xclip`) and bracketed paste of image file paths.
+- Added `input_text`/`input_image` content types for OpenAI Responses API image support.
+- Added mouse scroll support (scroll wheel scrolls chat history up/down).
+- Added improved markdown rendering: fenced code blocks, inline bold/code styling, numbered lists, blank line preservation, diff coloring.
+- Added colored unified diff display after `apply_patch` edits — green additions, red/pink removals, accent headers.
+- Added LCS-based diff algorithm with configurable context lines and max output limits.
+- Added tachyonfx animations: HSL color shimmer loops during model streaming.
+- Added randomized eye animation state machine (no more fixed frame sequences).
+- Added visual context usage bar in footer (green→yellow→red as context fills).
+- Added Ollama `/api/show` query at startup to fetch actual model context window size.
+- Added `Message::new()` and `Message::with_images()` constructors.
+- Added `base64` and `tachyonfx` dependencies.
+
+### Changed
+
+- Redesigned header: removed bordered rectangle, now shows ASCII art logo left + version/quote right.
+- Moved agent name from header to input title bar (left side, next to eye animation).
+- Changed `@` file mention display: chat shows short `[filename]` tags, full content only sent to model.
+- Changed context window display from text to visual bar.
+- Updated context window fallback values: gpt-5.4/5.5 → 1M, gpt-5.4-mini → 400k, gemma4 → 128k, gemini → 1M.
+- Changed `format_tool_result` to not truncate `apply_patch` output (full diffs visible).
+
+### Fixed
+
+- Fixed `@` file mention popup scroll — list now scrolls when cursor moves past visible window.
+- Fixed `@` file mention sort order — directories first, then by depth, then alphabetical.
+- Fixed path traversal detection on macOS/Windows (early `..` component check before canonicalization).
+- Fixed glob test on Windows (normalize path separators in assertion).
+- Fixed Responses API 400 error when sending images (was using `text`/`image_url` instead of `input_text`/`input_image`).
+
 ## 2026-05-21
 
 ### Added
