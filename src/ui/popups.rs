@@ -481,14 +481,9 @@ fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
             ListItem::new(Line::from(vec![
                 Span::styled(selector_pointer(is_selected), item_style),
                 Span::styled(selected_mark(is_connected), item_style),
-                Span::styled(format!("{:<16}", provider.display_name), item_style),
+                Span::styled(format!("{:<18}", provider.display_name), item_style),
                 Span::styled(
-                    format!(
-                        "{} • {} • streaming {}",
-                        app.provider_status_label(provider.id),
-                        provider.auth_requirement.label(),
-                        if provider.streaming { "yes" } else { "not yet" }
-                    ),
+                    login_status_short(app, provider.id, is_connected),
                     description_style,
                 ),
             ]))
@@ -497,6 +492,25 @@ fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(List::new(items), rows[1]);
 
     draw_selector_help(frame, app, rows[2], "connect");
+}
+
+fn login_status_short(app: &App, provider_id: &str, is_connected: bool) -> String {
+    if is_connected {
+        "ready".to_owned()
+    } else if provider_id == "ollama" {
+        "local".to_owned()
+    } else {
+        let status = app.provider_status_label(provider_id);
+        if status.contains("not connected") {
+            "sign in needed".to_owned()
+        } else if status.contains("missing") {
+            "key needed".to_owned()
+        } else if status.contains("expired") {
+            "expired".to_owned()
+        } else {
+            status
+        }
+    }
 }
 
 fn selector_block<'a>(app: &App, title: &'a str, command: &'a str) -> Block<'a> {
