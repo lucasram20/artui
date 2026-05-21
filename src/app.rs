@@ -2021,16 +2021,24 @@ fn known_context_window_tokens(provider_id: &str, model: &str) -> Option<usize> 
     let model = model.to_ascii_lowercase();
     let tokens = match provider_id {
         "ollama" => {
-            if model.contains("nemotron") || model.contains("qwen3") {
+            if model.contains("nemotron")
+                || model.contains("qwen3")
+                || model.contains("llama4")
+                || model.contains("gemma4")
+            {
                 128_000
             } else {
                 32_000
             }
         }
         "copilot" | "openai_account" | "openai_compat" => {
-            if model.contains("gpt-5") || model.contains("codex") {
+            if model.contains("gpt-5") && model.contains("mini") {
                 400_000
-            } else if model.contains("gpt-4.1") {
+            } else if model.contains("gpt-5")
+                || model.contains("codex")
+                || model.contains("gpt-4.1")
+                || model.contains("gemini")
+            {
                 1_000_000
             } else if model.contains("gpt-4o")
                 || model.starts_with("o1")
@@ -2038,7 +2046,7 @@ fn known_context_window_tokens(provider_id: &str, model: &str) -> Option<usize> 
                 || model.starts_with("o4")
             {
                 128_000
-            } else if model.contains("claude") || model.contains("gemini") {
+            } else if model.contains("claude") {
                 200_000
             } else {
                 128_000
@@ -2475,11 +2483,15 @@ mod tests {
     fn context_window_is_provider_model_dependent() {
         assert_eq!(
             known_context_window_tokens("ollama", "gemma4:e2b"),
-            Some(32_000)
+            Some(128_000)
+        );
+        assert_eq!(
+            known_context_window_tokens("copilot", "gpt-5.4-mini"),
+            Some(400_000)
         );
         assert_eq!(
             known_context_window_tokens("copilot", "gpt-5.2-codex"),
-            Some(400_000)
+            Some(1_000_000)
         );
         assert_eq!(
             known_context_window_tokens("copilot", "gpt-4.1"),
