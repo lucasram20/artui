@@ -55,12 +55,8 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         .constraints([Constraint::Length(16), Constraint::Min(20)])
         .split(area);
 
-    // Left: ASCII art logo — render as explicit Lines to avoid width miscalculation
-    let logo_lines: Vec<Line<'_>> = app
-        .logo
-        .lines()
-        .map(|l| Line::from(Span::styled(l, Style::default().fg(palette.accent))))
-        .collect();
+    // Left: Logo rendered with colored background spaces (avoids █ width issues)
+    let logo_lines = render_logo_lines(palette.accent);
     frame.render_widget(
         Paragraph::new(logo_lines).style(Style::default().bg(palette.bg)),
         columns[0],
@@ -115,6 +111,40 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
             height: columns[1].height,
         },
     );
+}
+
+/// Render "ART" logo using colored background spaces instead of █ characters.
+/// This avoids the common issue where █ renders as 2 cells wide in some terminal fonts.
+fn render_logo_lines(color: ratatui::style::Color) -> Vec<Line<'static>> {
+    // Each row is a bitmap: 1 = colored cell, 0 = empty
+    // Layout: A(5) + space + R(4) + space + T(5) = 16 chars wide
+    const LOGO_BITMAP: &[&[u8]] = &[
+        b" ### ####  #####",
+        b"#   # #  #   # ",
+        b"##### ###    # ",
+        b"#   # #  #   # ",
+        b"#   # #  #   # ",
+    ];
+
+    let on = Style::default().bg(color);
+    let off = Style::default();
+
+    LOGO_BITMAP
+        .iter()
+        .map(|row| {
+            let spans: Vec<Span<'static>> = row
+                .iter()
+                .map(|&cell| {
+                    if cell == b'#' {
+                        Span::styled(" ", on)
+                    } else {
+                        Span::styled(" ", off)
+                    }
+                })
+                .collect();
+            Line::from(spans)
+        })
+        .collect()
 }
 
 fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
