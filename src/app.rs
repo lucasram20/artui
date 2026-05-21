@@ -1167,16 +1167,15 @@ impl App {
     pub fn advance_thinking_animation(&mut self) {
         let now = Instant::now();
 
-        // Eye animation (always active, context-aware)
+        // Eye animation — randomized timing for natural feel
         let interval = match self.mode {
-            UiMode::Streaming => Duration::from_millis(250),
-            UiMode::Input if !self.input.is_empty() => Duration::from_millis(200),
-            _ => Duration::from_millis(400),
+            UiMode::Streaming => Duration::from_millis(200),
+            UiMode::Input if !self.input.is_empty() => Duration::from_millis(180),
+            _ => Duration::from_millis(self.next_eye_interval_ms()),
         };
 
         if now.duration_since(self.last_eye_frame_at) >= interval {
-            let frames = self.active_eye_frames();
-            self.eye_frame = next_wrapped_index(self.eye_frame, frames.len());
+            self.eye_frame = self.next_eye_state();
             self.last_eye_frame_at = now;
         }
 
@@ -1197,28 +1196,50 @@ impl App {
         }
     }
 
-    pub fn eye_frame(&self) -> &str {
-        let frames = self.active_eye_frames();
-        frames[self.eye_frame.min(frames.len() - 1)]
+    pub fn eye_frame(&self) -> &'static str {
+        EYE_GLYPHS[self.eye_frame.min(EYE_GLYPHS.len() - 1)]
     }
 
-    fn active_eye_frames(&self) -> &'static [&'static str] {
+    /// Pick next eye state based on mode and pseudo-random variation.
+    fn next_eye_state(&self) -> usize {
+        let seed = self.last_eye_frame_at.elapsed().subsec_nanos() as usize;
         match self.mode {
             UiMode::Streaming => {
-                if self
+                let is_thinking = self
                     .transcript
                     .last()
-                    .map(|m| m.content.is_empty())
-                    .unwrap_or(true)
-                {
-                    EYE_THINKING
+                    .is_some_and(|m| m.content.is_empty());
+                if is_thinking {
+                    // Rapid look-around while thinking
+                    [EYE_LOOK_LEFT, EYE_OPEN, EYE_LOOK_RIGHT, EYE_OPEN, EYE_WIDE, EYE_OPEN]
+                        [seed % 6]
                 } else {
-                    EYE_STREAMING
+                    // Streaming text — focused with occasional blinks
+                    if seed.is_multiple_of(8) { EYE_BLINK } else { EYE_OPEN }
                 }
             }
-            UiMode::Input if !self.input.is_empty() => EYE_TYPING,
-            _ => EYE_IDLE,
+            UiMode::Input if !self.input.is_empty() => {
+                // Typing — attentive with quick blinks
+                if seed.is_multiple_of(5) { EYE_BLINK } else { EYE_OPEN }
+            }
+            _ => {
+                // Idle — mostly open, occasional blink/look
+                match seed % 20 {
+                    0 => EYE_BLINK,
+                    1 => EYE_LOOK_LEFT,
+                    2 => EYE_LOOK_RIGHT,
+                    3 => EYE_HALF,
+                    _ => EYE_OPEN,
+                }
+            }
         }
+    }
+
+    /// Randomized interval for idle eye — longer pauses with occasional quick transitions.
+    fn next_eye_interval_ms(&self) -> u64 {
+        let seed = self.last_eye_frame_at.elapsed().subsec_nanos();
+        // Range: 300ms to 1200ms for idle, creates natural rhythm
+        300 + (seed as u64 % 900)
     }
 
     pub fn thinking_frame(&self) -> &str {
@@ -2362,19 +2383,22 @@ const CHAT_PAGE_SCROLL_STEP: u16 = 10;
 
 const LOGO: &str = "┌────────┐\n│  >_  ●●│\n└────────┘";
 
-const EYE_IDLE: &[&str] = &[
-    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "◡◡",
-    "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "●●", "◕◕", "●●",
-    "●●", "●●", "◔◔", "●●", "●●", "●●", "◡◡", "●●", "●●", "●●", "●●", "●●", "●●",
+// Eye glyph indices into EYE_GLYPHS
+const EYE_OPEN: usize = 0;
+const EYE_BLINK: usize = 1;
+const EYE_LOOK_LEFT: usize = 2;
+const EYE_LOOK_RIGHT: usize = 3;
+const EYE_WIDE: usize = 4;
+const EYE_HALF: usize = 5;
+
+const EYE_GLYPHS: &[&str] = &[
+    "●●", // open
+    "◡◡", // blink
+    "◔◔", // look left
+    "◕◕", // look right
+    "⚆⚆", // wide
+    "··", // half-closed
 ];
-
-const EYE_TYPING: &[&str] = &["●●", "··", "●●", "··", "●●", "··", "●●", "··"];
-
-const EYE_THINKING: &[&str] = &[
-    "◔◔", "●●", "◕◕", "●●", "◔◔", "●●", "◕◕", "●●", "⚆⚆", "●●", "◡◡", "●●",
-];
-
-const EYE_STREAMING: &[&str] = &["⚆⚆", "●●", "⚆⚆", "●●", "⚆⚆", "●●", "◡◡", "●●"];
 
 #[cfg(test)]
 mod tests {
