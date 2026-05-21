@@ -523,7 +523,7 @@ fn draw_slash_commands(
 
 // ── File mention suggestions ───────────────────────────────────────────
 
-const FILE_MENTION_MAX_VISIBLE: usize = 8;
+const FILE_MENTION_MAX_VISIBLE: usize = 12;
 
 fn visible_file_mentions(app: &App) -> Vec<String> {
     if app.mode == UiMode::Streaming
