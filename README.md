@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/artui.png" alt="artui logo" width="240">
+  <img src="src/assets/artui.svg" alt="artui logo" width="240">
 </p>
 
 <h1 align="center">artui</h1>
