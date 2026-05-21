@@ -113,11 +113,17 @@ impl Tool for ShellTool {
             );
         }
 
-        // Execute command
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c")
-            .arg(command)
-            .current_dir(&work_dir)
+        // Execute command — platform-aware shell selection
+        let mut cmd = if cfg!(target_os = "windows") {
+            let mut c = Command::new("powershell.exe");
+            c.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+            c
+        } else {
+            let mut c = Command::new("sh");
+            c.arg("-c").arg(command);
+            c
+        };
+        cmd.current_dir(&work_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);

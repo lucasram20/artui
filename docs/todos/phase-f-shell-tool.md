@@ -1,7 +1,7 @@
 # Phase F — `shell` tool + classifier + output caps
 
 **Status:** DONE (2026-05-21)
-**Summary:** Implemented `shell` tool with command classifier (denies sudo, rm -rf /, curl-pipe patterns), output caps (30k chars), timeout support, stderr capture, and kill_on_drop. 71 tests pass, clippy clean.
+**Summary:** Implemented `shell` tool with command classifier (denies sudo, rm -rf /, curl-pipe patterns), output caps (30k chars), timeout support, stderr capture, and kill_on_drop. Cross-platform: uses `powershell.exe -NoProfile -NonInteractive -Command` on Windows, `sh -c` on Unix. 71 tests pass, clippy clean.
 
 **Phase:** F
 **Spec:** `docs/spec/harness-architecture.md` §6; `artui_v1_agentic_spec.md` §8.6, §9
