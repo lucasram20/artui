@@ -55,10 +55,14 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         .constraints([Constraint::Length(16), Constraint::Min(20)])
         .split(area);
 
-    // Left: ASCII art logo (no wrap, no centering — pre-formatted)
+    // Left: ASCII art logo — render as explicit Lines to avoid width miscalculation
+    let logo_lines: Vec<Line<'_>> = app
+        .logo
+        .lines()
+        .map(|l| Line::from(Span::styled(l, Style::default().fg(palette.accent))))
+        .collect();
     frame.render_widget(
-        Paragraph::new(app.logo)
-            .style(Style::default().fg(palette.accent).bg(palette.bg)),
+        Paragraph::new(logo_lines).style(Style::default().bg(palette.bg)),
         columns[0],
     );
 
