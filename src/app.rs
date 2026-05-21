@@ -397,6 +397,8 @@ pub struct App {
     pub eye_frame: usize,
     pub last_eye_frame_at: Instant,
     pub quote: Option<Quote>,
+    pub pasted_contents: Vec<String>,
+    pub pasted_images: Vec<Vec<u8>>,
 }
 
 impl App {
@@ -443,6 +445,8 @@ impl App {
             eye_frame: 0,
             last_eye_frame_at: now,
             quote: None,
+            pasted_contents: Vec::new(),
+            pasted_images: Vec::new(),
         }
     }
 
@@ -603,6 +607,23 @@ impl App {
             return request;
         }
 
+        // Expand @file mentions: resolve paths and inject file content
+        let mut content = self.expand_file_mentions(&content);
+
+        // Expand pasted content references
+        if !self.pasted_contents.is_empty() {
+            for (i, paste) in self.pasted_contents.iter().enumerate() {
+                let lines = paste.lines().count();
+                content.push_str(&format!(
+                    "\n\n<pasted_text id={} lines={lines}>\n{paste}\n</pasted_text>",
+                    i + 1
+                ));
+            }
+            self.pasted_contents.clear();
+        }
+        // Note: pasted_images cleared but not sent (requires multimodal API support)
+        self.pasted_images.clear();
+
         self.input.clear();
         self.slash_cursor = 0;
         self.chat_scroll = 0;
@@ -629,6 +650,75 @@ impl App {
                 max_output_tokens: None,
             },
         }))
+    }
+
+    /// Expand @file mentions in user input.
+    /// Scans for @path patterns, reads the files, and appends their content.
+    fn expand_file_mentions(&self, input: &str) -> String {
+        let workspace = std::env::current_dir().unwrap_or_default();
+        let mut result = input.to_owned();
+        let mut attachments = Vec::new();
+
+        // Find all @path patterns (word boundary: space or start of string before @)
+        let words: Vec<&str> = input.split_whitespace().collect();
+        for word in &words {
+            if let Some(path_str) = word.strip_prefix('@') {
+                if path_str.is_empty() {
+                    continue;
+                }
+                let path = workspace.join(path_str);
+                if path.is_file() {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        let lines = content.lines().count();
+                        // Remove the @mention from the message text
+                        result = result.replace(word, &format!("[{path_str}]"));
+                        // Truncate large files
+                        let display_content = if content.len() > 20_000 {
+                            format!(
+                                "{}...\n(truncated, {} lines total)",
+                                &content[..20_000],
+                                lines
+                            )
+                        } else {
+                            content
+                        };
+                        attachments.push(format!(
+                            "<file path=\"{path_str}\" lines={lines}>\n{display_content}\n</file>"
+                        ));
+                    }
+                }
+            }
+        }
+
+        if !attachments.is_empty() {
+            result.push_str("\n\n");
+            result.push_str(&attachments.join("\n\n"));
+        }
+
+        result
+    }
+
+    /// Handle pasted text content — show shortened tag for large pastes.
+    pub fn paste_text(&mut self, text: &str) {
+        let lines = text.lines().count();
+        if lines > 5 || text.len() > 200 {
+            // Store as attachment, show tag in input
+            self.pasted_contents.push(text.to_owned());
+            let index = self.pasted_contents.len();
+            let tag = format!("[Pasted text #{index} +{lines} lines]");
+            self.input.push_str(&tag);
+        } else {
+            // Short paste — inline directly
+            self.input.push_str(text);
+        }
+    }
+
+    /// Handle pasted image — show tag in input.
+    pub fn paste_image(&mut self, _data: Vec<u8>) {
+        self.pasted_images.push(_data);
+        let index = self.pasted_images.len();
+        let tag = format!("[Image #{index}]");
+        self.input.push_str(&tag);
     }
 
     fn system_prompt(&self) -> String {

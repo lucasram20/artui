@@ -56,8 +56,10 @@ pub async fn run() -> Result<()> {
             }
 
             if event::poll(Duration::from_millis(25))? {
-                if let Event::Key(key) = event::read()? {
-                    handle_key(key, &mut app, event_tx.clone());
+                match event::read()? {
+                    Event::Key(key) => handle_key(key, &mut app, event_tx.clone()),
+                    Event::Paste(text) => app.paste_text(&text),
+                    _ => {}
                 }
             }
         }
@@ -73,13 +75,21 @@ pub async fn run() -> Result<()> {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        crossterm::event::EnableBracketedPaste
+    )?;
     Terminal::new(CrosstermBackend::new(stdout)).map_err(Into::into)
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableBracketedPaste,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     Ok(())
 }
