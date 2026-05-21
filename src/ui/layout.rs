@@ -64,7 +64,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         columns[0],
     );
 
-    // Right: version + quote
+    // Right: version + quote, vertically centered
     let mut info_lines = vec![
         Line::from(vec![
             Span::styled(
@@ -90,7 +90,20 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
             format!("— {}", quote.author),
             Style::default().fg(palette.muted),
         )));
+    } else {
+        info_lines.push(Line::from(Span::styled(
+            "\"Code is like humor. When you have to explain it, it's bad.\"",
+            Style::default().fg(palette.text),
+        )));
+        info_lines.push(Line::from(Span::styled(
+            "— Cory House",
+            Style::default().fg(palette.muted),
+        )));
     }
+
+    // Center text vertically within the header area
+    let text_height = info_lines.len() as u16;
+    let vertical_offset = columns[1].height.saturating_sub(text_height) / 2;
 
     frame.render_widget(
         Paragraph::new(info_lines)
@@ -98,9 +111,9 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
             .style(Style::default().fg(palette.text).bg(palette.bg)),
         Rect {
             x: columns[1].x,
-            y: columns[1].y + 1,
+            y: columns[1].y + vertical_offset,
             width: columns[1].width,
-            height: columns[1].height.saturating_sub(1),
+            height: columns[1].height.saturating_sub(vertical_offset),
         },
     );
 }
