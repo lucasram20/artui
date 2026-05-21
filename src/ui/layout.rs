@@ -188,7 +188,7 @@ fn draw_brand(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         x: content.x + content.width.saturating_sub(logo_width) / 2,
         y: logo_y,
         width: logo_width,
-        height: 3,
+        height: 6,
     };
     frame.render_widget(
         Paragraph::new(app.logo).style(Style::default().fg(palette.accent).bg(palette.bg)),
