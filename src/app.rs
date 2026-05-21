@@ -114,6 +114,26 @@ pub enum Role {
 pub struct Message {
     pub role: Role,
     pub content: String,
+    /// Raw image data (PNG) attached to this message.
+    pub images: Vec<Vec<u8>>,
+}
+
+impl Message {
+    pub fn new(role: Role, content: impl Into<String>) -> Self {
+        Self {
+            role,
+            content: content.into(),
+            images: Vec::new(),
+        }
+    }
+
+    pub fn with_images(role: Role, content: impl Into<String>, images: Vec<Vec<u8>>) -> Self {
+        Self {
+            role,
+            content: content.into(),
+            images,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -653,20 +673,17 @@ impl App {
             }
             self.pasted_contents.clear();
         }
-        // Note: pasted_images cleared but not sent (requires multimodal API support)
-        self.pasted_images.clear();
+        let images = std::mem::take(&mut self.pasted_images);
 
         self.input.clear();
         self.slash_cursor = 0;
         self.chat_scroll = 0;
-        self.transcript.push(Message {
-            role: Role::User,
-            content: content.clone(),
-        });
-        self.transcript.push(Message {
-            role: Role::Assistant,
-            content: String::new(),
-        });
+        self.transcript.push(Message::with_images(
+            Role::User,
+            content.clone(),
+            images,
+        ));
+        self.transcript.push(Message::new(Role::Assistant, ""));
         self.mode = UiMode::Streaming;
         self.status = "Streaming response".to_owned();
         self.start_thinking_animation();
@@ -775,10 +792,7 @@ impl App {
                 self.mode = UiMode::Input;
             }
             AppEvent::Auth(AuthEvent::Message(message)) => {
-                self.transcript.push(Message {
-                    role: Role::Assistant,
-                    content: message,
-                });
+                self.transcript.push(Message::new(Role::Assistant, message));
                 self.mode = UiMode::Input;
             }
             AppEvent::Auth(AuthEvent::CopilotModels(result)) => match result {
@@ -1430,10 +1444,10 @@ impl App {
             .map(|command| format!("{} — {}", command.name, command.description))
             .collect::<Vec<_>>()
             .join("\n");
-        self.transcript.push(Message {
-            role: Role::Assistant,
-            content: format!("Available commands:\n{commands}"),
-        });
+        self.transcript.push(Message::new(
+            Role::Assistant,
+            format!("Available commands:\n{commands}"),
+        ));
         self.mode = UiMode::Input;
         self.status = "Showing commands".to_owned();
     }
@@ -1459,12 +1473,12 @@ impl App {
             .as_ref()
             .map(|store| store.path().display().to_string())
             .unwrap_or_else(|| "unavailable".to_owned());
-        self.transcript.push(Message {
-            role: Role::Assistant,
-            content: format!(
+        self.transcript.push(Message::new(
+            Role::Assistant,
+            format!(
                 "Providers:\n{lines}\n\nAuth store: {auth_path}\nUse /login <provider> or /logout <provider> for account-backed providers."
             ),
-        });
+        ));
         self.mode = UiMode::Input;
         self.status = "Showing providers".to_owned();
     }
@@ -1580,10 +1594,7 @@ impl App {
     }
 
     fn push_login_message(&mut self, content: String) {
-        self.transcript.push(Message {
-            role: Role::Assistant,
-            content,
-        });
+        self.transcript.push(Message::new(Role::Assistant, content));
         self.chat_scroll = 0;
     }
 

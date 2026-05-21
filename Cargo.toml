@@ -11,6 +11,7 @@ path = "src/bin/art.rs"
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
+base64 = "0.22"
 crossterm = "0.28"
 directories = "5"
 futures-util = "0.3"

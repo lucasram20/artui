@@ -54,7 +54,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-fn thinking_line(app: &App, theme_id: ThemeId, marker: &str, marker_color: ratatui::style::Color) -> Line<'static> {
+fn thinking_line(
+    app: &App,
+    theme_id: ThemeId,
+    marker: &str,
+    marker_color: ratatui::style::Color,
+) -> Line<'static> {
     let palette = theme::palette(theme_id);
     let elapsed = app
         .thinking_elapsed()

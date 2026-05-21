@@ -75,14 +75,14 @@ pub async fn compact_messages(
         .join("\n\n");
 
     let compaction_request = ModelRequest {
-        messages: vec![Message {
-            role: Role::User,
-            content: format!(
+        messages: vec![Message::new(
+            Role::User,
+            format!(
                 "Summarize the following conversation history into a concise context summary. \
                  Preserve all key decisions, file paths mentioned, task progress, and technical details. \
                  Keep it under 2000 characters.\n\n---\n{compact_content}"
             ),
-        }],
+        )],
         system_prompt: Some(COMPACTION_SYSTEM_PROMPT.to_owned()),
         reasoning_effort: None,
         tools: vec![],
@@ -110,10 +110,10 @@ pub async fn compact_messages(
 
     // Build new message list: summary + kept messages
     let mut result = Vec::with_capacity(to_keep.len() + 1);
-    result.push(Message {
-        role: Role::Assistant,
-        content: format!("[{split_at} messages compacted]\n\nContext summary:\n{summary}"),
-    });
+    result.push(Message::new(
+        Role::Assistant,
+        format!("[{split_at} messages compacted]\n\nContext summary:\n{summary}"),
+    ));
     result.extend_from_slice(to_keep);
     result
 }
@@ -132,34 +132,22 @@ mod tests {
     #[test]
     fn estimate_tokens_basic() {
         let messages = vec![
-            Message {
-                role: Role::User,
-                content: "a".repeat(400),
-            },
-            Message {
-                role: Role::Assistant,
-                content: "b".repeat(600),
-            },
+            Message::new(Role::User, "a".repeat(400)),
+            Message::new(Role::Assistant, "b".repeat(600)),
         ];
         assert_eq!(estimate_tokens(&messages), 250); // 1000 chars / 4
     }
 
     #[test]
     fn needs_compaction_below_threshold() {
-        let messages = vec![Message {
-            role: Role::User,
-            content: "hello".to_owned(),
-        }];
+        let messages = vec![Message::new(Role::User, "hello")];
         assert!(!needs_compaction(&messages, Some(128_000)));
     }
 
     #[test]
     fn needs_compaction_above_threshold() {
         // 128k * 0.835 = ~106k tokens = ~424k chars
-        let messages = vec![Message {
-            role: Role::User,
-            content: "x".repeat(500_000),
-        }];
+        let messages = vec![Message::new(Role::User, "x".repeat(500_000))];
         assert!(needs_compaction(&messages, Some(128_000)));
     }
 }

@@ -103,10 +103,7 @@ impl Tool for TaskTool {
         ));
 
         let request = ModelRequest {
-            messages: vec![Message {
-                role: Role::User,
-                content: prompt.to_owned(),
-            }],
+            messages: vec![Message::new(Role::User, prompt.to_owned())],
             system_prompt: Some(agent_type.system_prompt().to_owned()),
             reasoning_effort: None,
             tools: registry.specs(),

@@ -67,10 +67,7 @@ pub async fn run_turn(
             let _ = event_tx
                 .send(AppEvent::Model(ModelEvent::Done { end_turn: true }))
                 .await;
-            extra_messages.push(Message {
-                role: Role::Assistant,
-                content: limit_msg,
-            });
+            extra_messages.push(Message::new(Role::Assistant, limit_msg));
             break;
         }
 
@@ -153,24 +150,15 @@ pub async fn run_turn(
         // If no tool calls, we're done
         if tool_calls.is_empty() {
             if !assistant_text.is_empty() {
-                extra_messages.push(Message {
-                    role: Role::Assistant,
-                    content: assistant_text,
-                });
+                extra_messages.push(Message::new(Role::Assistant, assistant_text));
             }
             break;
         }
 
         // Record assistant message with tool calls in transcript
         if !assistant_text.is_empty() {
-            extra_messages.push(Message {
-                role: Role::Assistant,
-                content: assistant_text.clone(),
-            });
-            request.messages.push(Message {
-                role: Role::Assistant,
-                content: assistant_text,
-            });
+            extra_messages.push(Message::new(Role::Assistant, assistant_text.clone()));
+            request.messages.push(Message::new(Role::Assistant, assistant_text));
         }
 
         // Dispatch tool calls and collect results
@@ -207,13 +195,13 @@ pub async fn run_turn(
 
             // Push as a user message with tool result context
             // (OpenAI format: role=tool, but we use role=User with prefix for simplicity until Phase G)
-            let tool_msg = Message {
-                role: Role::User,
-                content: format!(
+            let tool_msg = Message::new(
+                Role::User,
+                format!(
                     "[tool_result call_id={} name={}]\n{}",
                     call.id, call.name, tool_content
                 ),
-            };
+            );
             extra_messages.push(tool_msg.clone());
             request.messages.push(tool_msg);
         }

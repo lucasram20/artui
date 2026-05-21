@@ -726,7 +726,7 @@ fn copilot_chat_messages(request: ModelRequest) -> Vec<CopilotMessage> {
         .filter(|content| !content.trim().is_empty())
         .map(|content| CopilotMessage {
             role: "system".to_owned(),
-            content,
+            content: serde_json::Value::String(content),
         })
         .chain(
             request
@@ -738,7 +738,7 @@ fn copilot_chat_messages(request: ModelRequest) -> Vec<CopilotMessage> {
                         Role::User => "user".to_owned(),
                         Role::Assistant => "assistant".to_owned(),
                     },
-                    content: message.content,
+                    content: build_openai_content(&message.content, &message.images),
                 }),
         )
         .collect()
@@ -754,7 +754,7 @@ fn copilot_conversation_messages(request: ModelRequest) -> Vec<CopilotMessage> {
                 Role::User => "user".to_owned(),
                 Role::Assistant => "assistant".to_owned(),
             },
-            content: message.content,
+            content: build_anthropic_content(&message.content, &message.images),
         })
         .collect()
 }
@@ -769,9 +769,62 @@ fn copilot_response_input(request: ModelRequest) -> Vec<CopilotResponseInput> {
                 Role::User => "user".to_owned(),
                 Role::Assistant => "assistant".to_owned(),
             },
-            content: message.content,
+            content: build_openai_content(&message.content, &message.images),
         })
         .collect()
+}
+
+// ── Multimodal content builders ────────────────────────────────────────
+
+use base64::Engine as _;
+
+/// Build OpenAI-format content: string if text-only, array of parts if images present.
+/// Used by Chat Completions API and Responses API.
+pub(crate) fn build_openai_content(text: &str, images: &[Vec<u8>]) -> serde_json::Value {
+    if images.is_empty() {
+        return serde_json::Value::String(text.to_owned());
+    }
+
+    let mut parts = Vec::with_capacity(images.len() + 1);
+    parts.push(serde_json::json!({
+        "type": "text",
+        "text": text,
+    }));
+    for image_data in images {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(image_data);
+        parts.push(serde_json::json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:image/png;base64,{b64}"),
+            },
+        }));
+    }
+    serde_json::Value::Array(parts)
+}
+
+/// Build Anthropic Messages API content: string if text-only, array of content blocks if images.
+pub(crate) fn build_anthropic_content(text: &str, images: &[Vec<u8>]) -> serde_json::Value {
+    if images.is_empty() {
+        return serde_json::Value::String(text.to_owned());
+    }
+
+    let mut parts = Vec::with_capacity(images.len() + 1);
+    for image_data in images {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(image_data);
+        parts.push(serde_json::json!({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": b64,
+            },
+        }));
+    }
+    parts.push(serde_json::json!({
+        "type": "text",
+        "text": text,
+    }));
+    serde_json::Value::Array(parts)
 }
 
 fn copilot_api_headers(config: &CopilotConfig, token: &str) -> Result<reqwest::header::HeaderMap> {
@@ -1107,7 +1160,7 @@ struct CopilotMessagesRequest {
 #[derive(Debug, Serialize)]
 struct CopilotMessage {
     role: String,
-    content: String,
+    content: serde_json::Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -1129,7 +1182,7 @@ struct CopilotReasoning {
 #[derive(Debug, Serialize)]
 struct CopilotResponseInput {
     role: String,
-    content: String,
+    content: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]

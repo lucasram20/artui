@@ -50,18 +50,28 @@ impl OllamaProvider {
             .map(|content| OllamaMessage {
                 role: "system".to_owned(),
                 content,
+                images: Vec::new(),
             })
             .chain(
                 request
                     .messages
                     .into_iter()
                     .filter(|message| !message.content.is_empty())
-                    .map(|message| OllamaMessage {
-                        role: match message.role {
-                            Role::User => "user".to_owned(),
-                            Role::Assistant => "assistant".to_owned(),
-                        },
-                        content: message.content,
+                    .map(|message| {
+                        use base64::Engine as _;
+                        let images: Vec<String> = message
+                            .images
+                            .iter()
+                            .map(|img| base64::engine::general_purpose::STANDARD.encode(img))
+                            .collect();
+                        OllamaMessage {
+                            role: match message.role {
+                                Role::User => "user".to_owned(),
+                                Role::Assistant => "assistant".to_owned(),
+                            },
+                            content: message.content,
+                            images,
+                        }
                     }),
             )
             .collect();
@@ -140,6 +150,8 @@ struct OllamaChatRequest {
 struct OllamaMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    images: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

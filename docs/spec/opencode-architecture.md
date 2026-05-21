@@ -360,3 +360,276 @@ Shell: {shell}
 | **Subagent context isolation** | Research/exploration tasks go in subagents — only the summary returns to the parent context |
 | **System prompt as stable anchor** | Pin the task spec and constraints to the system prompt, not message history — it survives compaction |
 | **Provider abstraction from day one** | Makes swapping models or adding Ollama/local endpoints trivial later |
+
+---
+
+## Concrete file:line audit (2026-05-21)
+
+`git clone --depth 1 https://github.com/sst/opencode /tmp/opencode`. The "harness" lives in `packages/opencode/src/`. Effect-TS / Bun service driving the Vercel AI SDK, exposed over HTTP API to a separate Go TUI binary.
+
+Headline architectural decisions:
+
+1. **No hand-rolled agent loop around `streamText`.** AI SDK owns one model turn (text + tool-calls + tool-results within a step). The opencode "loop" is an outer `while(true)` that re-invokes `streamText` whenever the previous turn finished with tool calls outstanding.
+2. **Tools are AI SDK `tool()` objects.** Vercel AI SDK schema: `description`, `inputSchema` JSON-Schema, `execute(args, opts)`. Permissions and audit are layered around `execute` via Effect.
+3. **Effect-TS Layers + Context.Services replace dependency injection.** Almost every subsystem (Bus, Permission, ToolRegistry, Provider, Session, Plugin, Storage) is an `Effect.Service`.
+4. **State is durable in SQLite via Drizzle** (`storage/db.ts`).
+5. **Server↔TUI is one HTTP API + one SSE stream** (`/event`).
+
+### Outer loop
+
+```ts
+// session/prompt.ts:1240
+const runLoop = Effect.fn("SessionPrompt.run")(function* (sessionID) {
+  let step = 0
+  const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+  while (true) {
+    yield* status.set(sessionID, { type: "busy" })
+    let msgs = yield* MessageV2.filterCompactedEffect(sessionID)
+    const { user: lastUser, assistant: lastAssistant, finished: lastFinished, tasks } = MessageV2.latest(msgs)
+
+    const hasToolCalls = lastAssistantMsg?.parts.some(
+      p => p.type === "tool" && !p.metadata?.providerExecuted) ?? false
+
+    if (lastAssistant?.finish && !["tool-calls"].includes(lastAssistant.finish)
+        && !hasToolCalls && lastUser.id < lastAssistant.id) break
+
+    step++
+    const agent = yield* agents.get(lastUser.agent)
+    const maxSteps = agent.steps ?? Infinity
+    const isLastStep = step >= maxSteps
+    const result = yield* handle.process({
+      user: lastUser, agent, sessionID, system,
+      messages: [...modelMsgs, ...(isLastStep ? [{ role: "assistant", content: MAX_STEPS }] : [])],
+      tools, model, ...
+    })
+    if (result === "stop") return "break"
+    if (result === "compact") yield* compaction.create({...})
+  }
+})
+```
+
+Properties:
+
+- One iteration ≈ one provider request. Loop exits when finish is anything but `tool-calls`/`unknown` and there are no unhandled tool calls.
+- Cancellation: `SessionRunState.layer` (`session/run-state.ts:38`) holds `Map<SessionID, Runner>`; `cancel(sessionID)` aborts the runner's fiber.
+- Doom-loop detection in `session/processor.ts:425-449`. If last `DOOM_LOOP_THRESHOLD` parts are identical tool calls, raises `permission.ask("doom_loop", [toolName])`.
+
+Single-turn execution delegated to `streamText` in `session/llm.ts:272`:
+
+```ts
+result: streamText({
+  async experimental_repairToolCall(failed) { /* lowercase tool name fix, else fall back to "invalid" tool */ },
+  temperature, topP, topK, maxOutputTokens,
+  providerOptions: ProviderTransform.providerOptions(input.model, prepared.params.options),
+  activeTools: Object.keys(prepared.tools).filter(x => x !== "invalid"),
+  tools: prepared.tools,
+  toolChoice: input.toolChoice,
+  abortSignal: input.abort,
+  maxRetries: input.retries ?? 0,
+  messages: prepared.messages,
+  model: wrapLanguageModel({ model: language, middleware: [{ /* prompt transforms */ }] }),
+})
+```
+
+### Tool definition contract
+
+```ts
+// tool/tool.ts
+export type Context<M extends Metadata = Metadata> = {
+  sessionID: SessionID
+  messageID: MessageID
+  agent: string
+  abort: AbortSignal
+  callID?: string
+  extra?: { [key: string]: unknown }
+  messages: MessageV2.WithParts[]
+  metadata(input: { title?: string; metadata?: M }): Effect.Effect<void>
+  ask(input: Omit<Permission.AskInput, "sessionID"|"id"|"ruleset"|"tool">): Effect.Effect<void, Error>
+}
+```
+
+`Tool.define(id, init)` returns a factory. `wrap()` (`tool/tool.ts:155`) compiles a Schema decoder once per tool init so every LLM tool call goes through `decodeUnknownEffect(args)` and raises `InvalidArgumentsError` on mismatch — that error has a model-facing `.message` getter.
+
+### Tool registry
+
+```ts
+// tool/registry.ts ~290
+const tool = yield* Effect.all({
+  invalid: Tool.init(invalid), shell: Tool.init(shell), read: Tool.init(read),
+  glob: Tool.init(globtool), grep: Tool.init(greptool), edit: Tool.init(edit),
+  write: Tool.init(writetool), task: Tool.init(task), task_status: Tool.init(taskStatus),
+  fetch: Tool.init(webfetch), todo: Tool.init(todo), search: Tool.init(websearch),
+  repo_clone: Tool.init(repoClone), repo_overview: Tool.init(repoOverview),
+  skill: Tool.init(skilltool), patch: Tool.init(patchtool),
+  question: Tool.init(question), lsp: Tool.init(lsptool), plan: Tool.init(plan),
+})
+```
+
+### Provider abstraction
+
+`packages/opencode/src/provider/provider.ts` (1846 lines) lazily imports per provider:
+
+```ts
+"@ai-sdk/anthropic": () => import("@ai-sdk/anthropic").then(m => m.createAnthropic),
+"@ai-sdk/google":    () => import("@ai-sdk/google").then(m => m.createGoogleGenerativeAI),
+"@ai-sdk/openai":    () => import("@ai-sdk/openai").then(m => m.createOpenAI),
+"@ai-sdk/openai-compatible": () => import("@ai-sdk/openai-compatible").then(m => m.createOpenAICompatible),
+"@openrouter/ai-sdk-provider": () => import("@openrouter/ai-sdk-provider").then(m => m.createOpenRouter),
+"@ai-sdk/github-copilot": () => import("@opencode-ai/core/github-copilot/copilot-provider")
+                                   .then(m => m.createOpenaiCompatible),
+```
+
+Per-provider JSON-Schema munging in `provider/transform.ts` (1376 lines) — strips `$defs`, removes `exclusiveMaximum: bool`, etc.
+
+### Session/state model
+
+State durable in SQLite:
+
+- `packages/opencode/src/storage/db.ts:33` — DB at `~/.local/share/opencode/opencode.db` (or per-workspace `opencode-<hash>.db`).
+- `db.bun.ts` / `db.node.ts` — runtime-specific drivers.
+- Sessions: `session/session.sql.ts` (`PermissionTable`, etc.); messages live as `MessageV2` rows + parts, paged via `MessageV2.page` (`session/session.ts:768`).
+
+Replay rebuilds via `MessageV2.toModelMessagesEffect(msgs, model)` (`session/prompt.ts:1424`) before next `streamText`.
+
+A `Snapshot` system tracks workspace as content tree at each `step-start`, emits a `patch` part with file diffs at `step-finish` (`session/processor.ts:580-602`).
+
+### Prompt construction
+
+```ts
+// session/system.ts
+export function provider(model) {
+  if (id.includes("gpt-4") || id.includes("o1") || id.includes("o3")) return [PROMPT_BEAST]
+  if (id.includes("gpt"))    return id.includes("codex") ? [PROMPT_CODEX] : [PROMPT_GPT]
+  if (id.includes("gemini-")) return [PROMPT_GEMINI]
+  if (id.includes("claude"))  return [PROMPT_ANTHROPIC]
+  if (id.toLowerCase().includes("trinity")) return [PROMPT_TRINITY]
+  if (id.toLowerCase().includes("kimi"))    return [PROMPT_KIMI]
+  return [PROMPT_DEFAULT]
+}
+```
+
+`environment(model)` injects working directory, worktree root, git-vcs flag, platform, date.
+
+Final assembly (`session/prompt.ts:1420-1428`):
+
+```ts
+const [skills, env, instructions, modelMsgs] = yield* Effect.all([
+  sys.skills(agent), sys.environment(model),
+  instruction.system().pipe(Effect.orDie),
+  MessageV2.toModelMessagesEffect(msgs, model),
+])
+const system = [...env, ...instructions, ...(skills ? [skills] : [])]
+```
+
+### Permissions
+
+`packages/opencode/src/permission/index.ts` is the single point of approval. A `Rule = { permission, pattern, action: "allow"|"ask"|"deny" }` is wildcard-matched against tool name + a tool-specified pattern:
+
+```ts
+for (const pattern of request.patterns) {
+  const rule = evaluate(request.permission, pattern, ruleset, approved)
+  if (rule.action === "deny") return yield* new DeniedError({ ruleset: ... })
+  if (rule.action === "allow") continue
+  needsAsk = true
+}
+if (!needsAsk) return
+const id = PermissionID.ascending()
+pending.set(id, { info, deferred })
+yield* bus.publish(Event.Asked, info)
+return yield* Deferred.await(deferred)
+```
+
+Agent-level permissions in `agent/agent.ts:120-156`:
+
+```ts
+const defaults = Permission.fromConfig({
+  "*": "allow", doom_loop: "ask",
+  external_directory: { "*": "ask", ...whitelistedDirs.map(d => [d, "allow"]) },
+  question: "deny", plan_enter: "deny", plan_exit: "deny",
+  repo_clone: "deny", repo_overview: "deny",
+  read: { "*": "allow", "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow" },
+})
+```
+
+### Diff / patch primitives
+
+`tool/edit.ts` is canonical. Per-file semaphore (`Semaphore.makeUnsafe(1)`) and multi-stage replace:
+
+```ts
+export function replace(content, oldString, newString, replaceAll = false) {
+  if (oldString === newString) throw new Error("No changes...")
+  for (const replacer of [
+    /* exact, normalize-line-endings, normalize-whitespace, escaped-chars,
+       single-line-trim, words-as-regex, ... */
+  ]) {
+    for (const search of replacer(content, oldString)) {
+      if (replaceAll) return content.replaceAll(search, newString)
+      // single occurrence: assert uniqueness, replace
+    }
+  }
+  throw new Error("could not match")
+}
+```
+
+Diff output uses `diff`'s `createTwoFilesPatch`. Origin: `tool/edit.ts:1-4` cites `cline/cline` and Google `gemini-cli` editCorrector.
+
+### Sub-agents / Task tool
+
+`tool/task.ts` (345 lines):
+
+```ts
+export const Parameters = Schema.Struct({
+  description: "A short (3-5 words) description",
+  prompt: "The task for the agent to perform",
+  subagent_type: "The type of specialized agent to use",
+  task_id: "optional, resume previous task",
+  command: "optional, the command that triggered this task",
+  background: "When true, launch async and return immediately",
+})
+```
+
+A subagent is just a fresh session running the same loop. Background mode uses `BackgroundJob.Service` and `task_status` polling.
+
+### Modes & agents
+
+Built-ins (`agent/agent.ts:129-280`):
+
+- `build` (default, all-allow except `doom_loop: ask`)
+- `plan` (denies edits, allows `plan_enter`/`plan_exit`/writes only into `.opencode/plans/*.md`)
+- `general` (subagent, no `todowrite`)
+- `explore` (subagent, deny `*` allow read/grep/glob)
+- `scout`, plus internal helpers `compaction`, `title`, `summary`
+
+Each agent alters: system prompt, tool whitelist, max steps, temperature/topP, permission ruleset.
+
+### Concrete file map (for follow-up reads)
+
+| Concern | File |
+|---|---|
+| Outer agent loop | `packages/opencode/src/session/prompt.ts:1240-1483` |
+| `streamText` invocation | `packages/opencode/src/session/llm.ts:81-340` |
+| Stream → events | `packages/opencode/src/session/processor.ts:300-619` |
+| Tool definition contract | `packages/opencode/src/tool/tool.ts` |
+| Tool registry | `packages/opencode/src/tool/registry.ts:~290` |
+| AI-SDK tool adapter | `packages/opencode/src/session/tools.ts:~30-90` |
+| Edit tool | `packages/opencode/src/tool/edit.ts` |
+| Subagent dispatch | `packages/opencode/src/tool/task.ts` |
+| Permissions | `packages/opencode/src/permission/index.ts` |
+| Agent definitions | `packages/opencode/src/agent/agent.ts` |
+| Provider abstraction | `packages/opencode/src/provider/provider.ts:94-820` |
+| Bus | `packages/opencode/src/bus/index.ts` |
+| SSE handler | `packages/opencode/src/server/routes/instance/httpapi/handlers/event.ts` |
+| Run-state / cancellation | `packages/opencode/src/session/run-state.ts` |
+| Storage (sqlite/drizzle) | `packages/opencode/src/storage/db.ts` |
+| System prompts | `packages/opencode/src/session/system.ts` + `session/prompt/*.txt` |
+| Snapshots | `packages/opencode/src/snapshot/` |
+
+### Patterns worth borrowing
+
+1. **No bespoke loop around `streamText`.** Vercel AI SDK already streams tool calls + results in one request; harness reruns it only when `finish_reason` is `tool-calls` or any tool part went through.
+2. **`experimental_repairToolCall`** — graceful fallback for case-insensitive tool-name typos and a hard-coded `"invalid"` tool, so malformed tool calls surface as a normal tool result.
+3. **InvalidArgumentsError with model-facing `.message`** — schema decode failures are converted to a tool-result-shaped error string the model can parse.
+4. **One Bus, one SSE.** All UI surfaces share the same `text/event-stream` feed.
+5. **Permissions decoupled from tools via `ctx.ask`** — every write tool calls the same `Permission.ask` Effect; unanswered requests block on a `Deferred` that lives in `InstanceState`.
+6. **Subagent = a fresh Session running the same loop** — no separate execution path.
+7. **Snapshot at every step-start, diff at step-finish** — gives a free, persistent revert/diff stream.

@@ -49,7 +49,12 @@ impl OpenAiCompatProvider {
                 crate::app::Role::User => "user",
                 crate::app::Role::Assistant => "assistant",
             };
-            messages.push(json!({"role": role, "content": msg.content}));
+            if msg.images.is_empty() {
+                messages.push(json!({"role": role, "content": msg.content}));
+            } else {
+                let content = super::copilot::build_openai_content(&msg.content, &msg.images);
+                messages.push(json!({"role": role, "content": content}));
+            }
         }
 
         let mut body = json!({

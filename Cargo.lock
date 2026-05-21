@@ -41,6 +41,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "crossterm 0.28.1",
  "directories",
  "futures-util",
