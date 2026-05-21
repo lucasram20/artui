@@ -1862,9 +1862,10 @@ fn extract_at_mention_partial(input: &str) -> Option<&str> {
 }
 
 const FILE_MENTION_MAX_RESULTS: usize = 15;
-const FILE_MENTION_WALK_DEPTH: usize = 4;
+const FILE_MENTION_WALK_DEPTH: usize = 5;
 
 /// Walk workspace files respecting .gitignore and filter by partial path.
+/// Results are sorted by depth (shallow first), then alphabetically within each level.
 fn collect_workspace_files(workspace: &std::path::Path, partial: &str) -> Vec<String> {
     let walker = ignore::WalkBuilder::new(workspace)
         .hidden(false)
@@ -1896,12 +1897,14 @@ fn collect_workspace_files(workspace: &std::path::Path, partial: &str) -> Vec<St
         if partial.is_empty() || display.to_lowercase().contains(&partial_lower) {
             results.push(display);
         }
-        if results.len() >= FILE_MENTION_MAX_RESULTS {
-            break;
-        }
     }
 
-    results.sort();
+    // Sort by depth (fewer path separators first), then alphabetically
+    results.sort_by(|a, b| {
+        let depth_a = a.matches('/').count();
+        let depth_b = b.matches('/').count();
+        depth_a.cmp(&depth_b).then_with(|| a.cmp(b))
+    });
     results.truncate(FILE_MENTION_MAX_RESULTS);
     results
 }
