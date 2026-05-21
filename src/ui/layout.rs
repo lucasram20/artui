@@ -25,8 +25,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         horizontal: 2,
     });
     let header_height = match content.width {
-        118.. => 8,
-        76.. => 7,
+        118.. => 9,
+        76.. => 8,
         _ => 4,
     };
     let root = Layout::default()
@@ -53,7 +53,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(20), Constraint::Min(20)])
+        .constraints([Constraint::Length(27), Constraint::Min(20)])
         .split(area);
 
     // Left: ASCII art logo
@@ -101,19 +101,16 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         )));
     }
 
-    // Center text vertically within the header area
-    let text_height = info_lines.len() as u16;
-    let vertical_offset = columns[1].height.saturating_sub(text_height) / 2;
-
+    // Center text vertically to align with logo top
     frame.render_widget(
         Paragraph::new(info_lines)
             .wrap(Wrap { trim: false })
             .style(Style::default().fg(palette.text).bg(palette.bg)),
         Rect {
             x: columns[1].x,
-            y: columns[1].y + vertical_offset,
+            y: columns[1].y,
             width: columns[1].width,
-            height: columns[1].height.saturating_sub(vertical_offset),
+            height: columns[1].height,
         },
     );
 }
