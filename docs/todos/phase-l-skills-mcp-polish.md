@@ -50,11 +50,14 @@ Next batch of features for artui.
 - Make system prompt composable (base + agent-specific + skill overrides)
 - Add `/system` slash command to inspect the active system prompt
 
-## L5: Installation Commands (curl/powershell)
+## L5: Installation Commands (curl/powershell/npm)
 
 - Set up GitHub Releases CI workflow for cross-platform binaries
 - Linux/macOS: `curl -fsSL https://artui.dev/install.sh | sh`
 - Windows: `irm https://artui.dev/install.ps1 | iex`
+- npm: `npm install -g artui` (publish as npm package wrapping native binary)
 - Install script should detect arch (x86_64/aarch64), download binary, place in PATH
+- npm package uses postinstall script to download platform-specific binary (like turbo, esbuild pattern)
 - Add `cargo install artui` as alternative
-- Update README with installation section
+- npx support: `npx artui` for one-off usage without global install
+- Update README with installation section covering all methods
