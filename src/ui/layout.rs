@@ -25,8 +25,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         horizontal: 2,
     });
     let header_height = match content.width {
-        118.. => 9,
-        76.. => 8,
+        118.. => 7,
+        76.. => 6,
         _ => 4,
     };
     let root = Layout::default()
