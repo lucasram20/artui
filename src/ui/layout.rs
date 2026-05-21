@@ -25,8 +25,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         horizontal: 2,
     });
     let header_height = match content.width {
-        118.. => 10,
-        76.. => 8,
+        118.. => 8,
+        76.. => 7,
         _ => 4,
     };
     let root = Layout::default()
@@ -53,7 +53,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(28), Constraint::Min(20)])
+        .constraints([Constraint::Length(20), Constraint::Min(20)])
         .split(area);
 
     // Left: ASCII art logo
