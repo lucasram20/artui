@@ -586,7 +586,34 @@ impl App {
                 self.clamp_slash_cursor();
             }
             InputAction::Backspace => {
-                self.input.pop();
+                // Delete atomic tags ([Pasted text #N ...] or [Image #N]) as a unit
+                let delete_tag = if self.input.ends_with(']') {
+                    self.input.rfind('[').and_then(|start| {
+                        let is_paste = self.input[start..].starts_with("[Pasted text #");
+                        let is_image = self.input[start..].starts_with("[Image #")
+                            || self.input[start..].starts_with("[Image#");
+                        if is_paste {
+                            Some((start, true))
+                        } else if is_image {
+                            Some((start, false))
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                };
+
+                if let Some((start, is_paste)) = delete_tag {
+                    self.input.truncate(start);
+                    if is_paste {
+                        self.pasted_contents.pop();
+                    } else {
+                        self.pasted_images.pop();
+                    }
+                } else {
+                    self.input.pop();
+                }
                 self.clamp_slash_cursor();
             }
         }

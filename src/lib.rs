@@ -107,6 +107,13 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
     match (key.modifiers, key.code) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => app.should_quit = true,
         (KeyModifiers::CONTROL, KeyCode::Char('l')) => app.clear_transcript(),
+        (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
+            // Try to paste image from clipboard (Wayland: wl-paste, X11: xclip)
+            if let Some(image_data) = try_clipboard_image() {
+                app.paste_image(image_data);
+            }
+            // Text paste is handled by bracketed paste (Event::Paste)
+        }
         (_, KeyCode::BackTab) => app.cycle_reasoning_effort(),
         (KeyModifiers::SHIFT, KeyCode::Tab) => app.cycle_reasoning_effort(),
         (_, KeyCode::Esc) => app.cancel_input(),
@@ -184,6 +191,51 @@ fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
         (_, KeyCode::Char(ch)) => app.edit_input(InputAction::Insert(ch)),
         _ => {}
     }
+}
+
+/// Try to read image data from the system clipboard.
+/// Supports Wayland (wl-paste), X11 (xclip), and macOS (pbpaste).
+/// Windows clipboard image requires win32 API — deferred.
+fn try_clipboard_image() -> Option<Vec<u8>> {
+    // Wayland
+    if let Ok(output) = std::process::Command::new("wl-paste")
+        .args(["--type", "image/png", "--no-newline"])
+        .output()
+    {
+        if output.status.success() && !output.stdout.is_empty() {
+            return Some(output.stdout);
+        }
+    }
+
+    // X11
+    if let Ok(output) = std::process::Command::new("xclip")
+        .args(["-selection", "clipboard", "-target", "image/png", "-o"])
+        .output()
+    {
+        if output.status.success() && !output.stdout.is_empty() {
+            return Some(output.stdout);
+        }
+    }
+
+    // macOS — pbpaste doesn't support binary image; use osascript
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = std::process::Command::new("osascript")
+            .args([
+                "-e",
+                "set png to (the clipboard as «class PNGf»)",
+                "-e",
+                "return png",
+            ])
+            .output()
+        {
+            if output.status.success() && !output.stdout.is_empty() {
+                return Some(output.stdout);
+            }
+        }
+    }
+
+    None
 }
 
 fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
