@@ -36,7 +36,24 @@ pub async fn run() -> Result<()> {
     let config = config::load_global_config()?;
     let provider = providers::build_provider(&config)?;
     let (event_tx, mut event_rx) = mpsc::channel(64);
-    let mut app = App::new(config, provider);
+    let mut app = App::new(config.clone(), provider);
+
+    // Fetch Ollama context window asynchronously at startup
+    if config.default_provider == "ollama" {
+        let ollama_config = config.providers.ollama.clone();
+        let model = config.providers.ollama.default_model.clone();
+        let ctx_tx = event_tx.clone();
+        tokio::spawn(async move {
+            if let Some(ctx) =
+                providers::ollama::fetch_ollama_context_window(&ollama_config, &model).await
+            {
+                let _ = ctx_tx
+                    .send(AppEvent::OllamaContextWindow(ctx))
+                    .await;
+            }
+        });
+    }
+
     let _ = event_tx
         .send(AppEvent::Auth(app::AuthEvent::Status("Ready".to_owned())))
         .await;

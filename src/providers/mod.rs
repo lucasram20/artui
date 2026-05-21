@@ -1,6 +1,6 @@
 mod account;
 pub(crate) mod copilot;
-mod ollama;
+pub(crate) mod ollama;
 mod openai_compat;
 pub mod registry;
 pub mod tool_serialization;

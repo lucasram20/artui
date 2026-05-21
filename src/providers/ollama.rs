@@ -139,6 +139,54 @@ impl LlmProvider for OllamaProvider {
     }
 }
 
+/// Query Ollama's `/api/show` endpoint to get the model's actual context window size.
+/// Returns `None` if the request fails or the field is missing.
+pub async fn fetch_ollama_context_window(config: &OllamaConfig, model: &str) -> Option<usize> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/show", config.host.trim_end_matches('/'));
+    let response = client
+        .post(&url)
+        .json(&serde_json::json!({ "name": model }))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let body: serde_json::Value = response.json().await.ok()?;
+
+    // Ollama returns model_info.context_length or parameters with num_ctx
+    if let Some(ctx) = body
+        .get("model_info")
+        .and_then(|info| info.as_object())
+        .and_then(|obj| {
+            // Keys vary: "context_length", "llama.context_length", etc.
+            obj.iter()
+                .find(|(k, _)| k.contains("context_length"))
+                .and_then(|(_, v)| v.as_u64())
+        })
+    {
+        return Some(ctx as usize);
+    }
+
+    // Fallback: parse from parameters string (e.g. "num_ctx 4096")
+    if let Some(params) = body.get("parameters").and_then(|p| p.as_str()) {
+        for line in params.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() == 2 && parts[0] == "num_ctx" {
+                if let Ok(n) = parts[1].parse::<usize>() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 #[derive(Debug, Serialize)]
 struct OllamaChatRequest {
     model: String,

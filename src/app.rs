@@ -192,6 +192,7 @@ pub enum AppEvent {
     Model(ModelEvent),
     Auth(AuthEvent),
     Quote(Quote),
+    OllamaContextWindow(usize),
 }
 
 #[derive(Debug)]
@@ -420,6 +421,8 @@ pub struct App {
     pub quote: Option<Quote>,
     pub pasted_contents: Vec<String>,
     pub pasted_images: Vec<Vec<u8>>,
+    /// Cached context window size from Ollama /api/show (fetched once per model).
+    pub ollama_context_window: Option<usize>,
 }
 
 impl App {
@@ -469,6 +472,7 @@ impl App {
             quote: None,
             pasted_contents: Vec::new(),
             pasted_images: Vec::new(),
+            ollama_context_window: None,
         }
     }
 
@@ -885,6 +889,9 @@ impl App {
             | AppEvent::Model(ModelEvent::Usage { .. }) => {}
             AppEvent::Quote(quote) => {
                 self.quote = Some(quote);
+            }
+            AppEvent::OllamaContextWindow(tokens) => {
+                self.ollama_context_window = Some(tokens);
             }
         }
     }
@@ -1717,10 +1724,15 @@ impl App {
     pub fn context_usage_label(&self) -> String {
         let used = self.estimated_context_tokens();
         let Some(limit) = self.active_context_window_tokens() else {
-            return "ctx ?".to_owned();
+            return format!("ctx {}", format_token_count(used));
         };
         let percent = used.saturating_mul(100) / limit.max(1);
-        format!("ctx {}%", percent.min(100))
+        format!(
+            "ctx {}/{}  {}%",
+            format_token_count(used),
+            format_token_count(limit),
+            percent.min(100),
+        )
     }
 
     fn estimated_context_tokens(&self) -> usize {
@@ -1739,6 +1751,12 @@ impl App {
             if let Some(tokens) =
                 copilot_model_context_window(self.auth_store.as_ref(), self.active_model())
             {
+                return Some(tokens);
+            }
+        }
+        // Use cached Ollama context window if available
+        if self.config.default_provider == "ollama" {
+            if let Some(tokens) = self.ollama_context_window {
                 return Some(tokens);
             }
         }
@@ -2029,6 +2047,24 @@ fn known_context_window_tokens(provider_id: &str, model: &str) -> Option<usize> 
         _ => return None,
     };
     Some(tokens)
+}
+
+/// Format a token count for display: 1234 → "1.2k", 128000 → "128k", 1000000 → "1M".
+fn format_token_count(tokens: usize) -> String {
+    if tokens >= 1_000_000 {
+        format!("{}M", tokens / 1_000_000)
+    } else if tokens >= 1_000 {
+        let k = tokens as f64 / 1_000.0;
+        if k >= 100.0 {
+            format!("{}k", tokens / 1_000)
+        } else if k >= 10.0 {
+            format!("{:.0}k", k)
+        } else {
+            format!("{:.1}k", k)
+        }
+    } else {
+        tokens.to_string()
+    }
 }
 
 fn provider_reasoning_efforts(provider_id: &str, model: &str) -> Vec<ReasoningEffort> {
