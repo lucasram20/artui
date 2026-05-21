@@ -52,7 +52,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(16), Constraint::Min(20)])
+        .constraints([Constraint::Length(19), Constraint::Min(20)])
         .split(area);
 
     // Left: Logo rendered with colored background spaces (avoids █ width issues)
