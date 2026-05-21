@@ -619,13 +619,6 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         app.context_usage_label(),
         Style::default().fg(palette.muted),
     ));
-    spans.push(Span::styled(" | ", Style::default().fg(palette.subtle)));
-    spans.push(Span::styled(
-        app.active_agent_name(),
-        Style::default()
-            .fg(palette.accent)
-            .add_modifier(Modifier::BOLD),
-    ));
 
     frame.render_widget(
         Paragraph::new(Line::from(spans))
@@ -641,7 +634,9 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
     }
     let palette = theme::palette(theme);
 
-    // Left side: Eye animation
+    // Left side: Eye animation + agent name
+    let agent_name = app.active_agent_name();
+    let left_width = (4 + agent_name.chars().count() + 3) as u16; // eye(4) + " · " + name
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
@@ -649,12 +644,20 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
                 app.eye_frame(),
                 Style::default().fg(palette.accent).bg(palette.bg),
             ),
+            Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
+            Span::styled(
+                agent_name,
+                Style::default()
+                    .fg(palette.accent)
+                    .bg(palette.bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
         ])),
         Rect {
             x: area.x.saturating_add(2),
             y: area.y,
-            width: 4,
+            width: left_width.min(area.width / 2),
             height: 1,
         },
     );
