@@ -114,9 +114,14 @@ impl Tool for ShellTool {
         }
 
         // Execute command — platform-aware shell selection
+        // Windows priority: pwsh (PS7+) → powershell (legacy) → cmd.exe
+        // Unix: sh -c
         let mut cmd = if cfg!(target_os = "windows") {
-            let mut c = Command::new("powershell.exe");
-            c.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+            let (shell, args) = resolve_windows_shell(command);
+            let mut c = Command::new(shell);
+            for arg in args {
+                c.arg(arg);
+            }
             c
         } else {
             let mut c = Command::new("sh");
@@ -186,6 +191,43 @@ impl Tool for ShellTool {
 
         ToolResult::ok(ctx.call_id, format!("{header}{combined}"))
     }
+}
+
+/// Resolve the best available shell on Windows.
+/// Priority: pwsh (PowerShell 7+) → powershell (legacy 5.1) → cmd.exe
+/// Returns (shell_path, args_for_command).
+/// Pattern from opencode: `which("pwsh") || which("powershell") || COMSPEC || "cmd.exe"`
+#[allow(dead_code)]
+fn resolve_windows_shell(command: &str) -> (String, Vec<String>) {
+    // Prefer pwsh (PowerShell 7+, cross-platform)
+    if which::which("pwsh").is_ok() {
+        return (
+            "pwsh".to_owned(),
+            vec![
+                "-NoProfile".to_owned(),
+                "-NonInteractive".to_owned(),
+                "-Command".to_owned(),
+                command.to_owned(),
+            ],
+        );
+    }
+
+    // Fall back to legacy Windows PowerShell 5.1
+    if which::which("powershell").is_ok() {
+        return (
+            "powershell.exe".to_owned(),
+            vec![
+                "-NoProfile".to_owned(),
+                "-NonInteractive".to_owned(),
+                "-Command".to_owned(),
+                command.to_owned(),
+            ],
+        );
+    }
+
+    // Last resort: cmd.exe via COMSPEC
+    let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_owned());
+    (comspec, vec!["/C".to_owned(), command.to_owned()])
 }
 
 /// Returns Some(reason) if the command should be denied.
