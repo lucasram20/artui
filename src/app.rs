@@ -1735,6 +1735,15 @@ impl App {
         )
     }
 
+    /// Returns context usage as a percentage (0-100).
+    pub fn context_usage_percent(&self) -> u8 {
+        let used = self.estimated_context_tokens();
+        let Some(limit) = self.active_context_window_tokens() else {
+            return 0;
+        };
+        (used.saturating_mul(100) / limit.max(1)).min(100) as u8
+    }
+
     fn estimated_context_tokens(&self) -> usize {
         let chars = self.system_prompt().chars().count()
             + self.input.chars().count()

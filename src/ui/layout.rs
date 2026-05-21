@@ -615,10 +615,7 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     }
 
     spans.push(Span::styled(" | ", Style::default().fg(palette.subtle)));
-    spans.push(Span::styled(
-        app.context_usage_label(),
-        Style::default().fg(palette.muted),
-    ));
+    spans.extend(context_bar_spans(app, palette));
 
     frame.render_widget(
         Paragraph::new(Line::from(spans))
@@ -626,6 +623,31 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
             .style(Style::default().fg(palette.text).bg(palette.bg)),
         area,
     );
+}
+
+/// Render a compact colored context usage bar (10 cells wide).
+/// Green → Yellow → Red as usage increases.
+fn context_bar_spans(app: &App, palette: theme::Palette) -> Vec<Span<'static>> {
+    use ratatui::style::Color;
+
+    const BAR_WIDTH: usize = 10;
+    let percent = app.context_usage_percent() as usize;
+    let filled = (percent * BAR_WIDTH) / 100;
+
+    let bar_color = match percent {
+        0..=50 => palette.green,
+        51..=75 => Color::Yellow,
+        _ => palette.pink,
+    };
+
+    let filled_str: String = "█".repeat(filled);
+    let empty_str: String = "░".repeat(BAR_WIDTH - filled);
+
+    vec![
+        Span::styled("ctx ", Style::default().fg(palette.muted)),
+        Span::styled(filled_str, Style::default().fg(bar_color)),
+        Span::styled(empty_str, Style::default().fg(palette.subtle)),
+    ]
 }
 
 fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
