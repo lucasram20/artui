@@ -2,7 +2,7 @@
 #
 # Usage:
 #   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
-#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.5
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.6
 
 [CmdletBinding()]
 param(
