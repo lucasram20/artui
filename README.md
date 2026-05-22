@@ -5,87 +5,160 @@
 <h1 align="center">artui</h1>
 
 <p align="center">
-  A Rust terminal coding-agent TUI built with ratatui.
+  Interactive coding-agent CLI written in Rust. Built with ratatui.
 </p>
 
-artui is designed around explicit tool use, bounded output, approvals, diffs, and logs instead of a generic chat window.
+<p align="center">
+  <a href="#install">Install</a> · <a href="#configure">Configure</a> · <a href="#run">Run</a> · <a href="#documentation">Docs</a>
+</p>
 
-## Quick Start
+artui is a TUI coding agent built around explicit tool use, bounded output, approvals, diffs, and logs — not a generic chat window. Think Claude Code / Codex / OpenCode, but Rust, terminal-first, and provider-agnostic.
 
-### Install (prebuilt binary)
+## Install
+
+One-liner installers fetch the matching prebuilt binary from a public Cloudflare R2 mirror — zero GitHub auth required.
+
+**Linux / macOS**
 
 ```bash
-# Linux / macOS — interactive, asks before installing
 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
+```
 
-# Linux / macOS — non-interactive (CI, scripts, opt-in upgrades)
+**Windows (PowerShell)**
+
+```powershell
+irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
+```
+
+**npm**
+
+```bash
+npm install -g artui-cli
+```
+
+<details>
+<summary>Other install options & flags</summary>
+
+```bash
+# Skip the confirmation prompt (CI, scripts, automation)
 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
 
-# Windows (PowerShell)
-irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
-# Non-interactive PowerShell
-irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Yes
-```
-
-Both the install scripts and the binary archives live on a public Cloudflare R2 bucket, so anyone can install zero-auth — no GitHub account, no PAT, regardless of whether the source repo is public or private. The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads.
-
-Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — type `n` at the prompt to abort cleanly without downloading anything.
-
-Pin a specific version:
-
-```bash
+# Pin a specific version
 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.4 --yes
-```
 
-Build from source instead:
-
-```bash
+# Build from source
 ARTUI_FROM_SOURCE=1 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
-```
 
-### Install (npm)
+# npm without downloading the binary (just the wrapper)
+npm install -g artui-cli --abort
 
-```bash
-npm install -g artui-cli           # downloads the prebuilt binary on postinstall
-npm install -g artui-cli --abort   # skip the download (just install the wrapper)
-ARTUI_SKIP_POSTINSTALL=1 npm install -g artui-cli   # same, env-flavoured
-npx artui-cli                      # one-off run
-```
-
-The package name is `artui-cli` because the bare `artui` slot on npm is held by an unrelated 2017 package. Bin entries stay as `artui` and `art`, so commands stay unchanged.
-
-The npm package's postinstall renders an [`ink`](https://github.com/vadimdemedes/ink)-driven progress UI on TTY (the same React-for-CLI library Claude Code uses) and falls back to plain logs in CI. The wrapper binary is the native artui release picked from GitHub Releases. Pass `--abort`/`--no-install`/`--skip-binary` to install the wrapper without fetching the binary; rebuild later with `npm rebuild artui-cli`.
-
-### Install (cargo, local checkout)
-
-```bash
+# Clone + cargo install
 cargo install --path .
 ```
 
-Run the TUI with either command:
+The install script prints a logo, asks `Y/n`, then streams a real progress bar. Type `n` (or close the terminal) to abort cleanly. Override the mirror with `ARTUI_MIRROR_BASE` if you self-host the artifacts.
+
+See [`docs/distribution.md`](docs/distribution.md) for how the R2 mirror is set up.
+
+</details>
+
+Run the TUI with either binary:
 
 ```bash
-art
-# or
+art        # short alias
+artui      # canonical name
+```
+
+## Configure
+
+Optional. Drop a TOML config at `~/.config/artui/config.toml` to change defaults:
+
+```toml
+default_provider = "ollama"
+
+[providers.ollama]
+host = "http://localhost:11434"
+default_model = "gemma4:e2b"
+
+[updates]
+notify_level = "major"   # off | major | minor | all
+```
+
+artui ships with built-in Ollama, OpenAI-compatible, and GitHub Copilot providers. Sign in to Copilot from inside the TUI: `/login` → choose GitHub Copilot. See [`docs/auth.md`](docs/auth.md) for credential paths and the full provider taxonomy.
+
+## Run
+
+```bash
+ollama serve              # optional — for local models
+ollama pull gemma4:e2b
 artui
 ```
 
-For development without installing:
+Inside the TUI:
+
+| Command | Effect |
+|---|---|
+| `/help` | List all slash commands |
+| `/model` | Switch active model |
+| `/agent` | Toggle Build / Plan agent mode |
+| `/system` | Print the active system prompt |
+| `/skill list` | Manage skill overlays (Mattpocock / `skills.sh` compatible) |
+| `/mcp` | Inspect MCP server connections |
+| `/login` / `/logout` | Manage provider credentials |
+
+Universal skill paths supported: `~/.agents/skills/`, `<workspace>/.agents/skills/`, plus artui-specific `<workspace>/.artui/skills/`.
+
+## Tech stack
+
+![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
+![Ratatui](https://img.shields.io/badge/Ratatui-Terminal%20UI-FFB000)
+![Tokio](https://img.shields.io/badge/Tokio-Async-2C4F7C)
+![Reqwest](https://img.shields.io/badge/Reqwest-HTTP-0088CC)
+![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-111111)
+![OpenAI Compatible](https://img.shields.io/badge/OpenAI--compatible-HTTP%20API-412991)
+
+Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serde TOML config. Targets Linux, macOS, Windows (`x86_64` and `aarch64`).
+
+## Releases
+
+Releases are tag-driven — no automation pushes a release on every commit. To ship:
 
 ```bash
-cargo run --bin artui
+# Bump versions in lockstep
+sed -i 's/^version = ".*"/version = "0.4.0"/' Cargo.toml
+(cd npm && npm version --no-git-tag-version 0.4.0)
+cargo update -p artui --offline
+
+git commit -am "chore(release): 0.4.0"
+git tag v0.4.0
+git push origin main --tags
 ```
 
-Optional local model setup:
+The tag triggers `.github/workflows/release.yml`, which cross-compiles for Linux / macOS / Windows × `x86_64` / `aarch64` and uploads archives to GitHub Releases + the R2 mirror.
+
+If a build fails or you want to rebuild an existing tag:
 
 ```bash
-ollama serve
-ollama pull gemma4:e2b
+gh workflow run release.yml -f tag=v0.4.0
 ```
 
-By default, artui uses Ollama at `http://localhost:11434` with `gemma4:e2b`.
+artui auto-checks for new versions at startup and surfaces a banner when severity meets `[updates] notify_level` (default: major bumps only). Configure or disable in `~/.config/artui/config.toml`.
 
-Useful checks:
+| Path | Upgrade |
+|---|---|
+| curl / PowerShell | re-run the install one-liner |
+| `npm install -g artui-cli` | `npm install -g artui-cli@latest` |
+| `cargo install` | `git pull && cargo install --path .` |
+
+## Documentation
+
+- [v1 agentic spec](docs/spec/artui_v1_agentic_spec.md)
+- [Distribution & R2 mirror](docs/distribution.md)
+- [Authentication & credentials](docs/auth.md)
+- [Spec index](docs/spec/README.md)
+- [Changelog](docs/changelogs/CHANGELOG.md)
+
+## Development
 
 ```bash
 cargo fmt --check
@@ -94,106 +167,6 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
-## Tech Stack
+## License
 
-![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
-![Ratatui](https://img.shields.io/badge/Ratatui-Terminal%20UI-FFB000)
-![Tokio](https://img.shields.io/badge/Tokio-Async-2C4F7C)
-![Reqwest](https://img.shields.io/badge/Reqwest-HTTP-0088CC)
-![Serde](https://img.shields.io/badge/Serde-JSON%2FTOML-3B82F6)
-![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-111111)
-![OpenAI Compatible](https://img.shields.io/badge/OpenAI--compatible-HTTP%20API-412991)
-
-- **Language:** Rust 2021
-- **Terminal UI:** ratatui + crossterm
-- **Async runtime:** Tokio
-- **HTTP streaming:** reqwest
-- **Config:** TOML via serde
-- **LLM providers:** Ollama first, OpenAI-compatible HTTP skeleton
-- **Primary target:** Linux/Fedora first, with Windows/macOS compatibility where practical
-
-## Configuration
-
-Global config path:
-
-```text
-~/.config/artui/config.toml
-```
-
-Minimal example:
-
-```toml
-default_provider = "ollama"
-
-[providers.ollama]
-host = "http://localhost:11434"
-default_model = "gemma4:e2b"
-```
-
-GitHub Copilot account login uses GitHub's OAuth device flow. Create a GitHub OAuth app with device flow enabled, then configure its client ID and the GitHub OAuth endpoints from the official GitHub docs:
-
-```toml
-[providers.copilot]
-github_oauth_client_id = "your-oauth-app-client-id"
-github_oauth_scope = ""
-github_login_timeout_secs = 900
-```
-
-Then run `/login` inside artui and choose GitHub Copilot. The GitHub device-code and token URLs default to GitHub's official OAuth endpoints and can be overridden if needed. Tokens are stored in the platform data directory auth store unless `auth_storage_path` is configured. After login, artui exchanges the GitHub token for a Copilot session token when possible, fetches available Copilot models, and shows them under a GitHub Copilot section in `/model`.
-
-## Releases
-
-Releases are tag-driven — no automation pushes a release on every commit. When you're ready to ship a new version:
-
-```bash
-# Bump versions in lockstep
-sed -i 's/^version = ".*"/version = "0.4.0"/' Cargo.toml
-(cd npm && npm version --no-git-tag-version 0.4.0)
-cargo update -p artui --offline
-
-# Commit, tag, push
-git commit -am "chore(release): 0.4.0"
-git tag v0.4.0
-git push origin main --tags
-```
-
-`.github/workflows/release.yml` fires on the tag push, cross-compiles for Linux/macOS/Windows × `x86_64`/`aarch64`, and publishes a GitHub Release with checksums.
-
-If a build fails (or you bumped versions but forgot to push the tag), trigger the workflow manually:
-
-```bash
-gh workflow run release.yml -f tag=v0.4.0
-```
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) in your day-to-day commits if you like (`feat:`, `fix:`, `chore:`); they don't auto-trigger anything but they keep the changelog tidy and make it easy to decide the next semver bump by hand.
-
-## Auto-update
-
-artui polls GitHub Releases at startup and shows a banner when a meaningful update is available. The default policy follows the user's request: **only major bumps are surfaced** — patch and minor releases stay silent.
-
-```toml
-[updates]
-repo          = "lucasram20/artui"   # "<owner>/<name>" to poll
-notify_level  = "major"              # "off" | "major" | "minor" | "all"
-auto_check    = true                  # set false to disable the network poll entirely
-timeout_secs  = 5                     # GitHub API timeout
-```
-
-How upgrades happen — modeled on Claude Code, OpenCode, and Codex:
-
-| Install path | Upgrade command |
-|---|---|
-| `curl \| sh` / `irm \| iex` | re-run the same one-liner; the script always pulls the latest binary from the latest release |
-| `npm install -g artui-cli` | `npm install -g artui-cli@latest` (postinstall picks up the matching binary) |
-| `cargo install --git` | `ARTUI_FROM_SOURCE=1 curl ... \| sh` re-runs `cargo install` |
-| Source clone | `git pull && cargo install --path .` |
-
-The install scripts are hosted on `main`, so each new push automatically updates the canonical script — but **existing installs do not auto-rewrite themselves**. The startup banner exists precisely so you don't have to remember to run the script. Set `notify_level = "off"` or `auto_check = false` if you'd rather opt out.
-
-## Documentation
-
-- [v1 Agentic Spec](docs/spec/artui_v1_agentic_spec.md)
-- [Spec Index](docs/spec/README.md)
-- [Distribution & R2 mirror setup](docs/distribution.md)
-- [Authentication & credentials](docs/auth.md)
-- [Changelog](docs/changelogs/CHANGELOG.md)
+MIT.
