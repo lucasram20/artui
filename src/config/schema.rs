@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub agent: AgentConfig,
     pub providers: ProviderConfig,
     pub ui: UiConfig,
+    pub updates: UpdateConfig,
 }
 
 impl Default for AppConfig {
@@ -20,6 +21,32 @@ impl Default for AppConfig {
             agent: AgentConfig::default(),
             providers: ProviderConfig::default(),
             ui: UiConfig::default(),
+            updates: UpdateConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct UpdateConfig {
+    /// Repo to poll for new releases (`owner/name`).
+    pub repo: String,
+    /// Severity threshold that surfaces an update banner. Defaults to
+    /// `major` so day-to-day patch/feature releases stay quiet.
+    pub notify_level: crate::update::NotifyLevel,
+    /// When false, artui never reaches out to GitHub at startup.
+    pub auto_check: bool,
+    /// HTTP timeout for the `releases/latest` call (seconds).
+    pub timeout_secs: u64,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            repo: "lucasram20/artui".to_owned(),
+            notify_level: crate::update::NotifyLevel::Major,
+            auto_check: true,
+            timeout_secs: 5,
         }
     }
 }

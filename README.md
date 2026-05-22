@@ -155,6 +155,29 @@ feat!: rename ProviderRequest fields  # major bump (BREAKING CHANGE)
 chore: bump tachyonfx                 # no release
 ```
 
+## Auto-update
+
+artui polls GitHub Releases at startup and shows a banner when a meaningful update is available. The default policy follows the user's request: **only major bumps are surfaced** — patch and minor releases stay silent.
+
+```toml
+[updates]
+repo          = "lucasram20/artui"   # "<owner>/<name>" to poll
+notify_level  = "major"              # "off" | "major" | "minor" | "all"
+auto_check    = true                  # set false to disable the network poll entirely
+timeout_secs  = 5                     # GitHub API timeout
+```
+
+How upgrades happen — modeled on Claude Code, OpenCode, and Codex:
+
+| Install path | Upgrade command |
+|---|---|
+| `curl \| sh` / `irm \| iex` | re-run the same one-liner; the script always pulls the latest binary from the latest release |
+| `npm install -g artui` | `npm install -g artui@latest` (postinstall picks up the matching binary) |
+| `cargo install --git` | `ARTUI_FROM_SOURCE=1 curl ... \| sh` re-runs `cargo install` |
+| Source clone | `git pull && cargo install --path .` |
+
+The install scripts are hosted on `main`, so each new push automatically updates the canonical script — but **existing installs do not auto-rewrite themselves**. The startup banner exists precisely so you don't have to remember to run the script. Set `notify_level = "off"` or `auto_check = false` if you'd rather opt out.
+
 ## Documentation
 
 - [v1 Agentic Spec](docs/spec/artui_v1_agentic_spec.md)

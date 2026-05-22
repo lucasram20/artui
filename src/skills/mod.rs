@@ -70,11 +70,22 @@ impl SkillRegistry {
 
     /// Discover skills from project + user directories.
     /// Project skills override user skills with the same name.
+    ///
+    /// Search order (later wins on name collision):
+    /// 1. `~/.agents/skills/`           — universal cross-tool location
+    ///    (Codex, Warp, Cursor, Gemini, Copilot, etc.)
+    /// 2. `~/.config/artui/skills/`     — artui-specific user skills
+    /// 3. `<workspace>/.agents/skills/` — universal project skills
+    /// 4. `<workspace>/.artui/skills/`  — artui-specific project skills
     pub fn load(workspace_root: &Path) -> Self {
         let mut out = Self::new();
+        if let Some(home_agents) = home_path(".agents/skills") {
+            out.load_dir(&home_agents);
+        }
         if let Some(user_dir) = user_skill_dir() {
             out.load_dir(&user_dir);
         }
+        out.load_dir(&workspace_root.join(".agents").join("skills"));
         out.load_dir(&workspace_root.join(".artui").join("skills"));
         out
     }
@@ -143,6 +154,13 @@ fn user_skill_dir() -> Option<PathBuf> {
             .join("artui")
             .join("skills"),
     )
+}
+
+/// Resolve `$HOME/<suffix>` if `$HOME` is set. Used for the universal
+/// `~/.agents/skills` directory shared with Codex, Warp, Cursor, etc.
+fn home_path(suffix: &str) -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok().filter(|h| !h.is_empty())?;
+    Some(PathBuf::from(home).join(suffix))
 }
 
 fn read_toml_skill(path: &Path) -> Option<Skill> {
@@ -267,11 +285,35 @@ pub struct ActiveSkill(pub Option<String>);
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Tests mutate HOME/XDG_CONFIG_HOME — serialize them to avoid leaks.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn write_skill(dir: &Path, file: &str, body: &str) {
         fs::create_dir_all(dir).unwrap();
         fs::write(dir.join(file), body).unwrap();
+    }
+
+    /// Run `f` with HOME and XDG_CONFIG_HOME pointed at `tmp`, so the loader
+    /// cannot accidentally pick up the developer's real ~/.agents/skills,
+    /// ~/.config/artui/skills, etc.
+    fn isolated<F: FnOnce()>(tmp: &Path, f: F) {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let prev_home = std::env::var("HOME").ok();
+        let prev_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+        std::env::set_var("HOME", tmp);
+        std::env::set_var("XDG_CONFIG_HOME", tmp);
+        f();
+        match prev_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        match prev_xdg {
+            Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
     }
 
     #[test]
@@ -289,19 +331,23 @@ triggers = ["tdd"]
 prompt = "Always write tests first."
 "#,
         );
-        let registry = SkillRegistry::load(tmp.path());
-        let skill = registry.get("rust-tdd").expect("skill loaded");
-        assert_eq!(skill.description, "TDD discipline");
-        assert_eq!(skill.triggers, vec!["tdd"]);
-        assert_eq!(skill.prompt, "Always write tests first.");
-        assert!(skill.source.is_some());
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            let skill = registry.get("rust-tdd").expect("skill loaded");
+            assert_eq!(skill.description, "TDD discipline");
+            assert_eq!(skill.triggers, vec!["tdd"]);
+            assert_eq!(skill.prompt, "Always write tests first.");
+            assert!(skill.source.is_some());
+        });
     }
 
     #[test]
     fn empty_when_no_skills_dir() {
         let tmp = TempDir::new().unwrap();
-        let registry = SkillRegistry::load(tmp.path());
-        assert!(registry.is_empty());
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            assert!(registry.is_empty());
+        });
     }
 
     #[test]
@@ -312,8 +358,10 @@ prompt = "Always write tests first."
             "broken.toml",
             r#"description = "no name""#,
         );
-        let registry = SkillRegistry::load(tmp.path());
-        assert!(registry.is_empty());
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            assert!(registry.is_empty());
+        });
     }
 
     #[test]
@@ -324,8 +372,10 @@ prompt = "Always write tests first."
             "ignored.md",
             "# not a skill",
         );
-        let registry = SkillRegistry::load(tmp.path());
-        assert!(registry.is_empty());
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            assert!(registry.is_empty());
+        });
     }
 
     #[test]
@@ -334,11 +384,13 @@ prompt = "Always write tests first."
         let dir = tmp.path().join(".artui").join("skills");
         write_skill(&dir, "a.toml", "name = \"a\"\nprompt = \"x\"\n");
         write_skill(&dir, "b.toml", "name = \"b\"\nprompt = \"y\"\n");
-        let registry = SkillRegistry::load(tmp.path());
-        assert_eq!(registry.len(), 2);
-        let names: Vec<_> = registry.iter().map(|s| s.name.clone()).collect();
-        assert!(names.contains(&"a".to_owned()));
-        assert!(names.contains(&"b".to_owned()));
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            assert_eq!(registry.len(), 2);
+            let names: Vec<_> = registry.iter().map(|s| s.name.clone()).collect();
+            assert!(names.contains(&"a".to_owned()));
+            assert!(names.contains(&"b".to_owned()));
+        });
     }
 
     #[test]
@@ -352,11 +404,13 @@ prompt = "Always write tests first."
         )
         .unwrap();
 
-        let registry = SkillRegistry::load(tmp.path());
-        let skill = registry.get("diagnose").expect("md skill loaded");
-        assert_eq!(skill.description, "Disciplined debugging loop");
-        assert_eq!(skill.triggers, vec!["debug", "bug", "broken"]);
-        assert!(skill.prompt.contains("Reproduce"));
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            let skill = registry.get("diagnose").expect("md skill loaded");
+            assert_eq!(skill.description, "Disciplined debugging loop");
+            assert_eq!(skill.triggers, vec!["debug", "bug", "broken"]);
+            assert!(skill.prompt.contains("Reproduce"));
+        });
     }
 
     #[test]
@@ -374,7 +428,61 @@ prompt = "Always write tests first."
             "---\ndescription: anchor skill\n---\nbody",
         )
         .unwrap();
-        let registry = SkillRegistry::load(tmp.path());
-        assert!(registry.get("anchor").is_some(), "filename stem fallback");
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(tmp.path());
+            assert!(registry.get("anchor").is_some(), "filename stem fallback");
+        });
+    }
+
+    #[test]
+    fn loads_skill_from_universal_dot_agents_dir() {
+        let tmp = TempDir::new().unwrap();
+        // Workspace lives under tmp/work; ~/.agents/skills must be picked up.
+        let workspace = tmp.path().join("work");
+        fs::create_dir_all(&workspace).unwrap();
+        let universal = tmp.path().join(".agents").join("skills").join("review");
+        fs::create_dir_all(&universal).unwrap();
+        fs::write(
+            universal.join("SKILL.md"),
+            "---\nname: review\ndescription: cross-tool code review skill\n---\nbody",
+        )
+        .unwrap();
+
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(&workspace);
+            assert!(
+                registry.get("review").is_some(),
+                "~/.agents/skills picked up"
+            );
+        });
+    }
+
+    #[test]
+    fn project_dot_agents_skills_override_user_skills() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().join("work");
+        fs::create_dir_all(&workspace).unwrap();
+        // user-level skill
+        let user = tmp.path().join(".agents").join("skills").join("dup");
+        fs::create_dir_all(&user).unwrap();
+        fs::write(
+            user.join("SKILL.md"),
+            "---\nname: dup\ndescription: user\n---\nu",
+        )
+        .unwrap();
+        // project-level override
+        let project = workspace.join(".agents").join("skills").join("dup");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(
+            project.join("SKILL.md"),
+            "---\nname: dup\ndescription: project\n---\np",
+        )
+        .unwrap();
+
+        isolated(tmp.path(), || {
+            let registry = SkillRegistry::load(&workspace);
+            let skill = registry.get("dup").expect("dup loaded");
+            assert_eq!(skill.description, "project");
+        });
     }
 }

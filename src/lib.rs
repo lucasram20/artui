@@ -11,6 +11,7 @@ pub mod session;
 pub mod skills;
 pub mod tools;
 pub mod ui;
+pub mod update;
 pub mod util;
 
 use std::{
@@ -65,6 +66,27 @@ pub async fn run() -> Result<()> {
         let statuses = mcp::register_servers(&mcp_cfg, &mut registry).await;
         app.tool_registry = Arc::new(registry);
         app.mcp_servers = statuses;
+    }
+
+    // Background self-update check. Mirrors opencode's `autoupdate: notify`
+    // and Codex's silent-on-launch poll. We only emit a banner when the
+    // bump severity meets `[updates] notify_level` (default: major).
+    if config.updates.auto_check {
+        let updates = config.updates.clone();
+        let current = env!("CARGO_PKG_VERSION").to_owned();
+        let tx = event_tx.clone();
+        tokio::spawn(async move {
+            if let Some(info) = update::check_for_update(
+                &updates.repo,
+                &current,
+                updates.notify_level,
+                std::time::Duration::from_secs(updates.timeout_secs.max(1)),
+            )
+            .await
+            {
+                let _ = tx.send(AppEvent::UpdateAvailable(info)).await;
+            }
+        });
     }
 
     // Fetch Ollama context window asynchronously at startup

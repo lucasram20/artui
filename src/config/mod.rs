@@ -2,7 +2,9 @@ mod schema;
 
 use anyhow::{Context, Result};
 
-pub use schema::{AppConfig, CopilotConfig, OllamaConfig, OpenAiAccountConfig, OpenAiCompatConfig};
+pub use schema::{
+    AppConfig, CopilotConfig, OllamaConfig, OpenAiAccountConfig, OpenAiCompatConfig, UpdateConfig,
+};
 
 pub fn load_global_config() -> Result<AppConfig> {
     let Some(path) = crate::util::paths::global_config_path() else {

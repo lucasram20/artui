@@ -17,6 +17,8 @@ All notable changes to artui will be documented in this file.
 
 ### Added
 
+- Skill loader now scans the universal `~/.agents/skills/` and `<workspace>/.agents/skills/` directories used by Codex, Warp, Cursor, Copilot, Gemini, etc., so any skill installed via `npx skills add …` works in artui without re-installation. Project-level skills still override user-level ones on name collision.
+- Background self-update check (`src/update/mod.rs`): polls `releases/latest`, classifies the bump as major / minor / patch, and surfaces a `↑ artui vX.Y.Z available` banner only when severity meets `[updates] notify_level`. Default `notify_level = "major"` keeps the TUI quiet for routine `feat:` and `fix:` releases. Configurable via `repo`, `auto_check`, `timeout_secs`. Eight new unit tests cover the semver parser and severity classifier.
 - Install scripts now print the artui ASCII logo, ask for an interactive confirmation (skip with `--yes`, `-Yes`, `ARTUI_INSTALL_YES=1`, or `CI`), and animate progress while downloading. Bash uses `curl --progress-bar` plus a unicode braille spinner for extraction; PowerShell uses native `Write-Progress`.
 - Rewrote the npm wrapper in TypeScript with an [`ink`](https://github.com/vadimdemedes/ink) postinstall UI (the same React-for-CLI framework Claude Code uses): renders the logo, a step list, a download progress bar, and a final success/error frame. Falls back to plain console logging in CI / non-TTY contexts.
 - Added abort paths to every install surface:
@@ -27,6 +29,7 @@ All notable changes to artui will be documented in this file.
 ### Changed
 
 - `.gitignore` now excludes everything under `graphify-out/` (only `.gitkeep` is preserved). Existing `graphify-out/{graph,callflow}.html` were untracked from git so the language bar shows Rust as the dominant language.
+- README documents the universal `.agents/skills` discovery path, the new `[updates]` config block, and the upgrade flow per install path (curl, npm, cargo).
 
 ### Removed
 

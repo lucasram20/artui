@@ -193,6 +193,7 @@ pub enum AppEvent {
     Auth(AuthEvent),
     Quote(Quote),
     OllamaContextWindow(usize),
+    UpdateAvailable(crate::update::UpdateInfo),
 }
 
 #[derive(Debug)]
@@ -412,6 +413,7 @@ pub struct App {
     pub skills: crate::skills::SkillRegistry,
     pub active_skill: Option<String>,
     pub hooks: crate::hooks::HookConfig,
+    pub update_info: Option<crate::update::UpdateInfo>,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -470,6 +472,7 @@ impl App {
             ),
             active_skill: None,
             hooks: crate::hooks::load_hook_config(&std::env::current_dir().unwrap_or_default()),
+            update_info: None,
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -949,6 +952,13 @@ impl App {
             }
             AppEvent::OllamaContextWindow(tokens) => {
                 self.ollama_context_window = Some(tokens);
+            }
+            AppEvent::UpdateAvailable(info) => {
+                self.status = format!(
+                    "↑ artui {} available (you are on {})",
+                    info.latest, info.current
+                );
+                self.update_info = Some(info);
             }
         }
     }
