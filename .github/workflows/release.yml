@@ -49,13 +49,13 @@ jobs:
             os: macos-14
             archive: tar.gz
           - target: x86_64-pc-windows-msvc
-            os: windows-2025
+            os: windows-2025-vs2026
             archive: zip
           - target: aarch64-pc-windows-msvc
-            os: windows-2025
+            os: windows-2025-vs2026
             archive: zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # release: published sets GITHUB_REF to the tag automatically.
           # workflow_dispatch needs an explicit ref so the matrix builds
@@ -116,7 +116,7 @@ jobs:
           Get-ChildItem dist
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: artui-${{ matrix.target }}
           path: dist/artui-*.${{ matrix.archive }}
@@ -127,8 +127,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
