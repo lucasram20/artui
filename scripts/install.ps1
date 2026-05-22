@@ -1,8 +1,8 @@
 # artui install script — Windows PowerShell
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex
-#   irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex -ArgumentList -Version v0.0.1
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.5
 
 [CmdletBinding()]
 param(

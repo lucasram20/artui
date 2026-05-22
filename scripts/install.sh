@@ -2,11 +2,12 @@
 # artui install script — Linux / macOS
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.0.1
+#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
+#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.5
 #
-# Detects arch (x86_64/aarch64), downloads the matching release binary from
-# GitHub, and installs it to ~/.local/bin/artui (override with INSTALL_DIR).
+# Detects arch (x86_64/aarch64), downloads the matching release binary
+# from the public Cloudflare R2 mirror, falls back to GitHub releases on
+# miss. Installs to ~/.local/bin/artui (override with INSTALL_DIR).
 #
 # Skip download and build from source: ARTUI_FROM_SOURCE=1
 set -euo pipefail
