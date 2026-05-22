@@ -27,42 +27,12 @@ irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 
 irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex -ArgumentList -Yes
 ```
 
-### Install (private repo)
-
-While `lucasram20/artui` is private, friends granted collaborator access need a fine-grained Personal Access Token (PAT) so the installer can hit the GitHub API. Generate one at <https://github.com/settings/personal-access-tokens/new>:
-
-- **Resource owner:** `lucasram20`
-- **Repository access:** Only select repositories → `artui`
-- **Permissions:** Contents `Read-only`, Metadata `Read-only`
-
-Then install:
-
-```bash
-# Linux / macOS — token consumed by install.sh, raw.githubusercontent.com
-# is also private so wget the script with the PAT first.
-TOKEN=ghp_xxxxxxxxxxxx
-curl -fsSL -H "Authorization: Bearer $TOKEN" \
-  https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh \
-  | GITHUB_TOKEN=$TOKEN sh -s -- --yes
-
-# Windows (PowerShell)
-$env:GITHUB_TOKEN = 'ghp_xxxxxxxxxxxx'
-$headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
-$src = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1' -Headers $headers
-Invoke-Expression "$src -Yes"
-
-# npm — postinstall reads $GITHUB_TOKEN automatically
-GITHUB_TOKEN=$TOKEN npm install -g artui-cli
-```
-
-The script attaches `Authorization: Bearer …` only when talking to `api.github.com`; the signed S3 redirect that GitHub returns for the asset never sees the token. The PAT can be revoked at any time and only grants read access to the artui repo.
-
-The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads from GitHub Releases. Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — set `ARTUI_INSTALL_YES=0`, hit `n` at the prompt, or just close the terminal to abort cleanly without downloading anything.
+The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads from GitHub Releases. Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — type `n` at the prompt to abort cleanly without downloading anything.
 
 Pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.0.1 --yes
+curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.3.4 --yes
 ```
 
 Build from source instead:
@@ -80,7 +50,7 @@ ARTUI_SKIP_POSTINSTALL=1 npm install -g artui-cli   # same, env-flavoured
 npx artui-cli                      # one-off run
 ```
 
-The package name is `artui-cli` because the bare `artui` slot on npm was taken by an unrelated 2017 package. The bin entries stay as `artui` and `art`, so commands inside the TUI are unchanged.
+The package name is `artui-cli` because the bare `artui` slot on npm is held by an unrelated 2017 package. Bin entries stay as `artui` and `art`, so commands stay unchanged.
 
 The npm package's postinstall renders an [`ink`](https://github.com/vadimdemedes/ink)-driven progress UI on TTY (the same React-for-CLI library Claude Code uses) and falls back to plain logs in CI. The wrapper binary is the native artui release picked from GitHub Releases. Pass `--abort`/`--no-install`/`--skip-binary` to install the wrapper without fetching the binary; rebuild later with `npm rebuild artui-cli`.
 
@@ -212,7 +182,7 @@ How upgrades happen — modeled on Claude Code, OpenCode, and Codex:
 | Install path | Upgrade command |
 |---|---|
 | `curl \| sh` / `irm \| iex` | re-run the same one-liner; the script always pulls the latest binary from the latest release |
-| `npm install -g artui` | `npm install -g artui@latest` (postinstall picks up the matching binary) |
+| `npm install -g artui-cli` | `npm install -g artui-cli@latest` (postinstall picks up the matching binary) |
 | `cargo install --git` | `ARTUI_FROM_SOURCE=1 curl ... \| sh` re-runs `cargo install` |
 | Source clone | `git pull && cargo install --path .` |
 
