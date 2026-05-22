@@ -16,6 +16,11 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${ARTUI_VERSION:-latest}"
 ASSUME_YES="${ARTUI_INSTALL_YES:-0}"
 
+# Public Cloudflare R2 mirror — primary download source. Lets users
+# without GitHub access (or while the source repo is private) install
+# without auth. Override with $ARTUI_MIRROR_BASE for self-hosted CDNs.
+R2_BASE="${ARTUI_MIRROR_BASE:-https://pub-artui-releases.r2.dev}"
+
 # Optional GitHub token for private-repo access. Friends granted
 # collaborator access can generate a fine-grained PAT (Contents: read,
 # Metadata: read) and pass it as $GITHUB_TOKEN. Public installs leave
@@ -180,15 +185,25 @@ fi
 
 if [ "$VERSION" = "latest" ]; then
   step "Resolving latest release"
-  if [ -n "$AUTH_HEADER" ]; then
-    TAG="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
-      "https://api.github.com/repos/${REPO}/releases/latest" \
-      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
-  else
-    TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  TAG=""
+  # Prefer R2: a `latest/VERSION` text file the upload step keeps current.
+  if curl -fIsS "${R2_BASE}/latest/checksums.sha256" >/dev/null 2>&1; then
+    # checksums.sha256 names the binaries with their version embedded.
+    # e.g. "artui-0.3.4-x86_64-unknown-linux-gnu.tar.gz"
+    TAG="v$(curl -fsSL "${R2_BASE}/latest/checksums.sha256" \
+      | sed -n 's/.*artui-\([0-9.][0-9.]*\)-.*/\1/p' | head -1 || true)"
   fi
-  if [ -z "$TAG" ]; then
+  if [ -z "$TAG" ] || [ "$TAG" = "v" ]; then
+    if [ -n "$AUTH_HEADER" ]; then
+      TAG="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${REPO}/releases/latest" \
+        | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+    else
+      TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+        | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+    fi
+  fi
+  if [ -z "$TAG" ] || [ "$TAG" = "v" ]; then
     err "Could not resolve latest release for ${REPO}."
     if [ -z "$AUTH_HEADER" ]; then
       warn "Repo may be private. Set GITHUB_TOKEN to a fine-grained PAT with Contents:read and Metadata:read."
@@ -202,6 +217,7 @@ fi
 
 ASSET="artui-${TAG#v}-${TARGET}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+R2_URL="${R2_BASE}/${TAG}/${ASSET}"
 step "Version ${C_CYAN}${TAG}${C_RESET}"
 
 TMP="$(mktemp -d)"
@@ -230,9 +246,19 @@ download_private_asset() {
     -o "$TMP/artui.tar.gz"
 }
 
-# Try curl --progress-bar first (real progress), spinner only if not a tty.
-if [ -n "$AUTH_HEADER" ]; then
-  step "Downloading ${ASSET} (private repo)"
+# Try the public R2 mirror first (zero-auth, fastest, works for friends
+# without GitHub access). Fall back to private GitHub asset endpoint when
+# a token is set, then plain public GH releases as a last resort.
+if curl -fIsS "$R2_URL" >/dev/null 2>&1; then
+  if _is_tty; then
+    printf '  Downloading '
+    curl -fL --progress-bar "$R2_URL" -o "$TMP/artui.tar.gz"
+  else
+    step "Downloading $R2_URL"
+    curl -fsSL "$R2_URL" -o "$TMP/artui.tar.gz"
+  fi
+elif [ -n "$AUTH_HEADER" ]; then
+  step "R2 mirror miss; falling back to GitHub API for ${ASSET}"
   if ! download_private_asset; then
     err "Asset download failed. Verify the GITHUB_TOKEN scope (Contents:read, Metadata:read)."
     exit 1

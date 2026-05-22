@@ -192,4 +192,6 @@ The install scripts are hosted on `main`, so each new push automatically updates
 
 - [v1 Agentic Spec](docs/spec/artui_v1_agentic_spec.md)
 - [Spec Index](docs/spec/README.md)
+- [Distribution & R2 mirror setup](docs/distribution.md)
+- [Authentication & credentials](docs/auth.md)
 - [Changelog](docs/changelogs/CHANGELOG.md)

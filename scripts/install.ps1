@@ -16,9 +16,11 @@ $ErrorActionPreference = 'Stop'
 $IsInteractive = $Host.UI.RawUI -and -not $env:CI -and -not $env:NO_COLOR
 $AssumeYes = $Yes -or ($env:ARTUI_INSTALL_YES -eq '1')
 
-# Optional GitHub token for private-repo access. Friends granted
-# collaborator access can generate a fine-grained PAT (Contents: read,
-# Metadata: read) and pass it via $env:GITHUB_TOKEN.
+# Public Cloudflare R2 mirror — primary download source. Lets users
+# without GitHub access install zero-auth.
+$R2Base = if ($env:ARTUI_MIRROR_BASE) { $env:ARTUI_MIRROR_BASE } else { 'https://pub-artui-releases.r2.dev' }
+
+# Optional GitHub token for private-repo access.
 $Token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
 $AuthHeaders = @{}
 if ($Token) {
@@ -102,9 +104,15 @@ $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "artui-$([guid]::
 $zip = Join-Path $tmp 'artui.zip'
 
 Invoke-WithProgress -Activity "Downloading $asset" -Body {
+    $r2Url = "$R2Base/$Version/$asset"
+    # Try the public R2 mirror first.
+    try {
+        Invoke-WebRequest -Uri $r2Url -OutFile $zip -UseBasicParsing -ErrorAction Stop
+        return
+    } catch {
+        Step "R2 mirror miss; falling back to GitHub"
+    }
     if ($Token) {
-        # Private-repo path: resolve the asset id, then ask GitHub for the
-        # signed redirect via Accept: application/octet-stream.
         $tagRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Version" -Headers $AuthHeaders
         $assetMeta = $tagRelease.assets | Where-Object { $_.name -eq $asset } | Select-Object -First 1
         if (-not $assetMeta) { throw "Asset $asset not found on release $Version." }

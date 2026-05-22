@@ -124,11 +124,66 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # Detect whether R2 secrets exist. The mirror upload step is gated
+      # on this so the workflow stays green even if you haven't wired R2
+      # yet (set R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+      # in repo secrets to enable).
+      - name: Probe R2 secrets
+        id: r2_probe
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -n "$R2_ACCOUNT_ID" ]; then
+            echo "HAS_R2=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_R2=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+            echo "name=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Compute checksums
         run: |
           cd dist
           ls
           sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256 || true
+
+      # Mirror to Cloudflare R2 so installers running outside this repo
+      # (e.g. friends with no collaborator access while the source repo
+      # stays private) have a public, zero-auth download URL. R2 is
+      # S3-compatible — the AWS CLI does the upload.
+      - name: Upload assets to Cloudflare R2
+        if: ${{ env.HAS_R2 == 'true' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          set -e
+          cd dist
+          for asset in artui-*.tar.gz artui-*.zip checksums.sha256; do
+            [ -f "$asset" ] || continue
+            # Versioned path (immutable)
+            aws s3 cp "$asset" "s3://artui-releases/${TAG}/${asset}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+            # Latest pointer (overwrites every release)
+            aws s3 cp "$asset" "s3://artui-releases/latest/${asset}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+          done
+          echo "Uploaded artui $TAG to R2."
+
       - name: Publish release with assets
         uses: softprops/action-gh-release@v2
         with:

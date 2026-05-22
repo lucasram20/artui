@@ -153,6 +153,13 @@ async function resolveAssetUrl(
   version: string,
   asset: string,
 ): Promise<string> {
+  const r2Base = process.env.ARTUI_MIRROR_BASE ?? "https://pub-artui-releases.r2.dev";
+  const r2Url = `${r2Base}/v${version}/${asset}`;
+  // Probe R2 first — public, zero-auth, also works while the source repo is private.
+  if (await mirrorHasAsset(r2Url)) {
+    return r2Url;
+  }
+
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
   if (!token) {
     return `https://github.com/${repo}/releases/download/v${version}/${asset}`;
@@ -197,6 +204,21 @@ async function resolveAssetUrl(
       },
     );
     req.on("error", reject);
+    req.end();
+  });
+}
+
+function mirrorHasAsset(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = request(url, { method: "HEAD" }, (res) => {
+      res.resume();
+      resolve((res.statusCode ?? 0) === 200);
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(2_500, () => {
+      req.destroy();
+      resolve(false);
+    });
     req.end();
   });
 }
