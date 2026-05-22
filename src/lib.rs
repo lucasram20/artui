@@ -112,7 +112,10 @@ pub async fn run() -> Result<()> {
     let mut effects: EffectManager<&'static str> = EffectManager::default();
     let mut last_frame = Instant::now();
     let mut was_streaming = false;
-    let mut mouse_capture_active = true;
+    // Tracks the live terminal state so we issue Enable/Disable only on
+    // transitions. Must match the actual mode set in `setup_terminal`,
+    // which leaves mouse capture OFF for native drag-select + copy.
+    let mut mouse_capture_active = false;
 
     let result = async {
         loop {
@@ -201,11 +204,15 @@ pub async fn run() -> Result<()> {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
+    // NOTE: mouse capture is intentionally NOT enabled at startup so the
+    // host terminal's native drag-select + clipboard copy works out of
+    // the box (matches Claude Code, Codex CLI, and pi). Users can enable
+    // in-app scroll-wheel handling via `/mouse`; the runtime then issues
+    // EnableMouseCapture on demand.
     execute!(
         stdout,
         EnterAlternateScreen,
         crossterm::event::EnableBracketedPaste,
-        crossterm::event::EnableMouseCapture
     )?;
     Terminal::new(CrosstermBackend::new(stdout)).map_err(Into::into)
 }

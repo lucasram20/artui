@@ -465,9 +465,11 @@ pub struct App {
     pub statusline_cursor: usize,
     pub statusline_enabled: [bool; StatusLineItem::ALL.len()],
     /// When true, artui captures mouse events for scroll/click handling.
-    /// When false, mouse events pass through to the host terminal so the
-    /// user can drag-select text and copy with the terminal's native
-    /// clipboard integration. Toggle via `/mouse` or `Ctrl+Shift+M`.
+    /// When false (default), mouse events pass through to the host
+    /// terminal so the user can drag-select text and copy with the
+    /// terminal's native clipboard integration — matching the default
+    /// behavior of Claude Code, Codex CLI, and pi. Toggle via `/mouse`
+    /// to enable in-app scroll wheel.
     pub mouse_capture: bool,
     pub git_branch_label: String,
     pub git_status_label: String,
@@ -535,7 +537,7 @@ impl App {
             statusline_open: false,
             statusline_cursor: 0,
             statusline_enabled: [true; StatusLineItem::ALL.len()],
-            mouse_capture: true,
+            mouse_capture: false,
             git_branch_label: git_branch().unwrap_or_else(|| "no-git".to_owned()),
             git_status_label: git_status_label().unwrap_or_else(|| "unknown".to_owned()),
             thinking_frame: 0,
