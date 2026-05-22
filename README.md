@@ -16,29 +16,31 @@ artui is designed around explicit tool use, bounded output, approvals, diffs, an
 
 ```bash
 # Linux / macOS — interactive, asks before installing
-curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
+curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
 
 # Linux / macOS — non-interactive (CI, scripts, opt-in upgrades)
-curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --yes
+curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex
+irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
 # Non-interactive PowerShell
-irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex -ArgumentList -Yes
+irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Yes
 ```
 
-The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads from GitHub Releases. Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — type `n` at the prompt to abort cleanly without downloading anything.
+Both the install scripts and the binary archives live on a public Cloudflare R2 bucket, so anyone can install zero-auth — no GitHub account, no PAT, regardless of whether the source repo is public or private. The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads.
+
+Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — type `n` at the prompt to abort cleanly without downloading anything.
 
 Pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.3.4 --yes
+curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.4 --yes
 ```
 
 Build from source instead:
 
 ```bash
-ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --yes
+ARTUI_FROM_SOURCE=1 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
 ```
 
 ### Install (npm)

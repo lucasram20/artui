@@ -182,7 +182,30 @@ jobs:
             aws s3 cp "$asset" "s3://artui-releases/latest/${asset}" \
               --endpoint-url "$R2_ENDPOINT" --no-progress
           done
-          echo "Uploaded artui $TAG to R2."
+          echo "Uploaded artui $TAG binaries to R2."
+
+      # Mirror the install scripts themselves so friends can fetch them
+      # via curl/PowerShell without hitting raw.githubusercontent.com
+      # (which 404s while the source repo is private).
+      - name: Upload install scripts to Cloudflare R2
+        if: ${{ env.HAS_R2 == 'true' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          set -e
+          # Always serve the latest scripts from /install.sh and /install.ps1
+          # so the canonical curl one-liner is stable across releases.
+          aws s3 cp scripts/install.sh "s3://artui-releases/install.sh" \
+            --endpoint-url "$R2_ENDPOINT" --content-type "text/x-shellscript" \
+            --cache-control "public, max-age=300" --no-progress
+          aws s3 cp scripts/install.ps1 "s3://artui-releases/install.ps1" \
+            --endpoint-url "$R2_ENDPOINT" --content-type "text/plain; charset=utf-8" \
+            --cache-control "public, max-age=300" --no-progress
+          echo "Uploaded install scripts to R2."
 
       - name: Publish release with assets
         uses: softprops/action-gh-release@v2
