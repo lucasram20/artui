@@ -2,6 +2,25 @@
 
 All notable changes to artui will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Install scripts now print the artui ASCII logo, ask for an interactive confirmation (skip with `--yes`, `-Yes`, `ARTUI_INSTALL_YES=1`, or `CI`), and animate progress while downloading. Bash uses `curl --progress-bar` plus a unicode braille spinner for extraction; PowerShell uses native `Write-Progress`.
+- Rewrote the npm wrapper in TypeScript with an [`ink`](https://github.com/vadimdemedes/ink) postinstall UI (the same React-for-CLI framework Claude Code uses): renders the logo, a step list, a download progress bar, and a final success/error frame. Falls back to plain console logging in CI / non-TTY contexts.
+- Added abort paths to every install surface:
+  - bash/PowerShell prompts default to "yes" but accept `n` to bail without downloading.
+  - `npm install -g artui --abort` (or `--no-install` / `--skip-binary`) installs the wrapper but skips the binary download; rebuild later with `npm rebuild artui`.
+- Added `.gitattributes` with linguist overrides so generated graphify HTML, docs HTML, lockfiles, and the npm `dist/` no longer skew the GitHub language bar.
+
+### Changed
+
+- `.gitignore` now excludes everything under `graphify-out/` (only `.gitkeep` is preserved). Existing `graphify-out/{graph,callflow}.html` were untracked from git so the language bar shows Rust as the dominant language.
+
+### Removed
+
+- Deleted the JavaScript versions of the npm postinstall (`npm/scripts/postinstall.js`) and CLI launcher (`npm/bin/artui.js`); replaced by `npm/src/{cli,postinstall,install,ui}.ts(x)` compiled to `npm/dist/`.
+
 ## 2026-05-22
 
 ### Added

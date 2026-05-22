@@ -8,17 +8,22 @@
     "type": "git",
     "url": "git+https://github.com/lucasram20/artui.git"
   },
+  "type": "module",
   "bin": {
-    "artui": "bin/artui.js",
-    "art": "bin/artui.js"
+    "artui": "dist/cli.js",
+    "art": "dist/cli.js"
   },
   "files": [
-    "bin",
-    "scripts",
+    "dist",
     "README.md"
   ],
   "scripts": {
-    "postinstall": "node scripts/postinstall.js"
+    "build": "tsc -p tsconfig.json",
+    "build:bun": "bun build src/cli.ts src/postinstall.ts --target=node --outdir=dist --format=esm",
+    "postinstall": "node dist/postinstall.js",
+    "prepack": "npm run build",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
   },
   "engines": {
     "node": ">=18"
@@ -31,5 +36,14 @@
   "cpu": [
     "x64",
     "arm64"
-  ]
+  ],
+  "dependencies": {
+    "ink": "^5.1.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^18",
+    "typescript": "^5.6"
+  }
 }

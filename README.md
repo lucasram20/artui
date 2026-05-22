@@ -15,36 +15,42 @@ artui is designed around explicit tool use, bounded output, approvals, diffs, an
 ### Install (prebuilt binary)
 
 ```bash
-# Linux / macOS
+# Linux / macOS — interactive, asks before installing
 curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
+
+# Linux / macOS — non-interactive (CI, scripts, opt-in upgrades)
+curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --yes
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex
+# Non-interactive PowerShell
+irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex -ArgumentList -Yes
 ```
 
-The script detects your OS/arch (`x86_64` or `aarch64`), downloads the matching release archive from GitHub Releases, and installs the binary into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows).
+The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads from GitHub Releases. Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — set `ARTUI_INSTALL_YES=0`, hit `n` at the prompt, or just close the terminal to abort cleanly without downloading anything.
 
 Pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.0.1
+curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.0.1 --yes
 ```
 
 Build from source instead:
 
 ```bash
-ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
+ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --yes
 ```
 
 ### Install (npm)
 
 ```bash
-npm install -g artui
-# or one-off:
-npx artui
+npm install -g artui          # downloads the prebuilt binary on postinstall
+npm install -g artui --abort  # skip the download (just install the wrapper)
+ARTUI_SKIP_POSTINSTALL=1 npm install -g artui   # same, env-flavoured
+npx artui                     # one-off run
 ```
 
-The npm package downloads the matching native binary on `postinstall` (mirrors the `turbo` / `esbuild` pattern).
+The npm package's postinstall renders an [`ink`](https://github.com/vadimdemedes/ink)-driven progress UI on TTY (the same React-for-CLI library Claude Code uses) and falls back to plain logs in CI. The wrapper binary is the native artui release picked from GitHub Releases. Pass `--abort`/`--no-install`/`--skip-binary` to install the wrapper without fetching the binary; rebuild later with `npm rebuild artui`.
 
 ### Install (cargo, local checkout)
 

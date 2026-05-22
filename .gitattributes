@@ -1,0 +1,9 @@
+# GitHub Linguist overrides — fix the language bar on the repo page so
+# generated HTML/JS reports do not dwarf the actual Rust source.
+graphify-out/**         linguist-generated=true
+**/graphify-out/**      linguist-generated=true
+docs/**                 linguist-documentation=true
+docs/**/*.html          linguist-generated=true
+scripts/**              linguist-vendored=true
+npm/dist/**             linguist-generated=true
+**/*.lock               linguist-generated=true

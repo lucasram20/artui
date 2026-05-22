@@ -31,11 +31,17 @@ Thumbs.db
 .pi/*
 !.pi/README.md
 
-# Graphify outputs: keep only HTML visualizations (root + nested)
+# Graphify outputs: ignore everything except a safe placeholder.
+# Avoids HTML/cache dumps polluting GitHub's language stats.
 **/graphify-out/*
-!**/graphify-out/*.html
+!**/graphify-out/.gitkeep
 
 graphify-out/cache/
 graphify-out/.graphify_python
 graphify-out/.graphify_root
 graphify-out/cost.json
+
+# npm wrapper build artifacts
+npm/dist/
+npm/node_modules/
+npm/vendor/
