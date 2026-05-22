@@ -1,9 +1,19 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Triggered when semantic-release publishes a GitHub Release. Using
+  # `release: published` instead of `push: tags` is the documented
+  # workaround for GitHub's "workflows authed with the default
+  # GITHUB_TOKEN cannot trigger other workflows" rule, which was why
+  # tag pushes from semantic-release.yml never fired this workflow.
+  release:
+    types: [published]
+  # Manual fallback for re-running the build for an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.2.0)"
+        required: true
 
 permissions:
   contents: write
@@ -38,6 +48,22 @@ jobs:
             cargo_flags: --target aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
+        with:
+          # release: published sets GITHUB_REF to the tag automatically.
+          # workflow_dispatch needs an explicit ref so the matrix builds
+          # the right tagged source tree.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+            echo "name=$tag" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -60,7 +86,8 @@ jobs:
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
-          version="${GITHUB_REF#refs/tags/v}"
+          version="${{ steps.tag.outputs.name }}"
+          version="${version#v}"
           name="artui-${version}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
           cp "target/${{ matrix.target }}/release/artui" "dist/${name}/artui"
@@ -72,7 +99,7 @@ jobs:
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          $version = "$env:GITHUB_REF" -replace '^refs/tags/v',''
+          $version = "${{ steps.tag.outputs.name }}" -replace '^v',''
           $name = "artui-$version-${{ matrix.target }}"
           New-Item -ItemType Directory -Force "dist/$name" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/artui.exe" "dist/$name/artui.exe"
@@ -101,11 +128,15 @@ jobs:
           cd dist
           ls
           sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256 || true
-      - name: Create release
+      - name: Upload assets to existing release
         uses: softprops/action-gh-release@v2
         with:
+          # Attach the binaries to the release semantic-release already
+          # created (release: published path). For workflow_dispatch, pin
+          # to the supplied tag.
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
           files: |
             dist/artui-*.tar.gz
             dist/artui-*.zip
             dist/checksums.sha256
-          generate_release_notes: true
+          fail_on_unmatched_files: false
