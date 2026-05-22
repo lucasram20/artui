@@ -425,8 +425,7 @@ impl CliArgs {
         if let Some(id) = &self.copilot_client_id_override {
             config.providers.copilot.github_oauth_client_id = id.clone();
         } else if self.copilot_vscode_compat {
-            config.providers.copilot.github_oauth_client_id =
-                COPILOT_VSCODE_CLIENT_ID.to_owned();
+            config.providers.copilot.github_oauth_client_id = COPILOT_VSCODE_CLIENT_ID.to_owned();
         }
     }
 }

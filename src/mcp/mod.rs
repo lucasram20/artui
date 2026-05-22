@@ -90,7 +90,12 @@ pub fn load_mcp_config(workspace_root: &Path) -> McpConfig {
 
 fn user_config_path() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config").join("artui").join("mcp.json"))
+    Some(
+        PathBuf::from(home)
+            .join(".config")
+            .join("artui")
+            .join("mcp.json"),
+    )
 }
 
 fn read_config_file(path: &Path) -> Option<McpConfig> {
@@ -361,7 +366,12 @@ pub struct McpTool {
 }
 
 impl McpTool {
-    pub fn new(spec: ToolSpec, remote_name: String, client: Arc<McpClient>, server_id: String) -> Self {
+    pub fn new(
+        spec: ToolSpec,
+        remote_name: String,
+        client: Arc<McpClient>,
+        server_id: String,
+    ) -> Self {
         Self {
             spec,
             remote_name,
@@ -491,7 +501,10 @@ mod tests {
         let cfg: McpConfig = serde_json::from_str(raw).unwrap();
         assert_eq!(cfg.servers.len(), 1);
         let server = cfg.servers.get("fs").unwrap();
-        assert_eq!(server.command, vec!["npx", "-y", "@modelcontextprotocol/server-fs"]);
+        assert_eq!(
+            server.command,
+            vec!["npx", "-y", "@modelcontextprotocol/server-fs"]
+        );
         assert!(server.enabled);
     }
 

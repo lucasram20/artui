@@ -16,10 +16,7 @@ use crate::auth::AuthStore;
 pub fn known_env_keys(provider_id: &str) -> &'static [&'static str] {
     match provider_id {
         // Pi precedence: OAuth before plain key.
-        "openai_compat" | "openai" => &[
-            "OPENAI_OAUTH_TOKEN",
-            "OPENAI_API_KEY",
-        ],
+        "openai_compat" | "openai" => &["OPENAI_OAUTH_TOKEN", "OPENAI_API_KEY"],
         "anthropic" => &["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
         "openai_account" => &["OPENAI_OAUTH_TOKEN"],
         // GitHub Copilot tokens are handled separately via copilot.rs because

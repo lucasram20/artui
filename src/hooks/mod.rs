@@ -96,7 +96,12 @@ fn user_hook_path() -> Option<PathBuf> {
         }
     }
     let home = std::env::var("HOME").ok().filter(|h| !h.is_empty())?;
-    Some(PathBuf::from(home).join(".config").join("artui").join("hooks.json"))
+    Some(
+        PathBuf::from(home)
+            .join(".config")
+            .join("artui")
+            .join("hooks.json"),
+    )
 }
 
 fn read_hook_file(path: &Path) -> Option<HookConfig> {
@@ -107,12 +112,7 @@ fn read_hook_file(path: &Path) -> Option<HookConfig> {
 /// Run every hook attached to `event` whose matcher accepts `target`.
 /// `target` is typically a tool name (`shell`, `apply_patch`, …) or a
 /// short label like `done`. Failures are logged via `tracing::warn` only.
-pub async fn fire_hooks(
-    cfg: &HookConfig,
-    event: HookEvent,
-    target: &str,
-    workspace_root: &Path,
-) {
+pub async fn fire_hooks(cfg: &HookConfig, event: HookEvent, target: &str, workspace_root: &Path) {
     let Some(entries) = cfg.hooks.get(&event) else {
         return;
     };
@@ -123,7 +123,10 @@ pub async fn fire_hooks(
         if !matches(&entry.matcher, target) {
             continue;
         }
-        let cwd = entry.cwd.clone().unwrap_or_else(|| workspace_root.to_path_buf());
+        let cwd = entry
+            .cwd
+            .clone()
+            .unwrap_or_else(|| workspace_root.to_path_buf());
         let dur = Duration::from_millis(entry.timeout_ms.unwrap_or(5_000));
 
         #[cfg(windows)]

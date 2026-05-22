@@ -97,10 +97,7 @@ fn tools_section(tool_names: &[String]) -> String {
     let mut sorted = tool_names.to_vec();
     sorted.sort();
     sorted.dedup();
-    format!(
-        "## Tools available\n- {}",
-        sorted.join("\n- ")
-    )
+    format!("## Tools available\n- {}", sorted.join("\n- "))
 }
 
 fn safety_section() -> &'static str {
@@ -352,7 +349,11 @@ mod tests {
 
     #[test]
     fn tools_section_dedupes_and_sorts() {
-        let names = vec!["search".to_owned(), "read_file".to_owned(), "search".to_owned()];
+        let names = vec![
+            "search".to_owned(),
+            "read_file".to_owned(),
+            "search".to_owned(),
+        ];
         let section = tools_section(&names);
         // alphabetical, deduped
         let expected = "## Tools available\n- read_file\n- search";

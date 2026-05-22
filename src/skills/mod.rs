@@ -137,7 +137,12 @@ fn user_skill_dir() -> Option<PathBuf> {
         }
     }
     let home = std::env::var("HOME").ok().filter(|h| !h.is_empty())?;
-    Some(PathBuf::from(home).join(".config").join("artui").join("skills"))
+    Some(
+        PathBuf::from(home)
+            .join(".config")
+            .join("artui")
+            .join("skills"),
+    )
 }
 
 fn read_toml_skill(path: &Path) -> Option<Skill> {
@@ -230,8 +235,7 @@ fn read_markdown_skill(path: &Path) -> Option<Skill> {
                 .and_then(|p| p.file_name())
                 .map(|s| s.to_string_lossy().to_string())
         } else {
-            path.file_stem()
-                .map(|s| s.to_string_lossy().to_string())
+            path.file_stem().map(|s| s.to_string_lossy().to_string())
         };
         let fallback = fallback.unwrap_or_default();
         if fallback.is_empty() {

@@ -469,9 +469,7 @@ impl App {
                 &std::env::current_dir().unwrap_or_default(),
             ),
             active_skill: None,
-            hooks: crate::hooks::load_hook_config(
-                &std::env::current_dir().unwrap_or_default(),
-            ),
+            hooks: crate::hooks::load_hook_config(&std::env::current_dir().unwrap_or_default()),
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -1510,8 +1508,10 @@ impl App {
             }
             "/system" => {
                 let prompt = self.system_prompt();
-                self.transcript
-                    .push(Message::new(Role::Assistant, format!("# System prompt\n\n{prompt}")));
+                self.transcript.push(Message::new(
+                    Role::Assistant,
+                    format!("# System prompt\n\n{prompt}"),
+                ));
                 self.mode = UiMode::Input;
                 SlashCommandResult::Handled(None)
             }
@@ -1573,7 +1573,10 @@ impl App {
                         ));
                     }
                     lines.push("".to_owned());
-                    lines.push("Use `/skill use <name>` to activate, `/skill clear` to deactivate.".to_owned());
+                    lines.push(
+                        "Use `/skill use <name>` to activate, `/skill clear` to deactivate."
+                            .to_owned(),
+                    );
                 }
                 self.transcript
                     .push(Message::new(Role::Assistant, lines.join("\n")));
@@ -1594,7 +1597,9 @@ impl App {
                 } else {
                     self.transcript.push(Message::new(
                         Role::Assistant,
-                        format!("No skill named `{name}`. Use `/skill list` to see available skills."),
+                        format!(
+                            "No skill named `{name}`. Use `/skill list` to see available skills."
+                        ),
                     ));
                 }
                 self.mode = UiMode::Input;

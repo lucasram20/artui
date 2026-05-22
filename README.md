@@ -131,6 +131,24 @@ github_login_timeout_secs = 900
 
 Then run `/login` inside artui and choose GitHub Copilot. The GitHub device-code and token URLs default to GitHub's official OAuth endpoints and can be overridden if needed. Tokens are stored in the platform data directory auth store unless `auth_storage_path` is configured. After login, artui exchanges the GitHub token for a Copilot session token when possible, fetches available Copilot models, and shows them under a GitHub Copilot section in `/model`.
 
+## Releases
+
+Releases are fully automated by [`semantic-release`](https://github.com/semantic-release/semantic-release) running in `.github/workflows/semantic-release.yml`. Every push to `main` is analyzed against [Conventional Commits](https://www.conventionalcommits.org/) and:
+
+1. Computes the next semver bump (`fix:` → patch, `feat:` → minor, `BREAKING CHANGE:` → major).
+2. Updates `Cargo.toml` and `docs/changelogs/CHANGELOG.md`.
+3. Creates a git tag (`vX.Y.Z`) and pushes it back via the `github-actions[bot]`.
+4. The tag triggers `release.yml`, which cross-compiles binaries for Linux, macOS, and Windows (`x86_64` + `aarch64`) and uploads them to the GitHub Release with checksums.
+
+Use Conventional Commits when you push to `main`:
+
+```
+feat: add /skill picker
+fix: handle empty oauth response from copilot
+feat!: rename ProviderRequest fields  # major bump (BREAKING CHANGE)
+chore: bump tachyonfx                 # no release
+```
+
 ## Documentation
 
 - [v1 Agentic Spec](docs/spec/artui_v1_agentic_spec.md)
