@@ -1,19 +1,19 @@
 name: Release
 
 on:
-  # Direct trigger when a release is published manually via the GitHub UI
-  # or by a PAT-authed publisher (semantic-release with $GH_PAT).
-  release:
-    types: [published]
+  # Triggered when you push a manual tag from your local CLI:
+  #   git tag v0.3.5 && git push origin v0.3.5
+  # Manual tag pushes are NOT subject to GitHub's
+  # "default GITHUB_TOKEN cannot trigger other workflows" rule, since
+  # they originate from a real user push, not from another workflow.
+  push:
+    tags:
+      - 'v*'
   # Manual fallback for re-running the build for an existing tag.
-  # Also used by .github/workflows/semantic-release.yml after it ships
-  # a new release, since the default GITHUB_TOKEN cannot trigger other
-  # workflows on its own — semantic-release.yml runs `gh workflow run`
-  # explicitly to launch us.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build (e.g. v0.2.0)"
+        description: "Existing tag to build (e.g. v0.3.5)"
         required: true
 
 permissions:
@@ -129,13 +129,14 @@ jobs:
           cd dist
           ls
           sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256 || true
-      - name: Upload assets to existing release
+      - name: Publish release with assets
         uses: softprops/action-gh-release@v2
         with:
-          # Attach the binaries to the release semantic-release already
-          # created (release: published path). For workflow_dispatch, pin
-          # to the supplied tag.
-          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          # Tag pushed manually from local CLI (push: tags) sets
+          # github.ref to the tag; workflow_dispatch supplies it via input.
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: artui ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
           files: |
             dist/artui-*.tar.gz
             dist/artui-*.zip

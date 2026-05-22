@@ -171,21 +171,29 @@ Then run `/login` inside artui and choose GitHub Copilot. The GitHub device-code
 
 ## Releases
 
-Releases are fully automated by [`semantic-release`](https://github.com/semantic-release/semantic-release) running in `.github/workflows/semantic-release.yml`. Every push to `main` is analyzed against [Conventional Commits](https://www.conventionalcommits.org/) and:
+Releases are tag-driven — no automation pushes a release on every commit. When you're ready to ship a new version:
 
-1. Computes the next semver bump (`fix:` → patch, `feat:` → minor, `BREAKING CHANGE:` → major).
-2. Updates `Cargo.toml` and `docs/changelogs/CHANGELOG.md`.
-3. Creates a git tag (`vX.Y.Z`) and pushes it back via the `github-actions[bot]`.
-4. The tag triggers `release.yml`, which cross-compiles binaries for Linux, macOS, and Windows (`x86_64` + `aarch64`) and uploads them to the GitHub Release with checksums.
+```bash
+# Bump versions in lockstep
+sed -i 's/^version = ".*"/version = "0.4.0"/' Cargo.toml
+(cd npm && npm version --no-git-tag-version 0.4.0)
+cargo update -p artui --offline
 
-Use Conventional Commits when you push to `main`:
-
+# Commit, tag, push
+git commit -am "chore(release): 0.4.0"
+git tag v0.4.0
+git push origin main --tags
 ```
-feat: add /skill picker
-fix: handle empty oauth response from copilot
-feat!: rename ProviderRequest fields  # major bump (BREAKING CHANGE)
-chore: bump tachyonfx                 # no release
+
+`.github/workflows/release.yml` fires on the tag push, cross-compiles for Linux/macOS/Windows × `x86_64`/`aarch64`, and publishes a GitHub Release with checksums.
+
+If a build fails (or you bumped versions but forgot to push the tag), trigger the workflow manually:
+
+```bash
+gh workflow run release.yml -f tag=v0.4.0
 ```
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) in your day-to-day commits if you like (`feat:`, `fix:`, `chore:`); they don't auto-trigger anything but they keep the changelog tidy and make it easy to decide the next semver bump by hand.
 
 ## Auto-update
 
