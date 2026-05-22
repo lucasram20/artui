@@ -9,7 +9,7 @@ use ratatui::{
 use crate::{
     agent::PrimaryAgent,
     app::{App, StatusLineItem, ThemeId},
-    providers::registry::{AuthRequirement, PROVIDERS},
+    providers::registry::{AuthRequirement, LOGIN_PROVIDERS},
     ui::layout::theme,
 };
 
@@ -415,7 +415,7 @@ fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {
 }
 
 fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
-    let item_count = PROVIDERS.len() as u16;
+    let item_count = LOGIN_PROVIDERS.len() as u16;
     let area = selector_area(frame.area(), 82, item_count.saturating_add(8));
     render_popup_surface(frame, app, area);
 
@@ -456,7 +456,7 @@ fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
         rows[0],
     );
 
-    let items = PROVIDERS
+    let items = LOGIN_PROVIDERS
         .iter()
         .enumerate()
         .map(|(index, provider)| {
@@ -523,7 +523,7 @@ fn login_status_short(app: &App, provider_id: &str, is_connected: bool) -> Strin
 fn truncate_provider_name(name: &str) -> &str {
     match name {
         "OpenAI-compatible API" => "OpenAI-compat",
-        "OpenAI account" => "OpenAI",
+        "OpenAI Codex" => "OpenAI Codex",
         other => other,
     }
 }

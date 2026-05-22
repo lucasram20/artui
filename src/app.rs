@@ -10,7 +10,7 @@ use crate::{
     config::{AppConfig, CopilotConfig},
     providers::{
         build_provider,
-        registry::{self, AuthRequirement, PROVIDERS},
+        registry::{self, AuthRequirement, LOGIN_PROVIDERS, PROVIDERS},
         LlmProvider, ModelEvent, ModelRequest,
     },
 };
@@ -1210,20 +1210,20 @@ impl App {
         self.statusline_open = false;
         self.agent_picker_open = false;
         self.login_picker_open = true;
-        self.login_cursor = self.login_cursor.min(PROVIDERS.len().saturating_sub(1));
+        self.login_cursor = self.login_cursor.min(LOGIN_PROVIDERS.len().saturating_sub(1));
         self.mode = UiMode::Normal;
         self.status = "Select a provider to log in".to_owned();
     }
 
     pub fn next_login_provider(&mut self) {
         if self.login_picker_open {
-            self.login_cursor = (self.login_cursor + 1) % PROVIDERS.len();
+            self.login_cursor = (self.login_cursor + 1) % LOGIN_PROVIDERS.len();
         }
     }
 
     pub fn previous_login_provider(&mut self) {
         if self.login_picker_open {
-            self.login_cursor = (self.login_cursor + PROVIDERS.len() - 1) % PROVIDERS.len();
+            self.login_cursor = (self.login_cursor + LOGIN_PROVIDERS.len() - 1) % LOGIN_PROVIDERS.len();
         }
     }
 
@@ -1231,12 +1231,12 @@ impl App {
         if !self.login_picker_open {
             return None;
         }
-        let provider_id = PROVIDERS[self.login_cursor].id;
+        let provider_id = LOGIN_PROVIDERS[self.login_cursor].id;
         self.login_picker_open = false;
         self.mode = UiMode::Input;
         self.push_login_message(format!(
             "Selected {}.",
-            PROVIDERS[self.login_cursor].display_name
+            LOGIN_PROVIDERS[self.login_cursor].display_name
         ));
         self.login_provider(provider_id)
     }
@@ -2572,7 +2572,7 @@ fn provider_model_options(
         ),
         "openai_account" => unique_model_options(
             config.providers.openai_account.default_model.as_str(),
-            Vec::new(),
+            openai_codex_model_options(),
         ),
         _ => Vec::new(),
     }
@@ -2740,6 +2740,23 @@ fn ollama_model_options() -> Vec<String> {
         .filter(|model| !model.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+/// Curated default model list shown in `/model` under the OpenAI Codex
+/// section before the live ChatGPT-backed Responses API streamer ships.
+/// Mirrors the public Codex CLI defaults; users can override via
+/// `providers.openai_account.default_model` in `~/.config/artui/config.toml`.
+fn openai_codex_model_options() -> Vec<String> {
+    [
+        "gpt-5.4-codex",
+        "gpt-5.3-codex",
+        "gpt-5.2-codex",
+        "gpt-5.4-mini",
+        "gpt-5-mini",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
 }
 
 const CHAT_SCROLL_STEP: u16 = 3;
