@@ -403,6 +403,10 @@ pub enum AppRequest {
         copilot_config: Box<CopilotConfig>,
         store: AuthStore,
     },
+    OpenAiOAuthLogin {
+        config: crate::auth::OpenAiOAuthConfig,
+        store: AuthStore,
+    },
     RefreshCopilotModels {
         config: Box<CopilotConfig>,
         store: AuthStore,
@@ -1827,6 +1831,9 @@ impl App {
             AuthRequirement::Account if provider_id == "copilot" => {
                 self.login_copilot_device_flow()
             }
+            AuthRequirement::Account if provider_id == "openai_account" => {
+                self.login_openai_oauth_flow()
+            }
             AuthRequirement::Account => {
                 self.status = format!(
                     "{} login is not implemented until an official third-party OAuth flow is configured",
@@ -1836,6 +1843,19 @@ impl App {
                 None
             }
         }
+    }
+
+    fn login_openai_oauth_flow(&mut self) -> Option<AppRequest> {
+        let Some(store) = self.auth_store.clone() else {
+            self.status = "Auth store is unavailable on this platform".to_owned();
+            return None;
+        };
+        let cfg = openai_oauth_config(&self.config.providers.openai_account);
+        self.status = "Starting OpenAI ChatGPT login".to_owned();
+        self.push_login_message(
+            "Starting OpenAI ChatGPT sign-in. A browser tab should open; complete the login and return here.".to_owned(),
+        );
+        Some(AppRequest::OpenAiOAuthLogin { config: cfg, store })
     }
 
     fn login_copilot_device_flow(&mut self) -> Option<AppRequest> {
@@ -2430,6 +2450,38 @@ fn copilot_device_flow_config(config: &CopilotConfig) -> Result<GitHubDeviceFlow
         scope: config.github_oauth_scope.clone(),
         timeout_secs: config.github_login_timeout_secs.max(1),
     })
+}
+
+fn openai_oauth_config(
+    config: &crate::config::OpenAiAccountConfig,
+) -> crate::auth::OpenAiOAuthConfig {
+    let mut cfg = crate::auth::OpenAiOAuthConfig::default();
+    let trimmed_client = config.oauth_client_id.trim();
+    if !trimmed_client.is_empty() {
+        cfg.client_id = trimmed_client.to_owned();
+    } else if let Ok(env) = std::env::var("ARTUI_OPENAI_OAUTH_CLIENT_ID") {
+        if !env.trim().is_empty() {
+            cfg.client_id = env.trim().to_owned();
+        }
+    }
+    let trimmed_issuer = config.oauth_issuer.trim();
+    if !trimmed_issuer.is_empty() {
+        cfg.issuer = trimmed_issuer.to_owned();
+    }
+    let trimmed_scope = config.oauth_scope.trim();
+    if !trimmed_scope.is_empty() {
+        cfg.scope = trimmed_scope.to_owned();
+    }
+    if config.oauth_port != 0 {
+        cfg.port = config.oauth_port;
+    }
+    if config.oauth_fallback_port != 0 {
+        cfg.fallback_port = config.oauth_fallback_port;
+    }
+    if config.oauth_timeout_secs != 0 {
+        cfg.timeout_secs = config.oauth_timeout_secs;
+    }
+    cfg
 }
 
 trait EnvFallback {

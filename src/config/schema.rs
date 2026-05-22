@@ -196,11 +196,32 @@ impl Default for OpenAiCompatConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct OpenAiAccountConfig {
     pub base_url: String,
     pub default_model: String,
+    pub oauth_client_id: String,
+    pub oauth_issuer: String,
+    pub oauth_scope: String,
+    pub oauth_port: u16,
+    pub oauth_fallback_port: u16,
+    pub oauth_timeout_secs: u64,
+}
+
+impl Default for OpenAiAccountConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://chatgpt.com/backend-api/codex".to_owned(),
+            default_model: String::new(),
+            oauth_client_id: String::new(),
+            oauth_issuer: String::new(),
+            oauth_scope: String::new(),
+            oauth_port: 0,
+            oauth_fallback_port: 0,
+            oauth_timeout_secs: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
