@@ -21,6 +21,7 @@ M4–M7 are larger structural work. M8 is documentation and release polish.
 | 6 | M6 | [phase-m6-codebase-indexer.md](phase-m6-codebase-indexer.md) | Tree-sitter or BM25 index; search tool gains semantic mode | ~1500 LoC |
 | 7 | M7 | [phase-m7-deep-subagents.md](phase-m7-deep-subagents.md) | Depth-N subagent trees; per-branch context budgets | ~600 LoC |
 | 8 | M8 | [phase-m8-production-polish.md](phase-m8-production-polish.md) | Telemetry opt-in, crash reporter, docs site, accessibility | ~800 LoC |
+| 9 | M9 | [phase-m9-agent-browser-web-tool.md](phase-m9-agent-browser-web-tool.md) | Bundle Vercel agent-browser as a `web_*` tool family | ~600 LoC |
 
 ## Conventions
 
