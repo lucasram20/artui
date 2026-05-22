@@ -1,0 +1,68 @@
+# Dependabot — tuned for solo dev. Goal: catch real CVEs without
+# flooding the repo with weekly version-bump PRs.
+#
+# - schedule: monthly  → never daily / weekly noise
+# - open-pull-requests-limit: 3 → at most 3 open Dependabot PRs at a time
+# - groups: bundle related minor/patch updates into one PR each ecosystem
+# - ignore: skip devDeps and pre-release noise
+#
+# Security advisories (CVEs) still open PRs immediately regardless of
+# this schedule — that's the bit we want fast.
+
+version: 2
+updates:
+  # Rust crates
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "rust"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      rust-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Pre-release / nightly-only crates we pin manually.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # npm wrapper
+  - package-ecosystem: "npm"
+    directory: "/npm"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "npm"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # ink + react are pinned by hand; major bumps land manually.
+      - dependency-name: "ink"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions versions in workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+    open-pull-requests-limit: 1
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
