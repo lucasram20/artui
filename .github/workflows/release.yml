@@ -55,7 +55,7 @@ jobs:
             os: windows-2025-vs2026
             archive: zip
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           # release: published sets GITHUB_REF to the tag automatically.
           # workflow_dispatch needs an explicit ref so the matrix builds
@@ -116,7 +116,7 @@ jobs:
           Get-ChildItem dist
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: artui-${{ matrix.target }}
           path: dist/artui-*.${{ matrix.archive }}
@@ -127,8 +127,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -216,7 +216,7 @@ jobs:
           echo "Uploaded install scripts to R2."
 
       - name: Publish release with assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # Tag pushed manually from local CLI (push: tags) sets
           # github.ref to the tag; workflow_dispatch supplies it via input.
