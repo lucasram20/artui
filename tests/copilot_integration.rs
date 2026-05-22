@@ -68,6 +68,7 @@ fn copilot_config_for(server: &MockServer) -> CopilotConfig {
         github_token_env: Vec::new(),
         request_timeout_secs: 5,
         default_model: "gpt-4.1".to_owned(),
+        strict_picker: false,
     }
 }
 
@@ -148,6 +149,9 @@ fn provider_request(messages: Vec<Message>) -> ModelRequest {
 
 #[tokio::test]
 async fn fetch_models_filters_picker_disabled_and_policy_disabled() {
+    // Default (relaxed) mode: keep `model_picker_enabled = false` models,
+    // drop only those with `policy.state = "disabled"`. See
+    // `CopilotModel::is_selectable` for rationale.
     let server = MockServer::start().await;
     let (_guard, store) = temp_auth_store();
     seed_copilot_record(&store, "ghu_test_oauth_aaaaaaaa");
@@ -181,13 +185,59 @@ async fn fetch_models_filters_picker_disabled_and_policy_disabled() {
         models.iter().any(|m| m == "claude-sonnet-4"),
         "expected claude-sonnet-4 in {models:?}"
     );
+    // Default (relaxed) mode keeps `model_picker_enabled = false` models —
+    // student/free Copilot plans rely on this to surface the full callable set.
     assert!(
-        !models.iter().any(|m| m == "internal-hidden"),
-        "model_picker_enabled=false should be filtered out"
+        models.iter().any(|m| m == "internal-hidden"),
+        "relaxed mode should keep model_picker_enabled=false models, got {models:?}"
     );
     assert!(
         !models.iter().any(|m| m == "policy-disabled"),
-        "policy.state=disabled should be filtered out"
+        "policy.state=disabled should always be filtered out"
+    );
+}
+
+#[tokio::test]
+async fn fetch_models_strict_mode_filters_picker_disabled_models() {
+    let server = MockServer::start().await;
+    let (_guard, store) = temp_auth_store();
+    seed_copilot_record(&store, "ghu_test_oauth_strictpicker");
+
+    Mock::given(method("GET"))
+        .and(path("/copilot_internal/v2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(token_payload(
+            "tid=session_token_strict",
+            future_unix(1800),
+            &server.uri(),
+        )))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/models"))
+        .and(header(
+            "authorization",
+            "Bearer tid=session_token_strict",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(model_payload(Vec::new())))
+        .mount(&server)
+        .await;
+
+    let mut config = copilot_config_for(&server);
+    config.strict_picker = true;
+    let models = fetch_copilot_models(&config, &store).await.unwrap();
+
+    assert!(
+        models.iter().any(|m| m == "gpt-4.1"),
+        "expected gpt-4.1 in {models:?}"
+    );
+    assert!(
+        !models.iter().any(|m| m == "internal-hidden"),
+        "strict mode should drop model_picker_enabled=false models, got {models:?}"
+    );
+    assert!(
+        !models.iter().any(|m| m == "policy-disabled"),
+        "policy.state=disabled should be filtered out, got {models:?}"
     );
 }
 

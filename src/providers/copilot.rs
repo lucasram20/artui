@@ -625,7 +625,7 @@ async fn fetch_models_with_session(
         .data
         .into_iter()
         .chain(body.models)
-        .filter(|model| model.is_selectable())
+        .filter(|model| model.is_selectable(config.strict_picker))
         .filter_map(|mut model| {
             model.id = model.id.trim().to_owned();
             (!model.id.is_empty()).then_some(model)
@@ -1312,13 +1312,30 @@ struct CopilotModel {
 }
 
 impl CopilotModel {
-    fn is_selectable(&self) -> bool {
-        self.model_picker_enabled
-            && self
-                .policy
-                .as_ref()
-                .and_then(|policy| policy.state.as_deref())
-                != Some("disabled")
+    /// Returns true when the model is allowed in the picker.
+    ///
+    /// Default ("relaxed") behavior: only excludes models the account
+    /// has *explicitly* disabled via policy. The `model_picker_enabled`
+    /// flag returned by `api.githubcopilot.com/models` is gated by
+    /// per-plan rollout — student/free Copilot plans see this flag set
+    /// to `false` for many models even though they are callable, so
+    /// honoring it shrinks the picker compared to other Copilot
+    /// clients (e.g. pi, opencode) that ship a static bundled list.
+    ///
+    /// Strict mode (opt-in via `providers.copilot.strict_picker = true`)
+    /// also requires `model_picker_enabled = true`, matching the GitHub
+    /// VS Code Copilot Chat picker exactly.
+    fn is_selectable(&self, strict: bool) -> bool {
+        let policy_ok = self
+            .policy
+            .as_ref()
+            .and_then(|policy| policy.state.as_deref())
+            != Some("disabled");
+        if strict {
+            policy_ok && self.model_picker_enabled
+        } else {
+            policy_ok
+        }
     }
 
     fn api_kind(&self) -> CopilotApiKind {
@@ -1505,6 +1522,7 @@ mod tests {
 
     #[test]
     fn filters_disabled_copilot_picker_models() {
+        // Strict mode: model_picker_enabled gates selection.
         assert!(CopilotModel {
             id: "enabled".to_owned(),
             model_picker_enabled: true,
@@ -1512,7 +1530,7 @@ mod tests {
             policy: None,
             capabilities: None,
         }
-        .is_selectable());
+        .is_selectable(true));
         assert!(!CopilotModel {
             id: "hidden".to_owned(),
             model_picker_enabled: false,
@@ -1520,7 +1538,8 @@ mod tests {
             policy: None,
             capabilities: None,
         }
-        .is_selectable());
+        .is_selectable(true));
+        // Policy "disabled" excludes in both modes.
         assert!(!CopilotModel {
             id: "disabled".to_owned(),
             model_picker_enabled: true,
@@ -1530,7 +1549,32 @@ mod tests {
             }),
             capabilities: None,
         }
-        .is_selectable());
+        .is_selectable(true));
+        assert!(!CopilotModel {
+            id: "disabled".to_owned(),
+            model_picker_enabled: true,
+            supported_endpoints: Vec::new(),
+            policy: Some(CopilotModelPolicy {
+                state: Some("disabled".to_owned()),
+            }),
+            capabilities: None,
+        }
+        .is_selectable(false));
+    }
+
+    #[test]
+    fn relaxed_mode_includes_picker_disabled_models() {
+        // Default (relaxed) mode: ignore model_picker_enabled so
+        // student/free Copilot plans see the full callable model set.
+        let model = CopilotModel {
+            id: "gpt-4o".to_owned(),
+            model_picker_enabled: false,
+            supported_endpoints: Vec::new(),
+            policy: None,
+            capabilities: None,
+        };
+        assert!(model.is_selectable(false));
+        assert!(!model.is_selectable(true));
     }
 
     #[test]

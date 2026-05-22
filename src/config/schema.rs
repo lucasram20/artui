@@ -242,6 +242,12 @@ pub struct CopilotConfig {
     pub github_token_env: Vec<String>,
     pub request_timeout_secs: u64,
     pub default_model: String,
+    /// When true, only show models GitHub explicitly marks
+    /// `model_picker_enabled = true` (matches the VS Code Copilot Chat
+    /// picker). When false (default), show every model the account is
+    /// callable for and is not policy-disabled — student/free Copilot
+    /// plans surface far more models this way.
+    pub strict_picker: bool,
 }
 
 impl Default for CopilotConfig {
@@ -262,6 +268,7 @@ impl Default for CopilotConfig {
             github_token_env: vec!["GITHUB_TOKEN".to_owned(), "GH_TOKEN".to_owned()],
             request_timeout_secs: 30,
             default_model: String::new(),
+            strict_picker: false,
         }
     }
 }
