@@ -19,7 +19,7 @@ ASSUME_YES="${ARTUI_INSTALL_YES:-0}"
 # Public Cloudflare R2 mirror — primary download source. Lets users
 # without GitHub access (or while the source repo is private) install
 # without auth. Override with $ARTUI_MIRROR_BASE for self-hosted CDNs.
-R2_BASE="${ARTUI_MIRROR_BASE:-https://pub-artui-releases.r2.dev}"
+R2_BASE="${ARTUI_MIRROR_BASE:-https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev}"
 
 # Optional GitHub token for private-repo access. Friends granted
 # collaborator access can generate a fine-grained PAT (Contents: read,

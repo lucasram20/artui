@@ -153,7 +153,7 @@ async function resolveAssetUrl(
   version: string,
   asset: string,
 ): Promise<string> {
-  const r2Base = process.env.ARTUI_MIRROR_BASE ?? "https://pub-artui-releases.r2.dev";
+  const r2Base = process.env.ARTUI_MIRROR_BASE ?? "https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev";
   const r2Url = `${r2Base}/v${version}/${asset}`;
   // Probe R2 first — public, zero-auth, also works while the source repo is private.
   if (await mirrorHasAsset(r2Url)) {

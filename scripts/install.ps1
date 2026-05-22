@@ -18,7 +18,7 @@ $AssumeYes = $Yes -or ($env:ARTUI_INSTALL_YES -eq '1')
 
 # Public Cloudflare R2 mirror — primary download source. Lets users
 # without GitHub access install zero-auth.
-$R2Base = if ($env:ARTUI_MIRROR_BASE) { $env:ARTUI_MIRROR_BASE } else { 'https://pub-artui-releases.r2.dev' }
+$R2Base = if ($env:ARTUI_MIRROR_BASE) { $env:ARTUI_MIRROR_BASE } else { 'https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev' }
 
 # Optional GitHub token for private-repo access.
 $Token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
