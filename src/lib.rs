@@ -661,6 +661,9 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                 crate::auth::run_github_device_login(config, *copilot_config, store, event_tx)
                     .await;
             }
+            AppRequest::OpenAiOAuthLogin { config, store } => {
+                crate::auth::run_openai_oauth_login(config, store, event_tx).await;
+            }
             AppRequest::RefreshCopilotModels { config, store } => {
                 let result = crate::providers::copilot::fetch_copilot_models(&config, &store)
                     .await
