@@ -20,6 +20,8 @@ pub enum UiMode {
     Normal,
     Input,
     Streaming,
+    /// Modal blocking on user approval for a tool call.
+    Approval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,6 +196,9 @@ pub enum AppEvent {
     Quote(Quote),
     OllamaContextWindow(usize),
     UpdateAvailable(crate::update::UpdateInfo),
+    /// Tool call needs interactive approval. Boxed because the prompt
+    /// owns a oneshot sender and would balloon the AppEvent enum size.
+    ApprovalRequest(Box<crate::permissions::ApprovalPrompt>),
 }
 
 #[derive(Debug)]
@@ -215,7 +220,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 13] = [
+pub const SLASH_COMMANDS: [SlashCommand; 14] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -255,6 +260,10 @@ pub const SLASH_COMMANDS: [SlashCommand; 13] = [
     SlashCommand {
         name: "/skill",
         description: "List, activate, or deactivate skills",
+    },
+    SlashCommand {
+        name: "/permissions",
+        description: "Show current permission policy and active overrides",
     },
     SlashCommand {
         name: "/clear",
@@ -350,6 +359,9 @@ pub struct ProviderRequest {
     pub compaction_keep_recent_tokens: u32,
     /// User-defined lifecycle hooks (cloned from App at request build time).
     pub hooks: crate::hooks::HookConfig,
+    /// Permission engine. Shared across requests so session-allow flags
+    /// stick.
+    pub permissions: std::sync::Arc<tokio::sync::Mutex<crate::permissions::PermissionEngine>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -414,6 +426,11 @@ pub struct App {
     pub active_skill: Option<String>,
     pub hooks: crate::hooks::HookConfig,
     pub update_info: Option<crate::update::UpdateInfo>,
+    /// Active approval modal — if `Some`, UI renders a prompt and intercepts
+    /// `a` (allow once), `s` (allow session), `d`/`Esc` (deny).
+    pub pending_approval: Option<crate::permissions::ApprovalPrompt>,
+    /// Permission engine — shared between turns so session-allow flags stick.
+    pub permissions: std::sync::Arc<tokio::sync::Mutex<crate::permissions::PermissionEngine>>,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -457,6 +474,12 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig, provider: Arc<dyn LlmProvider>) -> Self {
+        let permissions_engine = std::sync::Arc::new(tokio::sync::Mutex::new(
+            crate::permissions::PermissionEngine::with_overrides(
+                PrimaryAgent::Build,
+                &config.permissions.tools,
+            ),
+        ));
         let auth_store = AuthStore::from_config(&config);
         let model_options = available_model_options(&config, auth_store.as_ref());
         let now = Instant::now();
@@ -473,6 +496,8 @@ impl App {
             active_skill: None,
             hooks: crate::hooks::load_hook_config(&std::env::current_dir().unwrap_or_default()),
             update_info: None,
+            pending_approval: None,
+            permissions: permissions_engine,
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -754,6 +779,7 @@ impl App {
             compaction_reserve_tokens: self.config.agent.compaction_reserve_tokens,
             compaction_keep_recent_tokens: self.config.agent.compaction_keep_recent_tokens,
             hooks: self.hooks.clone(),
+            permissions: std::sync::Arc::clone(&self.permissions),
         }))
     }
 
@@ -960,7 +986,28 @@ impl App {
                 );
                 self.update_info = Some(info);
             }
+            AppEvent::ApprovalRequest(prompt) => {
+                self.pending_approval = Some(*prompt);
+                self.mode = UiMode::Approval;
+                self.status = "Awaiting approval (a/s/d)".to_owned();
+            }
         }
+    }
+
+    /// Answer the pending approval modal. No-op when no modal is open.
+    pub fn answer_approval(&mut self, answer: crate::permissions::ApprovalAnswer) {
+        let Some(prompt) = self.pending_approval.take() else {
+            return;
+        };
+        let _ = prompt.reply.send(answer);
+        self.mode = UiMode::Streaming;
+        self.status = match answer {
+            crate::permissions::ApprovalAnswer::Once => "Approved (once)".to_owned(),
+            crate::permissions::ApprovalAnswer::Session => {
+                format!("Approved {} for session", prompt.tool_name)
+            }
+            crate::permissions::ApprovalAnswer::Deny => "Denied".to_owned(),
+        };
     }
 
     pub fn cancel_input(&mut self) {
@@ -1596,6 +1643,41 @@ impl App {
             "/skill clear" => {
                 self.active_skill = None;
                 self.status = "Skill overlay cleared".to_owned();
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/permissions" | "/perm" => {
+                let mut lines = vec!["# Permissions".to_owned()];
+                lines.push(format!("- Active agent: **{}**", self.active_agent.name()));
+                let overrides = &self.config.permissions.tools;
+                let strict = overrides
+                    .get("apply_patch")
+                    .map(|s| s == "ask")
+                    .unwrap_or(false);
+                let mode = if strict {
+                    "strict (Claude Code style — Ask before each write)"
+                } else {
+                    "default (pi-coding-agent style — auto-allow writes in Build, deny in Plan)"
+                };
+                lines.push(format!("- Policy: **{mode}**"));
+                if !overrides.is_empty() {
+                    lines.push("".to_owned());
+                    lines.push("## `[permissions.tools]` overrides".to_owned());
+                    let mut keys: Vec<_> = overrides.keys().collect();
+                    keys.sort();
+                    for key in keys {
+                        let value = overrides.get(key).map(String::as_str).unwrap_or("?");
+                        lines.push(format!("- `{key}` = `{value}`"));
+                    }
+                }
+                lines.push("".to_owned());
+                lines.push(
+                    "Run `artui --strict-permissions` to opt into per-write approval prompts, \
+                     or set `[permissions.tools]` in `~/.config/artui/config.toml`."
+                        .to_owned(),
+                );
+                self.transcript
+                    .push(Message::new(Role::Assistant, lines.join("\n")));
                 self.mode = UiMode::Input;
                 SlashCommandResult::Handled(None)
             }

@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::agent::compaction;
 use crate::app::{AppEvent, AuthEvent, Message, Role};
 use crate::hooks::{fire_hooks, HookConfig, HookEvent};
+use crate::permissions::{ApprovalAnswer, ApprovalPrompt, PermissionDecision, PermissionEngine};
 use crate::providers::{LlmProvider, ModelEvent, ModelRequest, ToolCall};
 use crate::tools::registry::ToolRegistry;
 use crate::tools::{ToolContext, ToolResult};
@@ -32,6 +33,11 @@ pub struct AgentLoopConfig {
     pub compaction_keep_recent_tokens: u32,
     /// User-defined lifecycle hooks (empty = no-op).
     pub hooks: HookConfig,
+    /// Permission engine — classifies tool calls. When `None`, all tools
+    /// auto-allow (legacy behaviour for tests). Wrapped in `Arc<Mutex<…>>`
+    /// because the loop needs to flip session-allow flags after the user
+    /// answers an approval modal.
+    pub permissions: Option<std::sync::Arc<tokio::sync::Mutex<PermissionEngine>>>,
 }
 
 impl Default for AgentLoopConfig {
@@ -45,6 +51,7 @@ impl Default for AgentLoopConfig {
             compaction_reserve_tokens: 20_000,
             compaction_keep_recent_tokens: 8_000,
             hooks: HookConfig::default(),
+            permissions: None,
         }
     }
 }
@@ -235,14 +242,6 @@ pub async fn run_turn(
                 return extra_messages;
             }
 
-            let ctx = ToolContext {
-                call_id: call.id.clone(),
-                workspace_root: config.workspace_root.clone(),
-                cwd: config.workspace_root.clone(),
-                events: event_tx.clone(),
-                max_read_file_chars: config.max_read_file_chars,
-            };
-
             fire_hooks(
                 &config.hooks,
                 HookEvent::PreToolUse,
@@ -251,7 +250,87 @@ pub async fn run_turn(
             )
             .await;
 
-            let result = registry.dispatch(call, ctx).await;
+            // ── Permission gate ─────────────────────────────────────
+            // Classify the tool call, render an Approval modal when the
+            // engine says Ask, deny outright when it says Deny. Allow
+            // falls through to dispatch as before.
+            let decision = match &config.permissions {
+                Some(engine) => engine.lock().await.classify(call),
+                None => PermissionDecision::Allow,
+            };
+            let result = match decision {
+                PermissionDecision::Deny => {
+                    let msg = format!(
+                        "denied_by_policy: tool '{}' is not allowed in the current agent mode",
+                        call.name
+                    );
+                    let _ = event_tx
+                        .send(AppEvent::Model(ModelEvent::TextDelta(format!(
+                            "\n⛔ {msg}\n"
+                        ))))
+                        .await;
+                    ToolResult::error(call.id.clone(), msg)
+                }
+                PermissionDecision::Ask => {
+                    let (tx_answer, rx_answer) = tokio::sync::oneshot::channel();
+                    let prompt = ApprovalPrompt {
+                        call_id: call.id.clone(),
+                        tool_name: call.name.clone(),
+                        title: format!(
+                            "Allow {} to run? (a once / s session / d deny)",
+                            call.name
+                        ),
+                        body: render_approval_body(&call.name, &call.arguments),
+                        reply: tx_answer,
+                    };
+                    let _ = event_tx
+                        .send(AppEvent::ApprovalRequest(Box::new(prompt)))
+                        .await;
+                    let answer = tokio::select! {
+                        ans = rx_answer => ans.unwrap_or(ApprovalAnswer::Deny),
+                        _ = cancel.cancelled() => ApprovalAnswer::Deny,
+                    };
+                    match answer {
+                        ApprovalAnswer::Deny => ToolResult::error(
+                            call.id.clone(),
+                            "denied_by_user".to_owned(),
+                        ),
+                        ApprovalAnswer::Once => {
+                            let ctx = ToolContext {
+                                call_id: call.id.clone(),
+                                workspace_root: config.workspace_root.clone(),
+                                cwd: config.workspace_root.clone(),
+                                events: event_tx.clone(),
+                                max_read_file_chars: config.max_read_file_chars,
+                            };
+                            registry.dispatch(call, ctx).await
+                        }
+                        ApprovalAnswer::Session => {
+                            if let Some(engine) = &config.permissions {
+                                engine.lock().await.approve_for_session(&call.name);
+                            }
+                            let ctx = ToolContext {
+                                call_id: call.id.clone(),
+                                workspace_root: config.workspace_root.clone(),
+                                cwd: config.workspace_root.clone(),
+                                events: event_tx.clone(),
+                                max_read_file_chars: config.max_read_file_chars,
+                            };
+                            registry.dispatch(call, ctx).await
+                        }
+                    }
+                }
+                PermissionDecision::Allow => {
+                    let ctx = ToolContext {
+                        call_id: call.id.clone(),
+                        workspace_root: config.workspace_root.clone(),
+                        cwd: config.workspace_root.clone(),
+                        events: event_tx.clone(),
+                        max_read_file_chars: config.max_read_file_chars,
+                    };
+                    registry.dispatch(call, ctx).await
+                }
+            };
 
             fire_hooks(
                 &config.hooks,
@@ -318,5 +397,35 @@ fn format_tool_result(tool_name: &str, result: &ToolResult) -> String {
                 format!("{}...", &content[..DEFAULT_PREVIEW_LEN])
             };
         format!("\n📄 {tool_name}:\n{preview}\n")
+    }
+}
+
+/// Render a tool call as a human-readable body for the Approval modal.
+///
+/// `apply_patch` gets the raw V4A patch (already the user-facing diff).
+/// `shell` gets the command + cwd. Everything else falls back to a
+/// pretty-printed JSON dump of arguments.
+fn render_approval_body(tool_name: &str, args: &serde_json::Value) -> String {
+    match tool_name {
+        "apply_patch" => args
+            .get("patch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no patch payload)")
+            .to_owned(),
+        "shell" => {
+            let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
+            let cwd = args
+                .get("cwd")
+                .and_then(|v| v.as_str())
+                .unwrap_or(".")
+                .to_owned();
+            let reason = args
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .map(|r| format!("\nreason: {r}"))
+                .unwrap_or_default();
+            format!("$ {cmd}\ncwd: {cwd}{reason}")
+        }
+        _ => serde_json::to_string_pretty(args).unwrap_or_else(|_| args.to_string()),
     }
 }

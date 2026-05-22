@@ -17,6 +17,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, area: Rect) {
         UiMode::Streaming => palette.accent,
         UiMode::Input => palette.green,
         UiMode::Normal => palette.muted,
+        UiMode::Approval => palette.yellow,
     };
 
     let lines = vec![
