@@ -67,7 +67,28 @@ pub const PROVIDERS: [ProviderMetadata; 4] = [
     },
     ProviderMetadata {
         id: "openai_account",
-        display_name: "OpenAI account",
+        display_name: "OpenAI Codex",
+        auth_requirement: AuthRequirement::Account,
+        model_list_strategy: ModelListStrategy::ProviderEndpoint,
+        streaming: false,
+    },
+];
+
+/// Subset of `PROVIDERS` shown in the `/login` picker. Only providers that
+/// require an interactive account login appear here — Ollama runs locally
+/// and `openai_compat` resolves credentials from environment variables, so
+/// neither has a meaningful login flow to surface.
+pub const LOGIN_PROVIDERS: [ProviderMetadata; 2] = [
+    ProviderMetadata {
+        id: "copilot",
+        display_name: "GitHub Copilot",
+        auth_requirement: AuthRequirement::Account,
+        model_list_strategy: ModelListStrategy::ProviderEndpoint,
+        streaming: true,
+    },
+    ProviderMetadata {
+        id: "openai_account",
+        display_name: "OpenAI Codex",
         auth_requirement: AuthRequirement::Account,
         model_list_strategy: ModelListStrategy::ProviderEndpoint,
         streaming: false,
