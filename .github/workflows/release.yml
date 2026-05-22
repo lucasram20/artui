@@ -19,10 +19,14 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -41,12 +45,11 @@ jobs:
             os: macos-14
             archive: tar.gz
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025
             archive: zip
           - target: aarch64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025
             archive: zip
-            cargo_flags: --target aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,6 +121,7 @@ jobs:
     name: Publish GitHub release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
