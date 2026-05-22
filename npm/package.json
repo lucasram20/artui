@@ -1,6 +1,6 @@
 {
   "name": "artui-cli",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Interactive coding-agent CLI written in Rust. This npm package downloads the matching prebuilt binary on install.",
   "license": "MIT",
   "homepage": "https://github.com/lucasram20/artui",
