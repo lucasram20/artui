@@ -1,7 +1,12 @@
 //! Permission engine — classifies tool calls as Allow/Ask/Deny.
 //!
-//! Read-only tools are auto-allowed. Write tools require Ask (Build mode)
-//! or are Denied (Plan mode).
+//! Read-only tools are auto-allowed. Write tools default to Ask in Build mode
+//! and Deny in Plan mode. Per-tool overrides (`allow` / `ask` / `deny`) come
+//! from the `[permissions]` config table.
+
+use std::collections::HashMap;
+
+use tokio::sync::oneshot;
 
 use crate::agent::PrimaryAgent;
 use crate::providers::ToolCall;
@@ -17,6 +22,17 @@ pub enum PermissionDecision {
     Deny,
 }
 
+impl PermissionDecision {
+    fn from_label(label: &str) -> Option<Self> {
+        match label.trim().to_ascii_lowercase().as_str() {
+            "allow" => Some(Self::Allow),
+            "ask" => Some(Self::Ask),
+            "deny" => Some(Self::Deny),
+            _ => None,
+        }
+    }
+}
+
 /// Tools that are always read-only (allowed without asking).
 const READ_ONLY_TOOLS: &[&str] = &["read_file", "glob", "search"];
 
@@ -24,30 +40,72 @@ const READ_ONLY_TOOLS: &[&str] = &["read_file", "glob", "search"];
 const WRITE_TOOLS: &[&str] = &["apply_patch", "shell"];
 
 /// Classifies tool calls into permission decisions.
+#[derive(Debug, Clone)]
 pub struct PermissionEngine {
     agent: PrimaryAgent,
+    /// Per-tool override map (`tool_name` → label). Looked up before the
+    /// default agent/tool matrix. Populated from `[permissions]` config.
+    overrides: HashMap<String, PermissionDecision>,
+    /// Session-scope allowlist filled by "allow once / always allow" UI
+    /// answers — keyed by `tool_name` so subsequent calls of the same
+    /// tool short-circuit to Allow.
+    session_allow: HashMap<String, bool>,
 }
 
 impl PermissionEngine {
     pub fn new(agent: PrimaryAgent) -> Self {
-        Self { agent }
+        Self {
+            agent,
+            overrides: HashMap::new(),
+            session_allow: HashMap::new(),
+        }
     }
 
-    /// Classify a tool call based on agent mode and tool type.
+    /// Build with per-tool overrides parsed from `[permissions]`.
+    pub fn with_overrides(agent: PrimaryAgent, raw: &HashMap<String, String>) -> Self {
+        let mut overrides = HashMap::new();
+        for (k, v) in raw {
+            if let Some(decision) = PermissionDecision::from_label(v) {
+                overrides.insert(k.clone(), decision);
+            }
+        }
+        Self {
+            agent,
+            overrides,
+            session_allow: HashMap::new(),
+        }
+    }
+
+    /// Classify a tool call based on overrides + agent mode + tool type.
     pub fn classify(&self, call: &ToolCall) -> PermissionDecision {
+        // Session allowlist: user already approved this tool this session.
+        if self.session_allow.get(&call.name).copied().unwrap_or(false) {
+            return PermissionDecision::Allow;
+        }
+        // Explicit per-tool override always wins.
+        if let Some(decision) = self.overrides.get(&call.name).copied() {
+            return decision;
+        }
         // Read-only tools always allowed
         if READ_ONLY_TOOLS.contains(&call.name.as_str()) {
             return PermissionDecision::Allow;
         }
-
-        // Write tools: denied in Plan mode, Ask in Build mode
+        // Write tools: pi-coding-agent-style default — Build mode
+        // auto-allows, Plan still denies. Users who want a Claude
+        // Code-style "ask before each write" experience opt in via
+        // `[permissions.tools]` overrides:
+        //
+        //     [permissions.tools]
+        //     apply_patch = "ask"
+        //     shell       = "ask"
+        //
+        // Or pass `--strict-permissions` on the CLI.
         if WRITE_TOOLS.contains(&call.name.as_str()) {
             return match self.agent {
                 PrimaryAgent::Plan => PermissionDecision::Deny,
-                PrimaryAgent::Build => PermissionDecision::Allow, // Auto-allow in Build for v1
+                PrimaryAgent::Build => PermissionDecision::Allow,
             };
         }
-
         // Unknown tools: Ask
         PermissionDecision::Ask
     }
@@ -56,12 +114,43 @@ impl PermissionEngine {
     pub fn set_agent(&mut self, agent: PrimaryAgent) {
         self.agent = agent;
     }
+
+    /// Mark a tool as approved for the rest of the session.
+    pub fn approve_for_session(&mut self, tool_name: &str) {
+        self.session_allow.insert(tool_name.to_owned(), true);
+    }
 }
 
 impl Default for PermissionEngine {
     fn default() -> Self {
         Self::new(PrimaryAgent::Build)
     }
+}
+
+/// Sent to the UI when a tool call needs interactive approval. UI fills
+/// in `reply` with a yes/no/always answer; the agent loop blocks on it.
+#[derive(Debug)]
+pub struct ApprovalPrompt {
+    pub call_id: String,
+    pub tool_name: String,
+    /// One-line summary rendered as the modal title.
+    pub title: String,
+    /// Optional pre-formatted body (a unified diff for `apply_patch`,
+    /// the command line for `shell`, JSON args for unknown tools).
+    pub body: String,
+    /// Channel the UI uses to send the answer back. Replaced with `None`
+    /// once consumed.
+    pub reply: oneshot::Sender<ApprovalAnswer>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalAnswer {
+    /// Allow this single call only.
+    Once,
+    /// Allow this tool for the rest of the session.
+    Session,
+    /// Deny this call. Tool sees a `denied_by_user` result.
+    Deny,
 }
 
 #[cfg(test)]
@@ -85,7 +174,9 @@ mod tests {
     }
 
     #[test]
-    fn write_tools_allowed_in_build() {
+    fn write_tools_allow_in_build_default() {
+        // Pi-style default — agent has full write access in Build mode.
+        // Users opt into strict prompts via [permissions.tools] overrides.
         let engine = PermissionEngine::new(PrimaryAgent::Build);
         for name in WRITE_TOOLS {
             let call = ToolCall {
@@ -95,6 +186,19 @@ mod tests {
             };
             assert_eq!(engine.classify(&call), PermissionDecision::Allow);
         }
+    }
+
+    #[test]
+    fn ask_override_promotes_write_tool() {
+        let mut raw = HashMap::new();
+        raw.insert("apply_patch".to_owned(), "ask".to_owned());
+        let engine = PermissionEngine::with_overrides(PrimaryAgent::Build, &raw);
+        let call = ToolCall {
+            id: "c2b".to_owned(),
+            name: "apply_patch".to_owned(),
+            arguments: json!({}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Ask);
     }
 
     #[test]
@@ -119,5 +223,48 @@ mod tests {
             arguments: json!({}),
         };
         assert_eq!(engine.classify(&call), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn override_short_circuits_default() {
+        let mut raw = HashMap::new();
+        raw.insert("apply_patch".to_owned(), "allow".to_owned());
+        let engine = PermissionEngine::with_overrides(PrimaryAgent::Build, &raw);
+        let call = ToolCall {
+            id: "c5".to_owned(),
+            name: "apply_patch".to_owned(),
+            arguments: json!({}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn session_allow_persists_until_set_agent() {
+        // Default Build allows write tools; override via "ask" to test the
+        // path where session-allow short-circuits the engine result.
+        let mut raw = HashMap::new();
+        raw.insert("apply_patch".to_owned(), "ask".to_owned());
+        let mut engine = PermissionEngine::with_overrides(PrimaryAgent::Build, &raw);
+        let call = ToolCall {
+            id: "c6".to_owned(),
+            name: "apply_patch".to_owned(),
+            arguments: json!({}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Ask);
+        engine.approve_for_session("apply_patch");
+        assert_eq!(engine.classify(&call), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn deny_override_works_for_unknown_tool() {
+        let mut raw = HashMap::new();
+        raw.insert("dangerous_tool".to_owned(), "deny".to_owned());
+        let engine = PermissionEngine::with_overrides(PrimaryAgent::Build, &raw);
+        let call = ToolCall {
+            id: "c7".to_owned(),
+            name: "dangerous_tool".to_owned(),
+            arguments: json!({}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Deny);
     }
 }

@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub providers: ProviderConfig,
     pub ui: UiConfig,
     pub updates: UpdateConfig,
+    pub permissions: PermissionsConfig,
 }
 
 impl Default for AppConfig {
@@ -22,6 +23,7 @@ impl Default for AppConfig {
             providers: ProviderConfig::default(),
             ui: UiConfig::default(),
             updates: UpdateConfig::default(),
+            permissions: PermissionsConfig::default(),
         }
     }
 }
@@ -241,4 +243,27 @@ impl Default for CopilotConfig {
             default_model: String::new(),
         }
     }
+}
+
+/// Per-tool permission overrides loaded from `[permissions]` in
+/// `~/.config/artui/config.toml`.
+///
+/// Default policy (engine-side, no override needed):
+/// - `read_file` / `glob` / `search` → `allow`
+/// - `apply_patch` / `shell` → `ask` in Build, `deny` in Plan
+/// - unknown tools → `ask`
+///
+/// Example overrides:
+/// ```toml
+/// [permissions.tools]
+/// apply_patch = "allow"     # opt back into auto-allow
+/// shell       = "deny"      # never run shell, even in Build
+/// network     = "ask"       # gate a future web tool
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct PermissionsConfig {
+    /// `tool_name` → `"allow" | "ask" | "deny"`. Anything unrecognised is
+    /// dropped silently by the engine, falling back to the default policy.
+    pub tools: std::collections::HashMap<String, String>,
 }

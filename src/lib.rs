@@ -224,6 +224,26 @@ fn handle_mouse(mouse: crossterm::event::MouseEvent, app: &mut App) {
 }
 
 fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
+    // Approval modal intercepts keys first — block all other handling
+    // until the user answers (a/s/d/Esc).
+    if app.pending_approval.is_some() {
+        match (key.modifiers, key.code) {
+            (_, KeyCode::Char('a') | KeyCode::Char('A')) => {
+                app.answer_approval(crate::permissions::ApprovalAnswer::Once);
+            }
+            (_, KeyCode::Char('s') | KeyCode::Char('S')) => {
+                app.answer_approval(crate::permissions::ApprovalAnswer::Session);
+            }
+            (_, KeyCode::Char('d') | KeyCode::Char('D'))
+            | (_, KeyCode::Esc)
+            | (_, KeyCode::Char('q')) => {
+                app.answer_approval(crate::permissions::ApprovalAnswer::Deny);
+            }
+            _ => {}
+        }
+        return;
+    }
+
     match (key.modifiers, key.code) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => app.should_quit = true,
         (KeyModifiers::CONTROL, KeyCode::Char('l')) => app.clear_transcript(),
@@ -440,6 +460,13 @@ struct CliArgs {
     version_requested: bool,
     copilot_vscode_compat: bool,
     copilot_client_id_override: Option<String>,
+    /// Force every write tool through the Approval modal — Claude
+    /// Code's default. Off by default in artui (pi-coding-agent style).
+    strict_permissions: bool,
+    /// Explicit acknowledgement that no-prompt mode is active. Already
+    /// the default; flag exists for parity with Claude Code's
+    /// `--dangerously-skip-permissions` / Codex's `--yolo`.
+    yolo_acknowledged: bool,
 }
 
 impl CliArgs {
@@ -448,6 +475,17 @@ impl CliArgs {
             config.providers.copilot.github_oauth_client_id = id.clone();
         } else if self.copilot_vscode_compat {
             config.providers.copilot.github_oauth_client_id = COPILOT_VSCODE_CLIENT_ID.to_owned();
+        }
+        if self.strict_permissions {
+            // Promote write tools to Ask. Plan mode still denies regardless.
+            config
+                .permissions
+                .tools
+                .insert("apply_patch".to_owned(), "ask".to_owned());
+            config
+                .permissions
+                .tools
+                .insert("shell".to_owned(), "ask".to_owned());
         }
     }
 }
@@ -460,6 +498,8 @@ fn parse_cli_args<I: IntoIterator<Item = String>>(args: I) -> CliArgs {
             "-h" | "--help" => out.help_requested = true,
             "-V" | "--version" => out.version_requested = true,
             "--copilot-vscode-compat" => out.copilot_vscode_compat = true,
+            "--strict-permissions" | "--strict" => out.strict_permissions = true,
+            "--yolo" | "--dangerously-skip-permissions" => out.yolo_acknowledged = true,
             "--copilot-client-id" => {
                 if let Some(value) = iter.next() {
                     out.copilot_client_id_override = Some(value);
@@ -494,7 +534,13 @@ fn print_help() {
          (Iv1.b507a08c87ecfe98) for /login copilot.\n                                       \
          Useful when artui's own client_id is rate-limited.\n    \
          --copilot-client-id <ID>         Override the Copilot GitHub OAuth client_id\n                                       \
-         entirely (e.g. for GitHub Enterprise).\n",
+         entirely (e.g. for GitHub Enterprise).\n    \
+         --strict-permissions, --strict   Prompt before every write tool call\n                                       \
+         (Claude Code default). Off by default — artui follows\n                                       \
+         pi-coding-agent's no-prompt model.\n    \
+         --yolo, --dangerously-skip-permissions\n                                       \
+         No-op alias for the default behaviour. Records that you\n                                       \
+         intend to run without prompts (parity with codex/Claude).\n",
         env!("CARGO_PKG_VERSION"),
     );
 }
@@ -594,6 +640,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     compaction_reserve_tokens: request.compaction_reserve_tokens,
                     compaction_keep_recent_tokens: request.compaction_keep_recent_tokens,
                     hooks: request.hooks,
+                    permissions: Some(request.permissions),
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(
