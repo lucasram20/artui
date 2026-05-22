@@ -1,14 +1,15 @@
 name: Release
 
 on:
-  # Triggered when semantic-release publishes a GitHub Release. Using
-  # `release: published` instead of `push: tags` is the documented
-  # workaround for GitHub's "workflows authed with the default
-  # GITHUB_TOKEN cannot trigger other workflows" rule, which was why
-  # tag pushes from semantic-release.yml never fired this workflow.
+  # Direct trigger when a release is published manually via the GitHub UI
+  # or by a PAT-authed publisher (semantic-release with $GH_PAT).
   release:
     types: [published]
   # Manual fallback for re-running the build for an existing tag.
+  # Also used by .github/workflows/semantic-release.yml after it ships
+  # a new release, since the default GITHUB_TOKEN cannot trigger other
+  # workflows on its own — semantic-release.yml runs `gh workflow run`
+  # explicitly to launch us.
   workflow_dispatch:
     inputs:
       tag:
