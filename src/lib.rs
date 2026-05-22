@@ -112,6 +112,7 @@ pub async fn run() -> Result<()> {
     let mut effects: EffectManager<&'static str> = EffectManager::default();
     let mut last_frame = Instant::now();
     let mut was_streaming = false;
+    let mut mouse_capture_active = true;
 
     let result = async {
         loop {
@@ -149,6 +150,22 @@ pub async fn run() -> Result<()> {
 
             if app.should_quit {
                 break;
+            }
+
+            // Reconcile mouse-capture mode with the user's `/mouse` toggle.
+            if app.mouse_capture != mouse_capture_active {
+                if app.mouse_capture {
+                    let _ = execute!(
+                        terminal.backend_mut(),
+                        crossterm::event::EnableMouseCapture
+                    );
+                } else {
+                    let _ = execute!(
+                        terminal.backend_mut(),
+                        crossterm::event::DisableMouseCapture
+                    );
+                }
+                mouse_capture_active = app.mouse_capture;
             }
 
             if event::poll(Duration::from_millis(25))? {
