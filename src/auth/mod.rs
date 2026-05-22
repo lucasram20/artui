@@ -1,7 +1,7 @@
 mod copilot_vim;
 pub mod env_keys;
 mod github;
-mod openai_oauth;
+pub(crate) mod openai_oauth;
 mod store;
 
 pub use copilot_vim::{read_copilot_vim_tokens, CopilotVimToken};

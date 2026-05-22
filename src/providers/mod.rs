@@ -109,7 +109,9 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
             crate::auth::AuthStore::from_config(config),
         ))),
         "openai_account" => Ok(Arc::new(account::AccountProvider::new(
-            config.default_provider.clone(),
+            "openai_account",
+            config.providers.openai_account.clone(),
+            crate::auth::AuthStore::from_config(config),
         ))),
         provider => bail!("unsupported provider: {provider}"),
     }

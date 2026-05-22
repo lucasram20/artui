@@ -220,7 +220,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 14] = [
+pub const SLASH_COMMANDS: [SlashCommand; 15] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -264,6 +264,10 @@ pub const SLASH_COMMANDS: [SlashCommand; 14] = [
     SlashCommand {
         name: "/permissions",
         description: "Show current permission policy and active overrides",
+    },
+    SlashCommand {
+        name: "/mouse",
+        description: "Toggle mouse capture (off lets you drag-select to copy)",
     },
     SlashCommand {
         name: "/clear",
@@ -460,6 +464,11 @@ pub struct App {
     pub statusline_open: bool,
     pub statusline_cursor: usize,
     pub statusline_enabled: [bool; StatusLineItem::ALL.len()],
+    /// When true, artui captures mouse events for scroll/click handling.
+    /// When false, mouse events pass through to the host terminal so the
+    /// user can drag-select text and copy with the terminal's native
+    /// clipboard integration. Toggle via `/mouse` or `Ctrl+Shift+M`.
+    pub mouse_capture: bool,
     pub git_branch_label: String,
     pub git_status_label: String,
     pub thinking_frame: usize,
@@ -526,6 +535,7 @@ impl App {
             statusline_open: false,
             statusline_cursor: 0,
             statusline_enabled: [true; StatusLineItem::ALL.len()],
+            mouse_capture: true,
             git_branch_label: git_branch().unwrap_or_else(|| "no-git".to_owned()),
             git_status_label: git_status_label().unwrap_or_else(|| "unknown".to_owned()),
             thinking_frame: 0,
@@ -1247,6 +1257,22 @@ impl App {
         self.status = self.provider_status();
     }
 
+    /// Flip mouse capture on/off. The runtime in `lib.rs` reads this flag
+    /// each event-loop tick and reconciles the terminal mode with
+    /// `crossterm::event::Enable/DisableMouseCapture`. When capture is
+    /// off, drag-select + the terminal's native clipboard copy work
+    /// without intercepts from artui.
+    pub fn toggle_mouse_capture(&mut self) {
+        self.mouse_capture = !self.mouse_capture;
+        let label = if self.mouse_capture {
+            "Mouse capture: on (scroll wheel works inside artui)"
+        } else {
+            "Mouse capture: off (drag to select; terminal clipboard handles copy)"
+        };
+        self.status = label.to_owned();
+        self.push_login_message(label.to_owned());
+    }
+
     pub fn active_model(&self) -> &str {
         active_model_from_config(&self.config)
     }
@@ -1748,6 +1774,10 @@ impl App {
             }
             "/logout" => {
                 self.status = "Usage: /logout <provider>".to_owned();
+                SlashCommandResult::Handled(None)
+            }
+            "/mouse" => {
+                self.toggle_mouse_capture();
                 SlashCommandResult::Handled(None)
             }
             command if command.starts_with('/') => {
@@ -2744,15 +2774,27 @@ fn ollama_model_options() -> Vec<String> {
 
 /// Curated default model list shown in `/model` under the OpenAI Codex
 /// section before the live ChatGPT-backed Responses API streamer ships.
-/// Mirrors the public Codex CLI defaults; users can override via
+/// Mirrors the Codex CLI defaults plus the public `gpt-5.x` aliases that
+/// the ChatGPT backend exposes to every plan tier (free/Plus/Pro/Team/
+/// Enterprise). Users can override with their own preferred default via
 /// `providers.openai_account.default_model` in `~/.config/artui/config.toml`.
 fn openai_codex_model_options() -> Vec<String> {
     [
+        "gpt-5.5",
+        "gpt-5.5-pro",
+        "gpt-5.5-codex",
+        "gpt-5.5-mini",
+        "gpt-5.4",
         "gpt-5.4-codex",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
         "gpt-5.3-codex",
         "gpt-5.2-codex",
-        "gpt-5.4-mini",
-        "gpt-5-mini",
+        "gpt-5.1-codex-mini",
+        "gpt-5-codex",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
     ]
     .into_iter()
     .map(str::to_owned)

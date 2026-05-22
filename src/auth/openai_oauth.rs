@@ -492,7 +492,6 @@ async fn exchange_code(
 
 /// Refresh an existing access token using the stored refresh token.
 /// Exposed so the streaming provider can recover from `401`.
-#[allow(dead_code)]
 pub async fn refresh_access_token(
     client: &reqwest::Client,
     issuer: &str,
