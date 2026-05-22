@@ -26,6 +26,22 @@ Before starting: read `docs/spec/harness-architecture.md` end-to-end. The first 
 ## Backlog / parking lot
 
 - [oauth-provider-support.md](oauth-provider-support.md) — original provider roadmap covering Copilot/OpenAI account/MCP. Phase 3 (Copilot) is partially done; remaining items deferred until harness phases A–G land.
+- [parking-lot.md](parking-lot.md) — items punted out of Phase M (cross-machine sync, vector embeddings, GUI port, etc).
+
+## Phase M — Production polish (post-v0.3, road to v1.0)
+
+artui at v0.3.x has architecture parity with Claude Code / Codex / OpenCode / pi but lacks production polish. Phase M closes that gap. See [phase-m-README.md](phase-m-README.md) for ordering and milestone targets.
+
+| Order | Phase | Ticket | Outcome |
+|---|---|---|---|
+| 1 | M1 | [phase-m1-diff-preview-popup.md](phase-m1-diff-preview-popup.md) | Pre-apply diff preview popup |
+| 2 | M2 | [phase-m2-permission-ask-ui.md](phase-m2-permission-ask-ui.md) | Mid-tool Ask modal (permission engine wired) |
+| 3 | M3 | [phase-m3-snapshots-rollback.md](phase-m3-snapshots-rollback.md) | Workspace snapshots + rollback |
+| 4 | M4 | [phase-m4-macos-seatbelt-sandbox.md](phase-m4-macos-seatbelt-sandbox.md) | macOS Seatbelt parity with bwrap |
+| 5 | M5 | [phase-m5-windows-restricted-token.md](phase-m5-windows-restricted-token.md) | Windows Job Object + restricted token |
+| 6 | M6 | [phase-m6-codebase-indexer.md](phase-m6-codebase-indexer.md) | Tree-sitter symbols + BM25 chunks |
+| 7 | M7 | [phase-m7-deep-subagents.md](phase-m7-deep-subagents.md) | Depth-N subagent trees |
+| 8 | M8 | [phase-m8-production-polish.md](phase-m8-production-polish.md) | Telemetry, crash reporter, a11y, mdBook docs |
 
 ## Conventions
 
