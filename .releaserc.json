@@ -57,7 +57,8 @@
       {
         "successComment": false,
         "failComment": false,
-        "releasedLabels": false
+        "releasedLabels": false,
+        "releaseNameTemplate": "artui v${nextRelease.version}"
       }
     ]
   ]
