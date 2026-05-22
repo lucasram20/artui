@@ -99,9 +99,17 @@ function downloadWithProgress(
   emit: (event: InstallEvent) => void,
   redirects = 5,
 ): Promise<void> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
   return new Promise((resolve, reject) => {
     const fetch = (current: string, hops: number) => {
-      const req = request(current, { method: "GET" }, (res) => {
+      const headers: Record<string, string> = {};
+      // Only attach the bearer to the GitHub API host (asset endpoint);
+      // GitHub returns a signed S3 redirect we must NOT forward auth to.
+      if (token && current.startsWith("https://api.github.com/")) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["Accept"] = "application/octet-stream";
+      }
+      const req = request(current, { method: "GET", headers }, (res) => {
         const status = res.statusCode ?? 0;
         if ([301, 302, 307, 308].includes(status) && res.headers.location && hops > 0) {
           res.resume();
@@ -140,6 +148,59 @@ function downloadWithProgress(
   });
 }
 
+async function resolveAssetUrl(
+  repo: string,
+  version: string,
+  asset: string,
+): Promise<string> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
+  if (!token) {
+    return `https://github.com/${repo}/releases/download/v${version}/${asset}`;
+  }
+  // Private repo: resolve asset id via the API, return the asset endpoint
+  // so downloadWithProgress attaches the bearer + Accept header.
+  return new Promise((resolve, reject) => {
+    const url = `https://api.github.com/repos/${repo}/releases/tags/v${version}`;
+    const req = request(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": "artui-npm",
+        },
+      },
+      (res) => {
+        if ((res.statusCode ?? 0) !== 200) {
+          reject(new Error(`HTTP ${res.statusCode} resolving release ${version}`));
+          res.resume();
+          return;
+        }
+        let body = "";
+        res.on("data", (chunk: Buffer) => {
+          body += chunk.toString("utf8");
+        });
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(body) as { assets?: { id: number; name: string }[] };
+            const match = json.assets?.find((a) => a.name === asset);
+            if (!match) {
+              reject(new Error(`Asset ${asset} missing from release ${version}`));
+              return;
+            }
+            resolve(`https://api.github.com/repos/${repo}/releases/assets/${match.id}`);
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 export async function runInstall(
   version: string,
   emit: (event: InstallEvent) => void,
@@ -152,7 +213,6 @@ export async function runInstall(
   mkdirSync(vendor, { recursive: true });
 
   const asset = `artui-${version}-${platform.target}.${platform.archive}`;
-  const url = `https://github.com/${repo}/releases/download/v${version}/${asset}`;
   const tmp = join(
     tmpdir(),
     `artui-${createHash("sha1").update(`${Date.now()}`).digest("hex").slice(0, 8)}-${asset}`,
@@ -170,13 +230,18 @@ export async function runInstall(
   // ── 1. Download ──
   const downloadStep = startStep(`Downloading ${platform.target}`);
   try {
+    const url = await resolveAssetUrl(repo, version, asset);
     await downloadWithProgress(url, tmp, emit);
     finishStep(downloadStep, `Downloaded ${platform.target}`, true);
   } catch (err) {
     finishStep(downloadStep, `Download failed`, false);
+    const message = (err as Error).message;
+    const hint = process.env.GITHUB_TOKEN
+      ? ""
+      : "\nIf this is a private repo, set GITHUB_TOKEN to a PAT with Contents:read.";
     emit({
       kind: "error",
-      message: `${(err as Error).message}\nFallback: ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/${repo}/main/scripts/install.sh | sh`,
+      message: `${message}${hint}\nFallback: ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/${repo}/main/scripts/install.sh | sh`,
     });
     return;
   }

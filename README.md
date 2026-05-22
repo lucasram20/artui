@@ -27,6 +27,36 @@ irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 
 irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex -ArgumentList -Yes
 ```
 
+### Install (private repo)
+
+While `lucasram20/artui` is private, friends granted collaborator access need a fine-grained Personal Access Token (PAT) so the installer can hit the GitHub API. Generate one at <https://github.com/settings/personal-access-tokens/new>:
+
+- **Resource owner:** `lucasram20`
+- **Repository access:** Only select repositories → `artui`
+- **Permissions:** Contents `Read-only`, Metadata `Read-only`
+
+Then install:
+
+```bash
+# Linux / macOS — token consumed by install.sh, raw.githubusercontent.com
+# is also private so wget the script with the PAT first.
+TOKEN=ghp_xxxxxxxxxxxx
+curl -fsSL -H "Authorization: Bearer $TOKEN" \
+  https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh \
+  | GITHUB_TOKEN=$TOKEN sh -s -- --yes
+
+# Windows (PowerShell)
+$env:GITHUB_TOKEN = 'ghp_xxxxxxxxxxxx'
+$headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
+$src = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1' -Headers $headers
+Invoke-Expression "$src -Yes"
+
+# npm — postinstall reads $GITHUB_TOKEN automatically
+GITHUB_TOKEN=$TOKEN npm install -g artui
+```
+
+The script attaches `Authorization: Bearer …` only when talking to `api.github.com`; the signed S3 redirect that GitHub returns for the asset never sees the token. The PAT can be revoked at any time and only grants read access to the artui repo.
+
 The script prints an artui banner, asks for a one-key confirmation, then streams a real progress bar while the matching binary downloads from GitHub Releases. Installs into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows). Set `ARTUI_INSTALL_YES=1` (or pass `--yes`/`-Yes`) to skip the prompt — set `ARTUI_INSTALL_YES=0`, hit `n` at the prompt, or just close the terminal to abort cleanly without downloading anything.
 
 Pin a specific version:

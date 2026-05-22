@@ -16,6 +16,17 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${ARTUI_VERSION:-latest}"
 ASSUME_YES="${ARTUI_INSTALL_YES:-0}"
 
+# Optional GitHub token for private-repo access. Friends granted
+# collaborator access can generate a fine-grained PAT (Contents: read,
+# Metadata: read) and pass it as $GITHUB_TOKEN. Public installs leave
+# this empty.
+TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+if [ -n "$TOKEN" ]; then
+  AUTH_HEADER="Authorization: Bearer $TOKEN"
+else
+  AUTH_HEADER=""
+fi
+
 # ── Tiny TTY UI helpers ─────────────────────────────────────────────────
 _is_tty() { [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ -z "${CI:-}" ]; }
 if _is_tty; then
@@ -169,10 +180,19 @@ fi
 
 if [ "$VERSION" = "latest" ]; then
   step "Resolving latest release"
-  TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-    | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  if [ -n "$AUTH_HEADER" ]; then
+    TAG="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${REPO}/releases/latest" \
+      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  else
+    TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  fi
   if [ -z "$TAG" ]; then
     err "Could not resolve latest release for ${REPO}."
+    if [ -z "$AUTH_HEADER" ]; then
+      warn "Repo may be private. Set GITHUB_TOKEN to a fine-grained PAT with Contents:read and Metadata:read."
+    fi
     warn "Set ARTUI_FROM_SOURCE=1 to build from source instead."
     exit 1
   fi
@@ -187,8 +207,37 @@ step "Version ${C_CYAN}${TAG}${C_RESET}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Private-repo download path:
+#   1. Resolve the asset id via the API (requires Bearer token).
+#   2. Hit the API asset endpoint with Accept: application/octet-stream so
+#      GitHub returns a signed redirect we can follow without leaking the
+#      Authorization header to the redirect target.
+download_private_asset() {
+  local asset_id
+  asset_id="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" \
+    | tr ',' '\n' \
+    | awk -v name="$ASSET" '
+        /"name":/ { gsub(/[",]/, ""); current_name=$2 }
+        /"id":/   { gsub(/[",]/, ""); if (current_name == name) { print $2; exit } }
+      ')"
+  if [ -z "$asset_id" ]; then
+    err "Could not locate asset '$ASSET' on release ${TAG}."
+    return 1
+  fi
+  curl -fL -H "$AUTH_HEADER" -H "Accept: application/octet-stream" \
+    "https://api.github.com/repos/${REPO}/releases/assets/${asset_id}" \
+    -o "$TMP/artui.tar.gz"
+}
+
 # Try curl --progress-bar first (real progress), spinner only if not a tty.
-if _is_tty; then
+if [ -n "$AUTH_HEADER" ]; then
+  step "Downloading ${ASSET} (private repo)"
+  if ! download_private_asset; then
+    err "Asset download failed. Verify the GITHUB_TOKEN scope (Contents:read, Metadata:read)."
+    exit 1
+  fi
+elif _is_tty; then
   printf '  Downloading '
   curl -fL --progress-bar "$URL" -o "$TMP/artui.tar.gz"
 else

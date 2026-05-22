@@ -16,6 +16,16 @@ $ErrorActionPreference = 'Stop'
 $IsInteractive = $Host.UI.RawUI -and -not $env:CI -and -not $env:NO_COLOR
 $AssumeYes = $Yes -or ($env:ARTUI_INSTALL_YES -eq '1')
 
+# Optional GitHub token for private-repo access. Friends granted
+# collaborator access can generate a fine-grained PAT (Contents: read,
+# Metadata: read) and pass it via $env:GITHUB_TOKEN.
+$Token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
+$AuthHeaders = @{}
+if ($Token) {
+    $AuthHeaders['Authorization'] = "Bearer $Token"
+    $AuthHeaders['Accept'] = 'application/vnd.github+json'
+}
+
 function Write-Logo {
     if (-not $IsInteractive) { Write-Host 'artui installer'; return }
     $logo = @(
@@ -74,19 +84,37 @@ Step "Target $target"
 
 if ($Version -eq 'latest') {
     Step 'Resolving latest release'
-    $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+    try {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $AuthHeaders
+    } catch {
+        Fail "Could not resolve latest release for $Repo."
+        if (-not $Token) { Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).' }
+        exit 1
+    }
     $Version = $release.tag_name
 }
 Step "Version $Version"
 
 $asset = "artui-$($Version.TrimStart('v'))-$target.zip"
-$url = "https://github.com/$Repo/releases/download/$Version/$asset"
+$publicUrl = "https://github.com/$Repo/releases/download/$Version/$asset"
 
 $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "artui-$([guid]::NewGuid())") -Force
 $zip = Join-Path $tmp 'artui.zip'
 
 Invoke-WithProgress -Activity "Downloading $asset" -Body {
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+    if ($Token) {
+        # Private-repo path: resolve the asset id, then ask GitHub for the
+        # signed redirect via Accept: application/octet-stream.
+        $tagRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Version" -Headers $AuthHeaders
+        $assetMeta = $tagRelease.assets | Where-Object { $_.name -eq $asset } | Select-Object -First 1
+        if (-not $assetMeta) { throw "Asset $asset not found on release $Version." }
+        $assetUrl = "https://api.github.com/repos/$Repo/releases/assets/$($assetMeta.id)"
+        $headers = $AuthHeaders.Clone()
+        $headers['Accept'] = 'application/octet-stream'
+        Invoke-WebRequest -Uri $assetUrl -OutFile $zip -Headers $headers -UseBasicParsing
+    } else {
+        Invoke-WebRequest -Uri $publicUrl -OutFile $zip -UseBasicParsing
+    }
 }
 
 Invoke-WithProgress -Activity 'Extracting archive' -Body {
