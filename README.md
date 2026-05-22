@@ -52,7 +52,7 @@ $src = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/lucasram20/artu
 Invoke-Expression "$src -Yes"
 
 # npm — postinstall reads $GITHUB_TOKEN automatically
-GITHUB_TOKEN=$TOKEN npm install -g artui
+GITHUB_TOKEN=$TOKEN npm install -g artui-cli
 ```
 
 The script attaches `Authorization: Bearer …` only when talking to `api.github.com`; the signed S3 redirect that GitHub returns for the asset never sees the token. The PAT can be revoked at any time and only grants read access to the artui repo.
@@ -74,13 +74,15 @@ ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/lucasram20/artu
 ### Install (npm)
 
 ```bash
-npm install -g artui          # downloads the prebuilt binary on postinstall
-npm install -g artui --abort  # skip the download (just install the wrapper)
-ARTUI_SKIP_POSTINSTALL=1 npm install -g artui   # same, env-flavoured
-npx artui                     # one-off run
+npm install -g artui-cli           # downloads the prebuilt binary on postinstall
+npm install -g artui-cli --abort   # skip the download (just install the wrapper)
+ARTUI_SKIP_POSTINSTALL=1 npm install -g artui-cli   # same, env-flavoured
+npx artui-cli                      # one-off run
 ```
 
-The npm package's postinstall renders an [`ink`](https://github.com/vadimdemedes/ink)-driven progress UI on TTY (the same React-for-CLI library Claude Code uses) and falls back to plain logs in CI. The wrapper binary is the native artui release picked from GitHub Releases. Pass `--abort`/`--no-install`/`--skip-binary` to install the wrapper without fetching the binary; rebuild later with `npm rebuild artui`.
+The package name is `artui-cli` because the bare `artui` slot on npm was taken by an unrelated 2017 package. The bin entries stay as `artui` and `art`, so commands inside the TUI are unchanged.
+
+The npm package's postinstall renders an [`ink`](https://github.com/vadimdemedes/ink)-driven progress UI on TTY (the same React-for-CLI library Claude Code uses) and falls back to plain logs in CI. The wrapper binary is the native artui release picked from GitHub Releases. Pass `--abort`/`--no-install`/`--skip-binary` to install the wrapper without fetching the binary; rebuild later with `npm rebuild artui-cli`.
 
 ### Install (cargo, local checkout)
 
