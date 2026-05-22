@@ -76,9 +76,9 @@ src/providers/
 
 - [x] First keep official OpenAI API-key support as the stable path.
 - [x] Only add ChatGPT subscription OAuth if there is an official documented flow or permitted integration path for third-party apps.
-- [ ] If an account-backed flow is added, keep token storage, refresh, and logout in the shared auth layer.
-- [ ] Do not reuse or scrape another tool's private auth tokens.
-- [ ] Add clear UX copy distinguishing API billing from ChatGPT subscription/account usage.
+- [x] If an account-backed flow is added, keep token storage, refresh, and logout in the shared auth layer.
+- [x] Do not reuse or scrape another tool's private auth tokens.
+- [x] Add clear UX copy distinguishing API billing from ChatGPT subscription/account usage.
 
 ### Phase 5 — UX polish
 
