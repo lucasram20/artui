@@ -30,13 +30,13 @@ fi
 # ── Tiny TTY UI helpers ─────────────────────────────────────────────────
 _is_tty() { [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ -z "${CI:-}" ]; }
 if _is_tty; then
-  C_RESET="$(printf '[0m')"
-  C_DIM="$(printf '[2m')"
-  C_BOLD="$(printf '[1m')"
-  C_CYAN="$(printf '[36m')"
-  C_GREEN="$(printf '[32m')"
-  C_YELLOW="$(printf '[33m')"
-  C_RED="$(printf '[31m')"
+  C_RESET="$(printf '\033[0m')"
+  C_DIM="$(printf '\033[2m')"
+  C_BOLD="$(printf '\033[1m')"
+  C_CYAN="$(printf '\033[36m')"
+  C_GREEN="$(printf '\033[32m')"
+  C_YELLOW="$(printf '\033[33m')"
+  C_RED="$(printf '\033[31m')"
 else
   C_RESET=""; C_DIM=""; C_BOLD=""; C_CYAN=""; C_GREEN=""; C_YELLOW=""; C_RED=""
 fi
@@ -78,15 +78,15 @@ spin() {
   local pid status i=0
   ( "$@" ) &
   pid=$!
-  printf '%s' "[?25l"
+  printf '\033[?25l'
   while kill -0 "$pid" 2>/dev/null; do
     local c="${frames:i++ % ${#frames}:1}"
-    printf '\r[2K%s%s%s %s' "$C_CYAN" "$c" "$C_RESET" "$label"
+    printf '\r\033[2K%s%s%s %s' "$C_CYAN" "$c" "$C_RESET" "$label"
     sleep 0.08
   done
   wait "$pid"
   status=$?
-  printf '\r[2K[?25h'
+  printf '\r\033[2K\033[?25h'
   if [ "$status" -eq 0 ]; then ok "$label"; else err "$label"; fi
   return $status
 }
