@@ -12,13 +12,47 @@ artui is designed around explicit tool use, bounded output, approvals, diffs, an
 
 ## Quick Start
 
-Install Rust, then install the local command:
+### Install (prebuilt binary)
+
+```bash
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex
+```
+
+The script detects your OS/arch (`x86_64` or `aarch64`), downloads the matching release archive from GitHub Releases, and installs the binary into `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\artui\bin` (Windows).
+
+Pin a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh -s -- --version v0.0.1
+```
+
+Build from source instead:
+
+```bash
+ARTUI_FROM_SOURCE=1 curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh
+```
+
+### Install (npm)
+
+```bash
+npm install -g artui
+# or one-off:
+npx artui
+```
+
+The npm package downloads the matching native binary on `postinstall` (mirrors the `turbo` / `esbuild` pattern).
+
+### Install (cargo, local checkout)
 
 ```bash
 cargo install --path .
 ```
 
-Then start the TUI with either command:
+Run the TUI with either command:
 
 ```bash
 art
@@ -26,7 +60,7 @@ art
 artui
 ```
 
-For development without installing, run the explicit binary target:
+For development without installing:
 
 ```bash
 cargo run --bin artui

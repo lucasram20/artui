@@ -6,6 +6,30 @@ All notable changes to artui will be documented in this file.
 
 ### Added
 
+- Wired auto-compaction into the agent loop pre-flight: when `estimated_tokens >= context_window - reserve_tokens` the loop summarizes oldest messages via the active provider and emits a `Compacting context…` status. Mirrors opencode's `SessionCompaction.isOverflow` model (`usable = context − reserved`).
+- Added `[agent].compaction_auto`, `compaction_reserve_tokens`, and `compaction_keep_recent_tokens` settings (defaults: true / 20 000 / 8 000).
+- Added `compaction::usable_tokens`, `needs_compaction_with`, and `compact_messages_with` helpers.
+- Added `--copilot-vscode-compat` CLI flag — falls back to VSCode's public GitHub OAuth client_id (`Iv1.b507a08c87ecfe98`) when artui's own client is rate-limited or rejected.
+- Added `--copilot-client-id <id>` and `--copilot-client-id=<id>` overrides for GitHub Enterprise users.
+- Added `-h/--help` and `-V/--version` CLI flags.
+- Added zero-login support for users authenticated via `gh` CLI or copilot.vim: artui now reads `~/.config/github-copilot/hosts.json` and `apps.json` (honors `XDG_CONFIG_HOME`) and treats stored OAuth tokens as additional Copilot candidates.
+- Added `auth::copilot_vim::{read_copilot_vim_tokens, CopilotVimToken}` reader.
+- Added `tests/copilot_integration.rs` — 7 wiremock-driven integration tests covering Copilot token exchange, model listing (including `model_picker_enabled` and `policy.state` filtering), endpoint metadata persistence, streaming chat, Anthropic-shaped messages routing, 401-triggered refresh and retry, expired-cache re-exchange, and PAT rejection.
+- Added `wiremock` dev-dependency.
+- Added composable system-prompt builder in `agent::prompts` (identity → behavior → agent overlay → workspace context → tools → skill overlay → safety) and a `/system` command to inspect it.
+- Added workspace context section: cwd, primary language detection (Cargo.toml/package.json/pyproject.toml/go.mod/…), framework hints (Next/React/Vue/axum/ratatui/…), git branch, git short status, and a 2-deep file tree summary.
+- Added concise behavior + tool-use policy distilled from Claude Code's `cli-prompt.md` and pi-coding-agent's prompt set.
+- Added MCP (Model Context Protocol) stdio client in `src/mcp/`: spawns servers configured via `.artui/mcp.json` or `~/.config/artui/mcp.json`, performs `initialize` handshake, lists tools, and registers each remote tool into the local `ToolRegistry` namespaced as `<server_id>__<tool>`. Added `/mcp` command to inspect connected servers and tools.
+- Added skill registry (`src/skills/`) supporting both TOML manifests and Mattpocock/skills.sh-style `SKILL.md` directories with YAML frontmatter. Compatible with the `npx skills add <owner/repo>` ecosystem (Claude Code, Cursor, Codex, OpenCode, etc.). `/skill list`, `/skill use <name>`, `/skill clear` switch the active skill overlay; the active skill's body is appended to the system prompt.
+- Added skills.sh-spec frontmatter fields: `license`, `compatibility`, `metadata` (arbitrary key/value), and the `allowed-tools` alias for `tools`.
+- Added user-defined lifecycle hooks in `src/hooks/`: declarative shell commands fired on `PreToolUse` / `PostToolUse` / `Stop` / `UserPrompt`. Configured via `.artui/hooks.json` or `~/.config/artui/hooks.json`. Matchers accept pipe-separated globs; failures are non-blocking. Modeled on Claude Code and pi-coding-agent extensions.
+- Added Pi-style central credential resolver `auth::env_keys`: per-provider env-var registry with OAuth-before-API-key precedence (e.g. `OPENAI_OAUTH_TOKEN` ▸ `OPENAI_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` ▸ `ANTHROPIC_API_KEY`). Wired into `OpenAiCompatProvider` so logins from `/login` and env vars share the same lookup chain.
+- Added cross-platform install scripts under `scripts/`:
+  - `scripts/install.sh` for Linux and macOS — `curl -fsSL https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.sh | sh`.
+  - `scripts/install.ps1` for Windows PowerShell — `irm https://raw.githubusercontent.com/lucasram20/artui/main/scripts/install.ps1 | iex`.
+- Added npm wrapper package under `npm/` that downloads the matching native binary on `postinstall` (mirrors the `turbo` / `esbuild` pattern), enabling `npm install -g artui` and `npx artui`.
+- Added GitHub Actions release workflow `.github/workflows/release.yml` that cross-compiles to `x86_64`/`aarch64` for Linux, macOS, and Windows, packages tar.gz/zip archives with checksums, and publishes a GitHub Release on tag pushes.
+- Added `docs/auth.md` — credential locations per OS, manual deletion instructions, provider taxonomy (api-key vs subscription), and an error decoder.
 - Added live file autocomplete popup when typing `@` in the input — shows workspace files filtered by partial path, navigable with ↑/↓/j/k, selectable with Tab/Enter.
 - Added multimodal image support: pasted images are now sent to LLM providers as base64 content parts (OpenAI vision format, Anthropic format, Ollama native images field).
 - Added clipboard image detection from file URI lists (Wayland `text/uri-list`, X11 `xclip`) and bracketed paste of image file paths.
@@ -23,6 +47,12 @@ All notable changes to artui will be documented in this file.
 
 ### Changed
 
+- Reworked `compaction.rs`: trigger model is now `usable = context − reserved` (opencode-compatible) instead of a `0.835 * context` fraction. Compaction now walks backwards from the newest message preserving a configurable `keep_recent_tokens` budget verbatim before summarizing the rest.
+- Relaxed `validate_https_url` in the Copilot provider to allow `http://` for loopback hosts (`127.0.0.1`, `::1`, `localhost`) so local mock servers and dev proxies work; non-loopback http URLs are still rejected.
+- Loosened `providers::copilot` module visibility from `pub(crate)` to `pub` so external integration tests can construct `CopilotProvider` and call `fetch_copilot_models`.
+- Extended `AgentLoopConfig` and `ProviderRequest` with compaction knobs, the shared `ToolRegistry`, and the active `HookConfig`, all propagated from the active `AppConfig`/`App`.
+- App now holds `Arc<ToolRegistry>` so MCP-discovered tools can be merged into a single registry shared with the agent loop.
+- Refreshed README with `curl | sh` (Linux/macOS) and `irm | iex` (Windows) install instructions, plus npm and `cargo install` paths.
 - Redesigned header: removed bordered rectangle, now shows ASCII art logo left + version/quote right.
 - Moved agent name from header to input title bar (left side, next to eye animation).
 - Changed `@` file mention display: chat shows short `[filename]` tags, full content only sent to model.

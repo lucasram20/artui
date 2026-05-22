@@ -1,5 +1,6 @@
 pub mod compaction;
 pub mod r#loop;
+pub mod prompts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimaryAgent {

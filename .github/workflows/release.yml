@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            cargo_flags: --target aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (linux aarch64)
+        if: matrix.cross == true
+        run: cargo install cross --locked
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }} --bin artui
+
+      - name: Build
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }} --bin artui
+
+      - name: Stage artifacts (Unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          version="${GITHUB_REF#refs/tags/v}"
+          name="artui-${version}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          cp "target/${{ matrix.target }}/release/artui" "dist/${name}/artui"
+          cp README.md LICENSE* "dist/${name}/" 2>/dev/null || true
+          (cd dist && tar -czf "${name}.tar.gz" "${name}")
+          ls dist/
+
+      - name: Stage artifacts (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $version = "$env:GITHUB_REF" -replace '^refs/tags/v',''
+          $name = "artui-$version-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force "dist/$name" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/artui.exe" "dist/$name/artui.exe"
+          if (Test-Path README.md) { Copy-Item README.md "dist/$name/" }
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip" -Force
+          Get-ChildItem dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artui-${{ matrix.target }}
+          path: dist/artui-*.${{ matrix.archive }}
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Compute checksums
+        run: |
+          cd dist
+          ls
+          sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256 || true
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/artui-*.tar.gz
+            dist/artui-*.zip
+            dist/checksums.sha256
+          generate_release_notes: true

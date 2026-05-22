@@ -35,11 +35,13 @@ Next batch of features for artui.
 
 ## L3: Auto-Compact Conversation
 
-- Trigger compaction automatically when context usage reaches 80% of model's window
-- Currently `needs_compaction` exists but is not wired into the main loop
-- Wire `compact_if_needed` into the agent loop before each model request
-- Show a brief "Compacting context..." status when triggered
-- Preserve tool call history summaries during compaction
+**Status:** DONE (2026-05-22)
+
+- Triggered automatically before each agent-loop provider call when `estimated_tokens >= context_window − reserve_tokens` (opencode-compatible `usable = context − reserved` model).
+- Wired `compact_messages_with` through `AgentLoopConfig` and `ProviderRequest`; agent loop emits `Compacting context…` status, then `Compacted N → M messages` on success.
+- Configurable via `[agent].compaction_auto`, `compaction_reserve_tokens`, `compaction_keep_recent_tokens` in `~/.config/artui/config.toml`.
+- Recent-message preservation walks backwards from newest until `keep_recent_tokens` is reached; older messages are summarized into one assistant message via the active provider.
+- Falls back to summarizing the oldest 60 % when every message is within the recent budget.
 
 ## L4: Powerful System Prompt
 

@@ -2,10 +2,13 @@ pub mod agent;
 pub mod app;
 pub mod auth;
 pub mod config;
+pub mod hooks;
+pub mod mcp;
 pub mod permissions;
 pub mod providers;
 pub mod sandbox;
 pub mod session;
+pub mod skills;
 pub mod tools;
 pub mod ui;
 pub mod util;
@@ -37,10 +40,32 @@ pub async fn run() -> Result<()> {
 
     install_panic_hook();
 
-    let config = config::load_global_config()?;
+    let cli = parse_cli_args(std::env::args().skip(1));
+    if cli.help_requested {
+        print_help();
+        return Ok(());
+    }
+    if cli.version_requested {
+        println!("artui {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    let mut config = config::load_global_config()?;
+    cli.apply_to_config(&mut config);
     let provider = providers::build_provider(&config)?;
     let (event_tx, mut event_rx) = mpsc::channel(64);
     let mut app = App::new(config.clone(), provider);
+
+    // Spawn MCP servers and merge their tools into the registry before any
+    // turn runs. MCP failures are non-fatal: registered as ServerStatus::Failed.
+    let workspace = std::env::current_dir().unwrap_or_default();
+    let mcp_cfg = mcp::load_mcp_config(&workspace);
+    if !mcp_cfg.servers.is_empty() {
+        let mut registry = tools::registry::ToolRegistry::new();
+        let statuses = mcp::register_servers(&mcp_cfg, &mut registry).await;
+        app.tool_registry = Arc::new(registry);
+        app.mcp_servers = statuses;
+    }
 
     // Fetch Ollama context window asynchronously at startup
     if config.default_provider == "ollama" {
@@ -377,13 +402,179 @@ fn is_image_path(path: &str) -> bool {
         || lower.ends_with(".bmp")
 }
 
+// ── CLI argument parsing ────────────────────────────────────────────────
+//
+// Hand-rolled to avoid pulling in clap. Supports a tiny set of flags that
+// override config defaults at runtime.
+
+/// Public client_id of Microsoft's VSCode GitHub OAuth App. Used for the
+/// `--copilot-vscode-compat` escape hatch when artui's own client_id is
+/// rate-limited or rejected.
+const COPILOT_VSCODE_CLIENT_ID: &str = "Iv1.b507a08c87ecfe98";
+
+#[derive(Debug, Default)]
+struct CliArgs {
+    help_requested: bool,
+    version_requested: bool,
+    copilot_vscode_compat: bool,
+    copilot_client_id_override: Option<String>,
+}
+
+impl CliArgs {
+    fn apply_to_config(&self, config: &mut config::AppConfig) {
+        if let Some(id) = &self.copilot_client_id_override {
+            config.providers.copilot.github_oauth_client_id = id.clone();
+        } else if self.copilot_vscode_compat {
+            config.providers.copilot.github_oauth_client_id =
+                COPILOT_VSCODE_CLIENT_ID.to_owned();
+        }
+    }
+}
+
+fn parse_cli_args<I: IntoIterator<Item = String>>(args: I) -> CliArgs {
+    let mut out = CliArgs::default();
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "-h" | "--help" => out.help_requested = true,
+            "-V" | "--version" => out.version_requested = true,
+            "--copilot-vscode-compat" => out.copilot_vscode_compat = true,
+            "--copilot-client-id" => {
+                if let Some(value) = iter.next() {
+                    out.copilot_client_id_override = Some(value);
+                }
+            }
+            other if other.starts_with("--copilot-client-id=") => {
+                let value = other.trim_start_matches("--copilot-client-id=").to_owned();
+                if !value.is_empty() {
+                    out.copilot_client_id_override = Some(value);
+                }
+            }
+            _ => {
+                // Unknown args are ignored for forward-compat; the TUI will
+                // start as usual.
+            }
+        }
+    }
+    out
+}
+
+fn print_help() {
+    println!(
+        "artui {} — TUI coding agent\n\
+         \n\
+         USAGE:\n    \
+         artui [OPTIONS]\n\
+         \n\
+         OPTIONS:\n    \
+         -h, --help                       Show this help and exit\n    \
+         -V, --version                    Print version and exit\n    \
+         --copilot-vscode-compat          Use VSCode's public GitHub OAuth client_id\n                                       \
+         (Iv1.b507a08c87ecfe98) for /login copilot.\n                                       \
+         Useful when artui's own client_id is rate-limited.\n    \
+         --copilot-client-id <ID>         Override the Copilot GitHub OAuth client_id\n                                       \
+         entirely (e.g. for GitHub Enterprise).\n",
+        env!("CARGO_PKG_VERSION"),
+    );
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod cli_tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn parses_no_args() {
+        let cli = parse_cli_args(args(&[]));
+        assert!(!cli.help_requested);
+        assert!(!cli.copilot_vscode_compat);
+        assert!(cli.copilot_client_id_override.is_none());
+    }
+
+    #[test]
+    fn parses_help_flag() {
+        assert!(parse_cli_args(args(&["--help"])).help_requested);
+        assert!(parse_cli_args(args(&["-h"])).help_requested);
+    }
+
+    #[test]
+    fn parses_version_flag() {
+        assert!(parse_cli_args(args(&["--version"])).version_requested);
+        assert!(parse_cli_args(args(&["-V"])).version_requested);
+    }
+
+    #[test]
+    fn vscode_compat_flag_sets_vscode_client_id() {
+        let cli = parse_cli_args(args(&["--copilot-vscode-compat"]));
+        let mut config = config::AppConfig::default();
+        cli.apply_to_config(&mut config);
+        assert_eq!(
+            config.providers.copilot.github_oauth_client_id,
+            "Iv1.b507a08c87ecfe98"
+        );
+    }
+
+    #[test]
+    fn explicit_client_id_overrides_vscode_compat() {
+        let cli = parse_cli_args(args(&[
+            "--copilot-vscode-compat",
+            "--copilot-client-id",
+            "Ov23liCustomFleet",
+        ]));
+        let mut config = config::AppConfig::default();
+        cli.apply_to_config(&mut config);
+        assert_eq!(
+            config.providers.copilot.github_oauth_client_id,
+            "Ov23liCustomFleet"
+        );
+    }
+
+    #[test]
+    fn equals_form_for_client_id() {
+        let cli = parse_cli_args(args(&["--copilot-client-id=Ov23liEquals"]));
+        let mut config = config::AppConfig::default();
+        cli.apply_to_config(&mut config);
+        assert_eq!(
+            config.providers.copilot.github_oauth_client_id,
+            "Ov23liEquals"
+        );
+    }
+
+    #[test]
+    fn unknown_args_do_not_panic() {
+        let cli = parse_cli_args(args(&["--mystery", "value", "extra"]));
+        assert!(!cli.help_requested);
+        assert!(!cli.copilot_vscode_compat);
+    }
+
+    #[test]
+    fn no_flag_leaves_default_client_id() {
+        let cli = parse_cli_args(args(&[]));
+        let mut config = config::AppConfig::default();
+        let before = config.providers.copilot.github_oauth_client_id.clone();
+        cli.apply_to_config(&mut config);
+        assert_eq!(config.providers.copilot.github_oauth_client_id, before);
+    }
+}
+
 fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
     tokio::spawn(async move {
         match request {
             AppRequest::Provider(request) => {
                 let cancel = CancellationToken::new();
-                let registry = Arc::new(tools::registry::ToolRegistry::new());
-                let config = agent::r#loop::AgentLoopConfig::default();
+                let registry = request.tool_registry;
+                let config = agent::r#loop::AgentLoopConfig {
+                    context_window: request.context_window,
+                    compaction_auto: request.compaction_auto,
+                    compaction_reserve_tokens: request.compaction_reserve_tokens,
+                    compaction_keep_recent_tokens: request.compaction_keep_recent_tokens,
+                    hooks: request.hooks,
+                    ..agent::r#loop::AgentLoopConfig::default()
+                };
                 agent::r#loop::run_turn(
                     request.provider,
                     registry,

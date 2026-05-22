@@ -66,7 +66,7 @@ src/providers/
 - [x] Route Copilot models by discovered endpoint metadata, including OpenAI-compatible chat, Responses API, and Anthropic-compatible messages paths.
 - [x] Filter Copilot model picker results using backend picker flags and disabled policy state.
 - [x] Add unit coverage for Copilot stream parsing, API routing heuristics, model filtering, and endpoint validation.
-- [ ] Add integration tests with mocked token exchange, model listing, streaming, expiry, and refresh failure.
+- [x] Add integration tests with mocked token exchange, model listing, streaming, expiry, and refresh failure.
 - [x] Persist token exchange expiry metadata and avoid exchanging a GitHub token on every Copilot request when a session token is still valid.
 - [x] Retry Copilot requests once with a fresh session token after `401` or an expired Copilot session token response.
 - [x] Surface model-specific capability hints in `/model`, such as messages/responses routing, context window, vision, and reasoning support.

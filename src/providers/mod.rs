@@ -1,5 +1,5 @@
 mod account;
-pub(crate) mod copilot;
+pub mod copilot;
 pub(crate) mod ollama;
 mod openai_compat;
 pub mod registry;

@@ -1013,6 +1013,18 @@ fn token_candidates(
         });
     }
 
+    // Fall back to tokens written by the official copilot.vim plugin or the
+    // VS Code Copilot extension (~/.config/github-copilot/hosts.json and
+    // apps.json). Lets users authenticated via gh-CLI / Copilot.vim get
+    // zero-login without running /login copilot inside artui.
+    for vim_token in crate::auth::read_copilot_vim_tokens() {
+        candidates.push(TokenCandidate {
+            label: vim_token.source,
+            token: vim_token.token,
+            cacheable: false,
+        });
+    }
+
     dedupe_token_candidates(candidates)
 }
 
@@ -1044,10 +1056,14 @@ fn user_agent() -> String {
 
 fn validate_https_url(value: &str, name: &str) -> Result<()> {
     let url = reqwest::Url::parse(value.trim()).with_context(|| format!("invalid {name}"))?;
-    if url.scheme() != "https" {
+    let scheme = url.scheme();
+    let host = url.host_str().unwrap_or_default();
+    let is_loopback = matches!(host, "127.0.0.1" | "::1" | "localhost");
+    // Allow http only for loopback hosts (local mock servers, dev proxies).
+    if scheme != "https" && !(scheme == "http" && is_loopback) {
         bail!("{name} must use https");
     }
-    if url.host_str().is_none() {
+    if host.is_empty() {
         bail!("{name} must include a host");
     }
     if !url.username().is_empty() || url.password().is_some() {
@@ -1522,5 +1538,8 @@ mod tests {
         assert!(validate_https_url("http://example.com", "test").is_err());
         assert!(validate_https_url("https://user@example.com", "test").is_err());
         assert!(validate_https_url("https://example.com", "test").is_ok());
+        // Loopback http is allowed for local mock servers and dev proxies.
+        assert!(validate_https_url("http://127.0.0.1:9999", "test").is_ok());
+        assert!(validate_https_url("http://localhost:8080", "test").is_ok());
     }
 }

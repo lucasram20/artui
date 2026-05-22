@@ -116,6 +116,7 @@ impl Tool for TaskTool {
             max_steps_per_turn: 10,
             max_read_file_chars: 32_000,
             workspace_root: ctx.workspace_root.clone(),
+            ..AgentLoopConfig::default()
         };
 
         let cancel = CancellationToken::new();

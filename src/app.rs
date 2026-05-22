@@ -214,7 +214,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 10] = [
+pub const SLASH_COMMANDS: [SlashCommand; 13] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -242,6 +242,18 @@ pub const SLASH_COMMANDS: [SlashCommand; 10] = [
     SlashCommand {
         name: "/logout",
         description: "Remove saved provider credentials",
+    },
+    SlashCommand {
+        name: "/system",
+        description: "Print the active system prompt",
+    },
+    SlashCommand {
+        name: "/mcp",
+        description: "List configured MCP servers and their tools",
+    },
+    SlashCommand {
+        name: "/skill",
+        description: "List, activate, or deactivate skills",
     },
     SlashCommand {
         name: "/clear",
@@ -326,6 +338,17 @@ impl StatusLineItem {
 pub struct ProviderRequest {
     pub provider: Arc<dyn LlmProvider>,
     pub request: ModelRequest,
+    /// Tool registry shared with the agent loop. Includes built-in tools and
+    /// any MCP-discovered tools registered at startup.
+    pub tool_registry: Arc<crate::tools::registry::ToolRegistry>,
+    /// Active model context window (tokens) for compaction trigger calculation.
+    pub context_window: Option<u32>,
+    /// Snapshot of `[agent]` compaction settings.
+    pub compaction_auto: bool,
+    pub compaction_reserve_tokens: u32,
+    pub compaction_keep_recent_tokens: u32,
+    /// User-defined lifecycle hooks (cloned from App at request build time).
+    pub hooks: crate::hooks::HookConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -374,6 +397,7 @@ pub enum AppRequest {
     FetchQuote,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum SlashCommandResult {
     NotCommand,
     Handled(Option<AppRequest>),
@@ -383,7 +407,11 @@ pub struct App {
     pub config: AppConfig,
     pub provider: Arc<dyn LlmProvider>,
     pub auth_store: Option<AuthStore>,
-    pub tool_registry: crate::tools::registry::ToolRegistry,
+    pub tool_registry: Arc<crate::tools::registry::ToolRegistry>,
+    pub mcp_servers: Vec<crate::mcp::ServerStatus>,
+    pub skills: crate::skills::SkillRegistry,
+    pub active_skill: Option<String>,
+    pub hooks: crate::hooks::HookConfig,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -435,7 +463,15 @@ impl App {
             config,
             provider,
             auth_store,
-            tool_registry: crate::tools::registry::ToolRegistry::new(),
+            tool_registry: Arc::new(crate::tools::registry::ToolRegistry::new()),
+            mcp_servers: Vec::new(),
+            skills: crate::skills::SkillRegistry::load(
+                &std::env::current_dir().unwrap_or_default(),
+            ),
+            active_skill: None,
+            hooks: crate::hooks::load_hook_config(
+                &std::env::current_dir().unwrap_or_default(),
+            ),
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -709,6 +745,14 @@ impl App {
                 tool_choice: crate::providers::ToolChoice::Auto,
                 max_output_tokens: None,
             },
+            tool_registry: Arc::clone(&self.tool_registry),
+            context_window: self
+                .active_context_window_tokens()
+                .and_then(|tokens| u32::try_from(tokens).ok()),
+            compaction_auto: self.config.agent.compaction_auto,
+            compaction_reserve_tokens: self.config.agent.compaction_reserve_tokens,
+            compaction_keep_recent_tokens: self.config.agent.compaction_keep_recent_tokens,
+            hooks: self.hooks.clone(),
         }))
     }
 
@@ -803,13 +847,28 @@ impl App {
         self.input.push_str(&tag);
     }
 
-    fn system_prompt(&self) -> String {
-        format!(
-            "You are artui, an interactive coding-agent CLI. You are not ChatGPT in this product UI. If asked who you are, identify as artui and state the active provider/model exactly as {}/{}. Do not claim you lack a model label.\n\n{}",
-            self.config.default_provider,
-            self.active_model(),
-            self.active_agent.system_prompt()
-        )
+    pub fn system_prompt(&self) -> String {
+        let tool_names = self
+            .tool_registry
+            .specs()
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect();
+        let skill_overlay = self
+            .active_skill
+            .as_deref()
+            .and_then(|name| self.skills.get(name))
+            .map(|skill| skill.prompt.clone());
+        let inputs = crate::agent::prompts::PromptInputs {
+            provider_id: self.config.default_provider.clone(),
+            model: self.active_model().to_owned(),
+            agent: self.active_agent,
+            workspace_root: std::env::current_dir().unwrap_or_default(),
+            tool_names,
+            skip_workspace: false,
+            skill_overlay,
+        };
+        crate::agent::prompts::build_system_prompt(&inputs)
     }
 
     pub fn handle_event(&mut self, event: AppEvent) {
@@ -1446,6 +1505,98 @@ impl App {
             }
             "/clear" => {
                 self.clear_transcript();
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/system" => {
+                let prompt = self.system_prompt();
+                self.transcript
+                    .push(Message::new(Role::Assistant, format!("# System prompt\n\n{prompt}")));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/mcp" => {
+                let mut lines = vec!["# MCP servers".to_owned()];
+                if self.mcp_servers.is_empty() {
+                    lines.push("(no servers configured — see `.artui/mcp.json`)".to_owned());
+                } else {
+                    for status in &self.mcp_servers {
+                        let mut line = format!(
+                            "- **{}** — {} ({} tools)",
+                            status.server_id,
+                            status.state.label(),
+                            status.tool_count
+                        );
+                        if let Some(error) = &status.error {
+                            line.push_str(&format!(" — {error}"));
+                        }
+                        lines.push(line);
+                    }
+                }
+                let mcp_tool_specs: Vec<_> = self
+                    .tool_registry
+                    .specs()
+                    .into_iter()
+                    .filter(|spec| spec.name.contains("__"))
+                    .collect();
+                if !mcp_tool_specs.is_empty() {
+                    lines.push("".to_owned());
+                    lines.push("## Registered MCP tools".to_owned());
+                    for spec in mcp_tool_specs {
+                        lines.push(format!("- `{}`", spec.name));
+                    }
+                }
+                self.transcript
+                    .push(Message::new(Role::Assistant, lines.join("\n")));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/skill" | "/skill list" => {
+                let mut lines = vec!["# Skills".to_owned()];
+                if self.skills.is_empty() {
+                    lines.push(
+                        "(no skills installed — drop `.toml` files in `.artui/skills/` or `~/.config/artui/skills/`)"
+                            .to_owned(),
+                    );
+                } else {
+                    for skill in self.skills.iter() {
+                        let active = self.active_skill.as_deref() == Some(skill.name.as_str());
+                        let marker = if active { "★" } else { " " };
+                        lines.push(format!(
+                            "{marker} **{}** — {}",
+                            skill.name,
+                            if skill.description.is_empty() {
+                                "(no description)"
+                            } else {
+                                skill.description.as_str()
+                            }
+                        ));
+                    }
+                    lines.push("".to_owned());
+                    lines.push("Use `/skill use <name>` to activate, `/skill clear` to deactivate.".to_owned());
+                }
+                self.transcript
+                    .push(Message::new(Role::Assistant, lines.join("\n")));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/skill clear" => {
+                self.active_skill = None;
+                self.status = "Skill overlay cleared".to_owned();
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            command if command.starts_with("/skill use ") => {
+                let name = command.trim_start_matches("/skill use").trim();
+                if self.skills.get(name).is_some() {
+                    self.active_skill = Some(name.to_owned());
+                    self.status = format!("Skill activated: {name}");
+                } else {
+                    self.transcript.push(Message::new(
+                        Role::Assistant,
+                        format!("No skill named `{name}`. Use `/skill list` to see available skills."),
+                    ));
+                }
                 self.mode = UiMode::Input;
                 SlashCommandResult::Handled(None)
             }

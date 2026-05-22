@@ -98,6 +98,14 @@ pub struct AgentConfig {
     pub max_tool_output_chars: usize,
     pub max_search_output_chars: usize,
     pub max_read_file_chars: usize,
+    /// Auto-compaction toggle. When false, the agent loop never compacts.
+    pub compaction_auto: bool,
+    /// Reserved output budget (tokens). Compaction triggers when
+    /// `estimated_tokens >= context_window - compaction_reserve_tokens`.
+    /// Mirrors opencode's `COMPACTION_BUFFER` (20k) and pi's `reserveTokens` (16k).
+    pub compaction_reserve_tokens: u32,
+    /// How many recent message tokens to preserve verbatim during compaction.
+    pub compaction_keep_recent_tokens: u32,
 }
 
 impl Default for AgentConfig {
@@ -109,6 +117,9 @@ impl Default for AgentConfig {
             max_tool_output_chars: 30_000,
             max_search_output_chars: 20_000,
             max_read_file_chars: 16_000,
+            compaction_auto: true,
+            compaction_reserve_tokens: 20_000,
+            compaction_keep_recent_tokens: 8_000,
         }
     }
 }

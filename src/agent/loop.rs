@@ -10,7 +10,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::app::{AppEvent, Message, Role};
+use crate::agent::compaction;
+use crate::app::{AppEvent, AuthEvent, Message, Role};
+use crate::hooks::{fire_hooks, HookConfig, HookEvent};
 use crate::providers::{LlmProvider, ModelEvent, ModelRequest, ToolCall};
 use crate::tools::registry::ToolRegistry;
 use crate::tools::{ToolContext, ToolResult};
@@ -20,6 +22,16 @@ pub struct AgentLoopConfig {
     pub max_steps_per_turn: usize,
     pub max_read_file_chars: usize,
     pub workspace_root: PathBuf,
+    /// Active model context window in tokens. `None` = unknown → use compaction default.
+    pub context_window: Option<u32>,
+    /// Disable auto-compaction entirely (matches opencode `compaction.auto = false`).
+    pub compaction_auto: bool,
+    /// Reserved output budget for compaction trigger calculation.
+    pub compaction_reserve_tokens: u32,
+    /// Recent-message budget preserved verbatim during compaction.
+    pub compaction_keep_recent_tokens: u32,
+    /// User-defined lifecycle hooks (empty = no-op).
+    pub hooks: HookConfig,
 }
 
 impl Default for AgentLoopConfig {
@@ -28,6 +40,11 @@ impl Default for AgentLoopConfig {
             max_steps_per_turn: 25,
             max_read_file_chars: 32_000,
             workspace_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            context_window: None,
+            compaction_auto: true,
+            compaction_reserve_tokens: 20_000,
+            compaction_keep_recent_tokens: 8_000,
+            hooks: HookConfig::default(),
         }
     }
 }
@@ -70,6 +87,52 @@ pub async fn run_turn(
             extra_messages.push(Message::new(Role::Assistant, limit_msg));
             break;
         }
+
+        // ── Auto-compaction pre-flight ─────────────────────────────────
+        // Mirror opencode's SessionCompaction.isOverflow check before each
+        // provider call. Skip if disabled, cancelled, or transcript too small.
+        if config.compaction_auto
+            && !cancel.is_cancelled()
+            && compaction::needs_compaction_with(
+                &request.messages,
+                config.context_window,
+                config.compaction_reserve_tokens,
+            )
+        {
+            let before = request.messages.len();
+            let _ = event_tx
+                .send(AppEvent::Auth(AuthEvent::Status(
+                    "Compacting context…".to_owned(),
+                )))
+                .await;
+
+            let compacted = compaction::compact_messages_with(
+                &request.messages,
+                Arc::clone(&provider),
+                config.compaction_keep_recent_tokens,
+            )
+            .await;
+
+            // Only adopt result if it actually shrank — the provider may have
+            // failed silently (empty summary) and returned the original list.
+            if compacted.len() < before {
+                request.messages = compacted;
+                let _ = event_tx
+                    .send(AppEvent::Auth(AuthEvent::Status(format!(
+                        "Compacted {} → {} messages",
+                        before,
+                        request.messages.len()
+                    ))))
+                    .await;
+            } else {
+                let _ = event_tx
+                    .send(AppEvent::Auth(AuthEvent::Status(
+                        "Compaction skipped".to_owned(),
+                    )))
+                    .await;
+            }
+        }
+        // ───────────────────────────────────────────────────────────────
 
         // Stream one model response
         let (stream_tx, mut stream_rx) = mpsc::channel::<AppEvent>(64);
@@ -180,7 +243,23 @@ pub async fn run_turn(
                 max_read_file_chars: config.max_read_file_chars,
             };
 
+            fire_hooks(
+                &config.hooks,
+                HookEvent::PreToolUse,
+                &call.name,
+                &config.workspace_root,
+            )
+            .await;
+
             let result = registry.dispatch(call, ctx).await;
+
+            fire_hooks(
+                &config.hooks,
+                HookEvent::PostToolUse,
+                &call.name,
+                &config.workspace_root,
+            )
+            .await;
 
             // Show tool result in UI as a text delta
             let display = format_tool_result(&call.name, &result);

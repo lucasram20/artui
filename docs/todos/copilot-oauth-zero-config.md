@@ -1,8 +1,7 @@
 # Copilot OAuth — Zero-Config Device Flow
 
-**Status:** DONE (2026-05-21)
-**Summary:** Hard-coded artui OAuth App client_id (`Ov23liSsh5cnZv6yAz4X`). Defaulted editor_version to `vscode/1.99.2` and editor_plugin_version to `copilot-chat/0.26.3` for VSCode-shaped headers. Removed silent PAT fallback — `ghp_` tokens now rejected with friendly error pointing to `/login copilot`. 86 tests pass.
-**Remaining:** `hosts.json` reader for gh-CLI compat and `--copilot-vscode-compat` flag deferred to follow-up.
+**Status:** DONE (2026-05-22)
+**Summary:** Hard-coded artui OAuth App client_id (`Ov23liSsh5cnZv6yAz4X`). Defaulted editor_version to `vscode/1.99.2` and editor_plugin_version to `copilot-chat/0.26.3` for VSCode-shaped headers. Removed silent PAT fallback — `ghp_` tokens now rejected with friendly error pointing to `/login copilot`. Added `~/.config/github-copilot/{hosts,apps}.json` reader (honors `XDG_CONFIG_HOME`) for zero-login when `gh` CLI / Copilot.vim already authenticated. Added `--copilot-vscode-compat` and `--copilot-client-id <id>` CLI flags. 93 lib + 7 integration tests pass.
 
 **Phase:** A.5 (parallel with Phase A; not blocking)
 **Spec:** `docs/spec/copilot-oauth.md`
