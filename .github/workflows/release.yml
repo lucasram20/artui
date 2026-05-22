@@ -38,8 +38,12 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
             cross: true
+          # macOS — both targets cross-compile from the ARM runner.
+          # macos-13 (Intel) runners have a tiny pool and queue for
+          # 10+ minutes; macos-14 is plentiful and builds x86_64 just
+          # as well via `cargo build --target`.
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-14
             archive: tar.gz
           - target: aarch64-apple-darwin
             os: macos-14
