@@ -44,4 +44,5 @@ graphify-out/cost.json
 # npm wrapper build artifacts
 npm/dist/
 npm/node_modules/
+npm/src/node_modules/
 npm/vendor/
