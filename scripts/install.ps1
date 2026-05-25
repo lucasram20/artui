@@ -6,9 +6,9 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = $env:ARTUI_VERSION ?? 'latest',
+    [string]$Version = $(if ($env:ARTUI_VERSION) { $env:ARTUI_VERSION } else { 'latest' }),
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'artui\bin'),
-    [string]$Repo = $env:ARTUI_REPO ?? 'lucasram20/artui',
+    [string]$Repo = $(if ($env:ARTUI_REPO) { $env:ARTUI_REPO } else { 'lucasram20/artui' }),
     [switch]$Yes
 )
 
