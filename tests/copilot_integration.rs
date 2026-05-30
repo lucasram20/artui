@@ -215,10 +215,7 @@ async fn fetch_models_strict_mode_filters_picker_disabled_models() {
 
     Mock::given(method("GET"))
         .and(path("/models"))
-        .and(header(
-            "authorization",
-            "Bearer tid=session_token_strict",
-        ))
+        .and(header("authorization", "Bearer tid=session_token_strict"))
         .respond_with(ResponseTemplate::new(200).set_body_json(model_payload(Vec::new())))
         .mount(&server)
         .await;

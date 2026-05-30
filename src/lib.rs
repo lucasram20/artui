@@ -171,10 +171,7 @@ pub async fn run() -> Result<()> {
             // Reconcile mouse-capture mode with the user's `/mouse` toggle.
             if app.mouse_capture != mouse_capture_active {
                 if app.mouse_capture {
-                    let _ = execute!(
-                        terminal.backend_mut(),
-                        crossterm::event::EnableMouseCapture
-                    );
+                    let _ = execute!(terminal.backend_mut(), crossterm::event::EnableMouseCapture);
                 } else {
                     let _ = execute!(
                         terminal.backend_mut(),

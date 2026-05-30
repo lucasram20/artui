@@ -664,7 +664,10 @@ fn draw_approval(frame: &mut Frame<'_>, app: &App) {
                 .fg(palette.yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!("(call_id {})", prompt.call_id), Style::default().fg(palette.muted)),
+        Span::styled(
+            format!("(call_id {})", prompt.call_id),
+            Style::default().fg(palette.muted),
+        ),
     ]))
     .alignment(Alignment::Left);
 

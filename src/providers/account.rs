@@ -153,7 +153,9 @@ impl AccountProvider {
         if let Some(rt) = tokens.refresh_token.filter(|t| !t.trim().is_empty()) {
             record.refresh_token = Some(rt);
         }
-        record.expires_at = tokens.expires_in.map(|s| unix_timestamp().saturating_add(s));
+        record.expires_at = tokens
+            .expires_in
+            .map(|s| unix_timestamp().saturating_add(s));
         store.upsert(record.clone())?;
         Ok(())
     }
@@ -304,10 +306,7 @@ fn find_event_boundary(buffer: &[u8]) -> Option<usize> {
     buffer.windows(2).position(|w| w == b"\n\n")
 }
 
-async fn handle_sse_block(
-    tx: &mpsc::Sender<AppEvent>,
-    block: &str,
-) -> Result<Option<bool>> {
+async fn handle_sse_block(tx: &mpsc::Sender<AppEvent>, block: &str) -> Result<Option<bool>> {
     let mut data_lines: Vec<&str> = Vec::new();
     let mut event_kind: Option<&str> = None;
     for line in block.lines() {
@@ -354,11 +353,8 @@ async fn handle_sse_block(
         "response.reasoning_summary.delta" | "response.reasoning.delta" => {
             if let Some(delta) = payload.get("delta").and_then(Value::as_str) {
                 if !delta.is_empty() {
-                    AccountProvider::send_event(
-                        tx,
-                        ModelEvent::ReasoningDelta(delta.to_owned()),
-                    )
-                    .await;
+                    AccountProvider::send_event(tx, ModelEvent::ReasoningDelta(delta.to_owned()))
+                        .await;
                 }
             }
         }

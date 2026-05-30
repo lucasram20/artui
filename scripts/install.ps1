@@ -2,7 +2,7 @@
 #
 # Usage:
 #   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
-#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.9
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.10
 #
 # Resolves the latest version from the public Cloudflare R2 mirror first
 # (zero-auth, works for everyone). Falls back to the GitHub API when R2 is
@@ -96,7 +96,7 @@ if ($Version -eq 'latest') {
     # Prefer the public R2 mirror — works for everyone, including users
     # without GitHub access while the source repo is private. The
     # `latest/checksums.sha256` file embeds the version in each archive
-    # filename: `artui-0.3.9-x86_64-...`.
+    # filename: `artui-0.3.10-x86_64-...`.
     try {
         $checksums = Invoke-RestMethod -Uri "$R2Base/latest/checksums.sha256" -UseBasicParsing -ErrorAction Stop
         $match = [regex]::Match($checksums, 'artui-([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.\-]+)?)-')
@@ -118,7 +118,7 @@ if ($Version -eq 'latest') {
             if (-not $Token) {
                 Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).'
             }
-            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.3.9"
+            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.3.10"
             exit 1
         }
     }
