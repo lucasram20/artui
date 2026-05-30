@@ -1,0 +1,7 @@
+# wrangler/Cloudflare local state — never committed
+.wrangler/
+.dev.vars
+.dev.vars.*
+node_modules/
+dist/
+*.tsbuildinfo

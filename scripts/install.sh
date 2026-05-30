@@ -3,7 +3,7 @@
 #
 # Usage:
 #   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
-#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.6
+#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.9
 #
 # Detects arch (x86_64/aarch64), downloads the matching release binary
 # from the public Cloudflare R2 mirror, falls back to GitHub releases on

@@ -2,7 +2,12 @@
 #
 # Usage:
 #   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
-#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.6
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.3.9
+#
+# Resolves the latest version from the public Cloudflare R2 mirror first
+# (zero-auth, works for everyone). Falls back to the GitHub API when R2 is
+# unreachable; the GitHub path needs $env:GITHUB_TOKEN if the source repo
+# is private.
 
 [CmdletBinding()]
 param(
@@ -86,14 +91,39 @@ Step "Target $target"
 
 if ($Version -eq 'latest') {
     Step 'Resolving latest release'
+    $resolved = $null
+
+    # Prefer the public R2 mirror — works for everyone, including users
+    # without GitHub access while the source repo is private. The
+    # `latest/checksums.sha256` file embeds the version in each archive
+    # filename: `artui-0.3.9-x86_64-...`.
     try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $AuthHeaders
+        $checksums = Invoke-RestMethod -Uri "$R2Base/latest/checksums.sha256" -UseBasicParsing -ErrorAction Stop
+        $match = [regex]::Match($checksums, 'artui-([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.\-]+)?)-')
+        if ($match.Success) {
+            $resolved = "v$($match.Groups[1].Value)"
+        }
     } catch {
-        Fail "Could not resolve latest release for $Repo."
-        if (-not $Token) { Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).' }
-        exit 1
+        # R2 miss is non-fatal; we'll try GitHub next.
     }
-    $Version = $release.tag_name
+
+    # GitHub fallback. Public installs hit the unauthenticated endpoint;
+    # private-repo installs need a fine-grained PAT in $env:GITHUB_TOKEN.
+    if (-not $resolved) {
+        try {
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $AuthHeaders -UseBasicParsing -ErrorAction Stop
+            $resolved = $release.tag_name
+        } catch {
+            Fail "Could not resolve latest release for $Repo from R2 mirror or GitHub."
+            if (-not $Token) {
+                Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).'
+            }
+            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.3.9"
+            exit 1
+        }
+    }
+
+    $Version = $resolved
 }
 Step "Version $Version"
 
@@ -105,7 +135,7 @@ $zip = Join-Path $tmp 'artui.zip'
 
 Invoke-WithProgress -Activity "Downloading $asset" -Body {
     $r2Url = "$R2Base/$Version/$asset"
-    # Try the public R2 mirror first.
+    # Try the public R2 mirror first — works for everyone, no auth.
     try {
         Invoke-WebRequest -Uri $r2Url -OutFile $zip -UseBasicParsing -ErrorAction Stop
         return
@@ -113,7 +143,10 @@ Invoke-WithProgress -Activity "Downloading $asset" -Body {
         Step "R2 mirror miss; falling back to GitHub"
     }
     if ($Token) {
-        $tagRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Version" -Headers $AuthHeaders
+        # Authenticated path: resolve the asset id, then hit the API
+        # asset endpoint with `Accept: application/octet-stream` so
+        # GitHub returns a signed redirect we can follow.
+        $tagRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Version" -Headers $AuthHeaders -UseBasicParsing
         $assetMeta = $tagRelease.assets | Where-Object { $_.name -eq $asset } | Select-Object -First 1
         if (-not $assetMeta) { throw "Asset $asset not found on release $Version." }
         $assetUrl = "https://api.github.com/repos/$Repo/releases/assets/$($assetMeta.id)"
@@ -121,7 +154,14 @@ Invoke-WithProgress -Activity "Downloading $asset" -Body {
         $headers['Accept'] = 'application/octet-stream'
         Invoke-WebRequest -Uri $assetUrl -OutFile $zip -Headers $headers -UseBasicParsing
     } else {
-        Invoke-WebRequest -Uri $publicUrl -OutFile $zip -UseBasicParsing
+        # Last resort: unauthenticated public release URL. Fails on
+        # private repos — the caller should set GITHUB_TOKEN if they
+        # need the GitHub fallback while the repo is private.
+        try {
+            Invoke-WebRequest -Uri $publicUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
+        } catch {
+            throw "Both R2 ($r2Url) and public GitHub ($publicUrl) failed. Set `$env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read), or check that the version exists on the R2 mirror."
+        }
     }
 }
 

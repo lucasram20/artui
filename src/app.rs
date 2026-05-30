@@ -206,6 +206,10 @@ pub enum AuthEvent {
     Status(String),
     Message(String),
     CopilotModels(Result<Vec<String>, String>),
+    /// Result of a freemodel `GET /v1/models` discovery. Best-effort: an
+    /// empty list means the gateway was unreachable or returned nothing
+    /// usable; the configured default model is always available regardless.
+    FreemodelModels(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -414,6 +418,9 @@ pub enum AppRequest {
     RefreshCopilotModels {
         config: Box<CopilotConfig>,
         store: AuthStore,
+    },
+    RefreshFreemodelModels {
+        config: Box<crate::config::FreemodelConfig>,
     },
     FetchQuote,
 }
@@ -977,6 +984,31 @@ impl App {
                     };
                 }
             },
+            AppEvent::Auth(AuthEvent::FreemodelModels(models)) => {
+                // Replace the cached list. Empty result is fine — the
+                // configured default_model is always merged back in by
+                // `provider_model_options`. If the active model isn't in the
+                // discovered list, we leave it alone: users may have pinned
+                // something the gateway doesn't currently advertise.
+                let count = models.len();
+                self.config.providers.freemodel.models = models;
+                if self.model_picker_open {
+                    self.model_options =
+                        available_model_options(&self.config, self.auth_store.as_ref());
+                    self.model_cursor = self
+                        .model_options
+                        .iter()
+                        .position(|option| {
+                            option.provider_id == "freemodel" && option.is_selectable()
+                        })
+                        .or_else(|| first_selectable_model_index(&self.model_options))
+                        .unwrap_or(0);
+                    self.ensure_model_cursor_visible();
+                }
+                if count > 0 {
+                    self.status = format!("Freemodel models refreshed: {count}");
+                }
+            }
             AppEvent::Model(ModelEvent::Error(error)) => {
                 self.append_assistant_token(&format!("\nError: {error}"));
                 self.mode = UiMode::Input;
@@ -1282,6 +1314,7 @@ impl App {
     fn switch_active_model(&mut self, provider_id: String, model: String) {
         let mut next_config = self.config.clone();
         match provider_id.as_str() {
+            "freemodel" => next_config.providers.freemodel.default_model = model.clone(),
             "ollama" => next_config.providers.ollama.default_model = model.clone(),
             "openai_compat" => next_config.providers.openai_compat.default_model = model.clone(),
             "copilot" => next_config.providers.copilot.default_model = model.clone(),
@@ -1579,8 +1612,16 @@ impl App {
             }
             "/model" => SlashCommandResult::Handled(self.open_model_picker()),
             "/model refresh" => {
-                self.status = "Refreshing GitHub Copilot models".to_owned();
-                SlashCommandResult::Handled(self.copilot_model_refresh_request())
+                let provider = self.config.default_provider.as_str();
+                if provider == "freemodel" {
+                    self.status = "Refreshing Freemodel models".to_owned();
+                    SlashCommandResult::Handled(Some(AppRequest::RefreshFreemodelModels {
+                        config: Box::new(self.config.providers.freemodel.clone()),
+                    }))
+                } else {
+                    self.status = "Refreshing GitHub Copilot models".to_owned();
+                    SlashCommandResult::Handled(self.copilot_model_refresh_request())
+                }
             }
             "/statusline" => {
                 self.open_statusline_picker();
@@ -2433,6 +2474,7 @@ fn is_reasoning_model_name(model: &str) -> bool {
 
 fn active_model_from_config(config: &AppConfig) -> &str {
     match config.default_provider.as_str() {
+        "freemodel" => config.providers.freemodel.default_model.as_str(),
         "ollama" => config.providers.ollama.default_model.as_str(),
         "openai_compat" => config.providers.openai_compat.default_model.as_str(),
         "copilot" => config.providers.copilot.default_model.as_str(),
@@ -2590,6 +2632,10 @@ fn provider_model_options(
     provider_id: &str,
 ) -> Vec<String> {
     match provider_id {
+        "freemodel" => unique_model_options(
+            config.providers.freemodel.default_model.as_str(),
+            config.providers.freemodel.models.clone(),
+        ),
         "ollama" => unique_model_options(
             config.providers.ollama.default_model.as_str(),
             ollama_model_options(),
@@ -2623,6 +2669,7 @@ fn model_hint(
     model: &str,
 ) -> Option<String> {
     match provider_id {
+        "freemodel" => Some("default".to_owned()),
         "copilot" => copilot_model_hint(auth_store, model),
         "ollama" => Some("local".to_owned()),
         "openai_compat" => Some("api key".to_owned()),
