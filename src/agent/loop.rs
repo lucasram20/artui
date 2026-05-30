@@ -276,10 +276,7 @@ pub async fn run_turn(
                     let prompt = ApprovalPrompt {
                         call_id: call.id.clone(),
                         tool_name: call.name.clone(),
-                        title: format!(
-                            "Allow {} to run? (a once / s session / d deny)",
-                            call.name
-                        ),
+                        title: format!("Allow {} to run? (a once / s session / d deny)", call.name),
                         body: render_approval_body(&call.name, &call.arguments),
                         reply: tx_answer,
                     };
@@ -291,10 +288,9 @@ pub async fn run_turn(
                         _ = cancel.cancelled() => ApprovalAnswer::Deny,
                     };
                     match answer {
-                        ApprovalAnswer::Deny => ToolResult::error(
-                            call.id.clone(),
-                            "denied_by_user".to_owned(),
-                        ),
+                        ApprovalAnswer::Deny => {
+                            ToolResult::error(call.id.clone(), "denied_by_user".to_owned())
+                        }
                         ApprovalAnswer::Once => {
                             let ctx = ToolContext {
                                 call_id: call.id.clone(),

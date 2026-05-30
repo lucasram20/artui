@@ -124,7 +124,10 @@ async fn openai_oauth_login(
     let callback = match timeout(wait, wait_for_callback(listener)).await {
         Ok(Ok(callback)) => callback,
         Ok(Err(error)) => return Err(error),
-        Err(_) => bail!("OpenAI login timed out after {} seconds", config.timeout_secs),
+        Err(_) => bail!(
+            "OpenAI login timed out after {} seconds",
+            config.timeout_secs
+        ),
     };
 
     if callback.state != state {
@@ -575,8 +578,8 @@ fn validate_config(config: &OpenAiOAuthConfig) -> Result<()> {
     if config.client_id.trim().is_empty() {
         bail!("missing providers.openai_account.oauth_client_id");
     }
-    let url =
-        reqwest::Url::parse(config.issuer.trim()).context("invalid providers.openai_account.issuer")?;
+    let url = reqwest::Url::parse(config.issuer.trim())
+        .context("invalid providers.openai_account.issuer")?;
     if url.scheme() != "https" {
         bail!("providers.openai_account.issuer must use https");
     }

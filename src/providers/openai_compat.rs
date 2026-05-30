@@ -22,10 +22,17 @@ pub struct OpenAiCompatProvider {
 
 impl OpenAiCompatProvider {
     pub fn new(config: OpenAiCompatConfig) -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            config,
-        }
+        // Set a stable User-Agent on every request. The artui Cloudflare
+        // relay (used by the freemodel provider, which constructs an
+        // OpenAiCompatProvider under the hood) gates requests on a
+        // substring match — `artui/<version>` satisfies it. Other
+        // upstreams (api.openai.com etc.) accept any UA, so this is
+        // strictly additive.
+        let client = reqwest::Client::builder()
+            .user_agent(format!("artui/{}", env!("CARGO_PKG_VERSION")))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client, config }
     }
 
     async fn send_event(tx: &mpsc::Sender<AppEvent>, event: ModelEvent) {

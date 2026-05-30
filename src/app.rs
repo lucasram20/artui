@@ -1254,7 +1254,9 @@ impl App {
         self.statusline_open = false;
         self.agent_picker_open = false;
         self.login_picker_open = true;
-        self.login_cursor = self.login_cursor.min(LOGIN_PROVIDERS.len().saturating_sub(1));
+        self.login_cursor = self
+            .login_cursor
+            .min(LOGIN_PROVIDERS.len().saturating_sub(1));
         self.mode = UiMode::Normal;
         self.status = "Select a provider to log in".to_owned();
     }
@@ -1267,7 +1269,8 @@ impl App {
 
     pub fn previous_login_provider(&mut self) {
         if self.login_picker_open {
-            self.login_cursor = (self.login_cursor + LOGIN_PROVIDERS.len() - 1) % LOGIN_PROVIDERS.len();
+            self.login_cursor =
+                (self.login_cursor + LOGIN_PROVIDERS.len() - 1) % LOGIN_PROVIDERS.len();
         }
     }
 

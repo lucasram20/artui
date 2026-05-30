@@ -54,13 +54,17 @@ pub async fn discover_models(config: &FreemodelConfig) -> anyhow::Result<Vec<Str
     let timeout = std::time::Duration::from_secs(config.request_timeout_secs.max(1));
     let client = reqwest::Client::builder()
         .timeout(timeout)
+        // Same UA as `OpenAiCompatProvider` — the artui Cloudflare relay
+        // gates on a substring match against `artui`, so this is what
+        // gets discover requests through the gate.
+        .user_agent(format!("artui/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .context("failed to construct freemodel http client")?;
     let url = format!("{}/models", config.base_url.trim_end_matches('/'));
 
     let mut req = client.get(&url);
-    if let Some(api_key) = crate::auth::resolve_credential("freemodel", None)
-        .filter(|value| !value.trim().is_empty())
+    if let Some(api_key) =
+        crate::auth::resolve_credential("freemodel", None).filter(|value| !value.trim().is_empty())
     {
         req = req.header("Authorization", format!("Bearer {api_key}"));
     }
