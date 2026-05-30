@@ -84,7 +84,12 @@ impl OpenAiCompatProvider {
 
         let mut req = self.client.post(&url).json(&body);
 
-        if let Some(api_key) = crate::auth::resolve_credential("openai_compat", None)
+        let credential_provider = if self.config.credential_provider_id.trim().is_empty() {
+            "openai_compat"
+        } else {
+            self.config.credential_provider_id.as_str()
+        };
+        if let Some(api_key) = crate::auth::resolve_credential(credential_provider, None)
             .or_else(|| std::env::var(&self.config.api_key_env).ok())
             .filter(|key| !key.trim().is_empty())
         {

@@ -43,7 +43,17 @@ pub struct ProviderMetadata {
     pub streaming: bool,
 }
 
-pub const PROVIDERS: [ProviderMetadata; 4] = [
+pub const PROVIDERS: [ProviderMetadata; 5] = [
+    ProviderMetadata {
+        id: "freemodel",
+        display_name: "Freemodel",
+        // Embedded build-time key + optional FREEMODEL_API_KEY env override
+        // means the picker treats freemodel like a no-login provider. The
+        // user can still set their own key, but they don't have to.
+        auth_requirement: AuthRequirement::None,
+        model_list_strategy: ModelListStrategy::ProviderEndpoint,
+        streaming: true,
+    },
     ProviderMetadata {
         id: "ollama",
         display_name: "Ollama",
@@ -101,6 +111,7 @@ pub fn provider_metadata(id: &str) -> Option<&'static ProviderMetadata> {
 
 pub fn configured_model<'a>(config: &'a AppConfig, provider_id: &str) -> &'a str {
     match provider_id {
+        "freemodel" => config.providers.freemodel.default_model.as_str(),
         "ollama" => config.providers.ollama.default_model.as_str(),
         "openai_compat" => config.providers.openai_compat.default_model.as_str(),
         "copilot" => config.providers.copilot.default_model.as_str(),

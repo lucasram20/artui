@@ -3,7 +3,8 @@ mod schema;
 use anyhow::{Context, Result};
 
 pub use schema::{
-    AppConfig, CopilotConfig, OllamaConfig, OpenAiAccountConfig, OpenAiCompatConfig, UpdateConfig,
+    AppConfig, CopilotConfig, FreemodelConfig, OllamaConfig, OpenAiAccountConfig,
+    OpenAiCompatConfig, UpdateConfig,
 };
 
 pub fn load_global_config() -> Result<AppConfig> {

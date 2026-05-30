@@ -17,6 +17,12 @@ Thumbs.db
 *.pem
 *.key
 
+# Out-of-repo material that should never be committed.
+secrets/
+
+# Provider docs that may contain live API keys (kept local for development only).
+docs/freemodel/
+
 # artui runtime/session output
 .artui/auth.json
 .artui/auth.json.tmp

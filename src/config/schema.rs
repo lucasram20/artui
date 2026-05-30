@@ -17,7 +17,14 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            default_provider: "ollama".to_owned(),
+            // freemodel routes through the artui Cloudflare Worker relay
+            // (see `cloudflare/`), which holds the upstream API key
+            // server-side, so the binary works without a `/login` step.
+            // The user can still override `providers.freemodel.base_url`
+            // and supply their own `FREEMODEL_API_KEY` to bypass the relay,
+            // and they're free to switch to ollama or any other provider
+            // through `/model`.
+            default_provider: "freemodel".to_owned(),
             auth_storage_path: None,
             agent: AgentConfig::default(),
             providers: ProviderConfig::default(),
@@ -160,6 +167,7 @@ pub struct ProviderConfig {
     pub openai_compat: OpenAiCompatConfig,
     pub openai_account: OpenAiAccountConfig,
     pub copilot: CopilotConfig,
+    pub freemodel: FreemodelConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -178,12 +186,78 @@ impl Default for OllamaConfig {
     }
 }
 
+/// Configuration for the freemodel.dev OpenAI-format gateway.
+///
+/// freemodel is registered as a no-login default provider. End-user binaries
+/// route through the artui Cloudflare Worker relay (see `cloudflare/`),
+/// which injects the upstream API key server-side — the binary itself ships
+/// no credentials. The `default_model` is used as the active selection on
+/// first launch and as the seed entry in the `/model` picker. `models` is
+/// populated at runtime by hitting `GET {base_url}/models`; the configured
+/// value is preserved so users can pin a specific list in
+/// `~/.config/artui/config.toml` if they prefer.
+///
+/// Power users who want to bypass the relay and call freemodel.dev directly
+/// can override `base_url` to `https://api.freemodel.dev/v1` in their
+/// config and export `FREEMODEL_API_KEY` (or `ARTUI_FREEMODEL_API_KEY`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct FreemodelConfig {
+    pub base_url: String,
+    pub default_model: String,
+    /// Cached/configured model id list shown in the `/model` picker. Populated
+    /// at startup by `GET {base_url}/models` and may be overridden in the
+    /// user config file.
+    pub models: Vec<String>,
+    pub request_timeout_secs: u64,
+}
+
+impl Default for FreemodelConfig {
+    fn default() -> Self {
+        Self {
+            // Default points at the artui Cloudflare Worker relay. The relay
+            // injects the upstream API key, so the binary sends no
+            // Authorization header (see `OpenAiCompatProvider::stream_chat`,
+            // which conditionally adds the header only when
+            // `resolve_credential` returns a value).
+            //
+            // ⚠ FORK MAINTAINERS: the `WORKERS_DEV_SUBDOMAIN_PLACEHOLDER`
+            // segment below MUST be replaced with your actual workers.dev
+            // subdomain after running `wrangler deploy` for the first time.
+            // Wrangler prints the deployed URL on success, e.g.:
+            //   Published artui-freemodel-relay (1.23 sec)
+            //     https://artui-freemodel-relay.kaminarikokyu.workers.dev
+            // Until you replace the placeholder, the binary will fail to
+            // resolve the relay and chat will error out with a DNS failure.
+            //
+            // End users can also override `providers.freemodel.base_url` in
+            // `~/.config/artui/config.toml` to point at any compatible
+            // OpenAI-format gateway.
+            base_url: "https://artui-freemodel-relay.kaminarikokyu.workers.dev/v1".to_owned(),
+            default_model: "gpt-5.4-mini".to_owned(),
+            models: Vec::new(),
+            request_timeout_secs: 30,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct OpenAiCompatConfig {
     pub base_url: String,
     pub api_key_env: String,
     pub default_model: String,
+    /// Provider id used when looking up credentials through
+    /// [`crate::auth::resolve_credential`]. Defaults to `"openai_compat"` so
+    /// existing user configs keep working; the freemodel provider sets this
+    /// to `"freemodel"` so it picks up the freemodel-specific env vars and
+    /// embedded fallback instead of OpenAI keys.
+    #[serde(default = "default_credential_provider_id")]
+    pub credential_provider_id: String,
+}
+
+fn default_credential_provider_id() -> String {
+    "openai_compat".to_owned()
 }
 
 impl Default for OpenAiCompatConfig {
@@ -192,6 +266,7 @@ impl Default for OpenAiCompatConfig {
             base_url: "https://api.openai.com/v1".to_owned(),
             api_key_env: "OPENAI_API_KEY".to_owned(),
             default_model: "gpt-4o-mini".to_owned(),
+            credential_provider_id: default_credential_provider_id(),
         }
     }
 }

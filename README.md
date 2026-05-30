@@ -74,7 +74,12 @@ artui      # canonical name
 Optional. Drop a TOML config at `~/.config/artui/config.toml` to change defaults:
 
 ```toml
-default_provider = "ollama"
+default_provider = "freemodel"
+
+[providers.freemodel]
+# Power-user override: bypass the artui Cloudflare relay and call
+# api.freemodel.dev directly. Requires FREEMODEL_API_KEY in your env.
+# base_url = "https://api.freemodel.dev/v1"
 
 [providers.ollama]
 host = "http://localhost:11434"
@@ -84,7 +89,7 @@ default_model = "gemma4:e2b"
 notify_level = "major"   # off | major | minor | all
 ```
 
-artui ships with built-in Ollama, OpenAI-compatible, and GitHub Copilot providers. Sign in to Copilot from inside the TUI: `/login` → choose GitHub Copilot. See [`docs/auth.md`](docs/auth.md) for credential paths and the full provider taxonomy.
+artui ships with built-in Freemodel, Ollama, OpenAI-compatible, and GitHub Copilot providers. Freemodel is the default and works without any setup — the binary routes through a tiny Cloudflare Worker that keeps the upstream API key server-side. Sign in to Copilot from inside the TUI: `/login` → choose GitHub Copilot. See [`docs/auth.md`](docs/auth.md) for credential paths and the full provider taxonomy, and [`cloudflare/README.md`](cloudflare/README.md) for how the freemodel relay is set up if you're forking artui.
 
 ## Run
 
@@ -166,6 +171,10 @@ cargo check
 cargo clippy -- -D warnings
 cargo test
 ```
+
+The freemodel relay lives in [`cloudflare/`](cloudflare/) and deploys
+separately as a Cloudflare Worker — fork-friendly, free-tier compatible.
+See [`cloudflare/README.md`](cloudflare/README.md) for the deploy walkthrough.
 
 ## License
 
