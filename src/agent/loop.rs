@@ -48,6 +48,14 @@ pub struct AgentLoopConfig {
     /// Phase N3 — wall-clock budget for the post-apply_patch
     /// publishDiagnostics poll.
     pub lsp_diagnostics_timeout_ms: u32,
+    /// Maximum number of "please continue" nudges the loop will inject
+    /// per turn when the model stalls (emits a preamble like "I'll
+    /// inspect X" then `Done` without any tool calls). Capped to stop
+    /// confused models from looping forever; the counter resets when a
+    /// tool call actually lands. Default 2 — enough to recover from
+    /// the most common smaller-model misfire without burning tokens
+    /// on a model that's genuinely confused.
+    pub max_nudges_per_turn: u32,
 }
 
 impl Default for AgentLoopConfig {
@@ -65,6 +73,7 @@ impl Default for AgentLoopConfig {
             lsp_manager: None,
             lsp_writethrough: true,
             lsp_diagnostics_timeout_ms: 750,
+            max_nudges_per_turn: 2,
         }
     }
 }
@@ -86,6 +95,10 @@ pub async fn run_turn(
 ) -> Vec<Message> {
     let mut extra_messages: Vec<Message> = Vec::new();
     let mut steps = 0;
+    // Number of times we've nudged the model after it said "I'll do X" but
+    // emitted no tool calls. Capped per turn so a confused model can't
+    // loop forever; resets when a tool call lands.
+    let mut nudges_used: u32 = 0;
 
     loop {
         if cancel.is_cancelled() {
@@ -230,13 +243,54 @@ pub async fn run_turn(
         // Wait for stream task to finish
         let _ = stream_handle.await;
 
-        // If no tool calls, we're done
+        // No tool calls — model either finished or stalled.
+        //
+        // Stall detection: small/cheap models (and some big ones, depending
+        // on the prompt) emit a "preamble" like `I'll quickly inspect X`
+        // and then `Done { end_turn: true }` without firing any tool. The
+        // user sees a half-answer with no follow-through. This is the
+        // exact failure mode flagged by every coding-agent post-mortem
+        // (Claude Code's "Token Budget Continuation", LangChain's
+        // tool_choice="required", oh-my-pi's nudge-and-retry).
+        //
+        // Recovery: if the assistant text reads like a promise to act
+        // (heuristic match against intent verbs) and we're under the
+        // per-turn nudge cap, append the assistant's preamble to the
+        // request, then a synthetic user nudge that asks the model to
+        // either follow through with a tool call or wrap up. Loop again.
         if tool_calls.is_empty() {
+            let promised = looks_like_unfulfilled_promise(&assistant_text);
+            let cap = config.max_nudges_per_turn;
+            if promised && nudges_used < cap && !end_turn_explicit_finish(&assistant_text) {
+                if !assistant_text.is_empty() {
+                    request
+                        .messages
+                        .push(Message::new(Role::Assistant, assistant_text.clone()));
+                    extra_messages.push(Message::new(Role::Assistant, assistant_text));
+                }
+                request
+                    .messages
+                    .push(Message::new(Role::User, NUDGE_BODY.to_owned()));
+                nudges_used = nudges_used.saturating_add(1);
+                tracing::debug!(
+                    target: "agent",
+                    nudge = nudges_used,
+                    cap = cap,
+                    "no tool calls but model promised action; nudging to continue",
+                );
+                continue;
+            }
+            // Either no promise was made (model genuinely finished) or
+            // we hit the nudge cap. Record the assistant text and exit.
             if !assistant_text.is_empty() {
                 extra_messages.push(Message::new(Role::Assistant, assistant_text));
             }
             break;
         }
+
+        // A tool call landed; reset the nudge counter so a later stall
+        // gets its own fresh budget.
+        nudges_used = 0;
 
         // Record assistant message with tool calls in transcript
         if !assistant_text.is_empty() {
@@ -445,5 +499,132 @@ fn render_approval_body(tool_name: &str, args: &serde_json::Value) -> String {
             format!("$ {cmd}\ncwd: {cwd}{reason}")
         }
         _ => serde_json::to_string_pretty(args).unwrap_or_else(|_| args.to_string()),
+    }
+}
+
+/// Synthetic user message injected when the model stalls — emits a
+/// preamble but no tool call. Wording mirrors the Claude Code / Aider /
+/// oh-my-pi convention: short, unambiguous, gives the model two clear
+/// paths (call the tool you intended, or wrap up cleanly).
+const NUDGE_BODY: &str = "Please continue. If you intended to call a tool, call it now. \
+If your previous answer was complete, briefly confirm and stop.";
+
+/// Heuristic: did the assistant's latest message read like an intent to
+/// act that the model never followed through on? Returns true when the
+/// text contains common "I will / let me / I'll go ahead and" markers
+/// — these are the phrases that precede a tool call in a healthy
+/// trajectory and signal a stall when the tool call is missing.
+///
+/// Conservative: false negatives (real promises we miss and don't nudge)
+/// are fine — the user can re-prompt. False positives (nudging when the
+/// model already finished) waste a turn so the threshold is biased
+/// toward only firing on clear promises.
+pub(crate) fn looks_like_unfulfilled_promise(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if lower.trim().is_empty() {
+        return false;
+    }
+    // Common preamble phrasings, in order of frequency. Keeping the list
+    // small + explicit so unit tests catch regressions; an ML classifier
+    // would be overkill for what is essentially regex-tier intent
+    // detection.
+    const PROMISES: &[&str] = &[
+        "i'll ",
+        "i will ",
+        "i'm going to ",
+        "i am going to ",
+        "let me ",
+        "let's ",
+        "going to ",
+        "i'll quickly ",
+        "first, i'll ",
+        "first i'll ",
+        "now i'll ",
+        "next, i'll ",
+        "next i'll ",
+        "now let me ",
+        "i'll start by ",
+        "i'll begin by ",
+        "i'll inspect ",
+        "i'll check ",
+        "i'll look ",
+        "i'll read ",
+        "i'll run ",
+    ];
+    PROMISES.iter().any(|needle| lower.contains(needle))
+}
+
+/// Heuristic: did the model explicitly say it's done / has nothing
+/// further to do? When true, we skip the nudge even if a "promise"
+/// pattern matched earlier in the same message. Belt-and-braces against
+/// nudging a model that wrapped up properly with a final summary.
+pub(crate) fn end_turn_explicit_finish(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    const FINISH_PATTERNS: &[&str] = &[
+        "all done",
+        "task complete",
+        "i'm done",
+        "that's all",
+        "nothing more",
+        "no further action",
+        "no other changes",
+        "no additional changes",
+    ];
+    FINISH_PATTERNS.iter().any(|needle| lower.contains(needle))
+}
+
+#[cfg(test)]
+mod nudge_heuristic_tests {
+    use super::*;
+
+    #[test]
+    fn empty_text_is_not_a_promise() {
+        assert!(!looks_like_unfulfilled_promise(""));
+        assert!(!looks_like_unfulfilled_promise("   \n  "));
+    }
+
+    #[test]
+    fn detects_ill_quickly_inspect() {
+        // The exact phrasing from the bug report screenshot.
+        let text = "I'll quickly inspect `cloudflare/` (README, package config, worker) and summarize its purpose.";
+        assert!(looks_like_unfulfilled_promise(text));
+    }
+
+    #[test]
+    fn detects_let_me_check() {
+        assert!(looks_like_unfulfilled_promise(
+            "Let me check the existing layout."
+        ));
+    }
+
+    #[test]
+    fn detects_im_going_to() {
+        assert!(looks_like_unfulfilled_promise(
+            "I'm going to look at src/lib.rs first."
+        ));
+    }
+
+    #[test]
+    fn ignores_non_promise_text() {
+        assert!(!looks_like_unfulfilled_promise("The function returns 42."));
+        assert!(!looks_like_unfulfilled_promise(
+            "Done. The fix is at src/lib.rs:12."
+        ));
+    }
+
+    #[test]
+    fn explicit_finish_overrides_promise() {
+        // Edge case: the model said "I'll do X" but in the *same* message
+        // also said "all done" — interpret as a final summary, don't
+        // nudge.
+        let text = "I'll explain — all done. The function lives at src/lib.rs:12.";
+        assert!(looks_like_unfulfilled_promise(text));
+        assert!(end_turn_explicit_finish(text));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert!(looks_like_unfulfilled_promise("LET ME do that"));
+        assert!(end_turn_explicit_finish("ALL DONE."));
     }
 }
