@@ -14,6 +14,26 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
   exit 1
 fi
 
+# Strip any whitespace / CR / LF from the token. CircleCI's env var
+# UI doesn't trim trailing newlines on paste; gh CLI then sends an
+# Authorization header with a stray \n which GitHub returns as either
+# 401 Bad credentials (classic PATs) or 404 Not Found (fine-grained).
+# Same defensive normalization we do in upload_r2.sh.
+GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d ' \t\r\n')"
+
+# Validate the token shape. GitHub PATs come in two flavours:
+#   classic:        ghp_<36 chars>   → 40 chars total
+#   fine-grained:   github_pat_<82+ chars>
+# Length sanity-check both. A 16-char or 32-char token is wrong (likely
+# a Cloudflare token pasted into the wrong slot).
+TOKEN_LEN="${#GITHUB_TOKEN}"
+if [ "$TOKEN_LEN" -lt 30 ] || [ "$TOKEN_LEN" -gt 200 ]; then
+  echo "ERROR: GITHUB_TOKEN is $TOKEN_LEN chars; expected 40 (classic ghp_) or 90+ (github_pat_)." >&2
+  echo "       Did you paste a Cloudflare token into this slot?" >&2
+  exit 1
+fi
+echo "GITHUB_TOKEN sanity check: ${GITHUB_TOKEN:0:6}…${GITHUB_TOKEN: -4} ($TOKEN_LEN chars)"
+
 TAG="$(cat /tmp/release-meta/tag)"
 REPO="${GITHUB_REPO:-lucasram20/artui}"
 
