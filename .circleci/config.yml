@@ -1,33 +1,64 @@
 # CircleCI configuration for artui.
 #
-# This file takes over CI duty from `.github/workflows/ci.yml`. The GHA CI
-# workflow is kept in the repo with `workflow_dispatch`-only triggers as a
-# manual fallback in case CircleCI is unavailable.
+# Two pipelines live here:
 #
-# `.github/workflows/release.yml` is unchanged and continues to handle tag
-# pushes (cross-compiling to 6 targets, R2 upload, GitHub release publish).
-# Branch pushes go through CircleCI; tag pushes go through GHA. No overlap.
+#   1. CI (`ci` workflow) — fires on every branch push + PR. Lint, test,
+#      build sanity-check on Linux. Replaces the GHA CI workflow which
+#      ran out of GHA's 2,000 min/month private-repo allowance.
+#   2. Release (`release` workflow) — fires on `v*` tag push. Cross-compiles
+#      to 6 targets (linux-x86_64/aarch64, macos-x86_64/aarch64,
+#      windows-x86_64/aarch64), uploads archives to Cloudflare R2, and
+#      publishes a GitHub release. Replaces the GHA release workflow
+#      which used the same minute pool as CI.
 #
-# Why the migration: GHA private-repo allowance is 2,000 minutes/month and
-# the multi-OS test matrix burned through it. CircleCI's free plan grants
-# 30,000 credits/month, ~3,000 Linux build-minutes — 50% more headroom.
+# Why the migration: GHA's release workflow ran out of minutes mid-publish
+# during the v0.6.0 release. The artifacts built fine but the final
+# `gh release create` step never ran. Moving the entire pipeline to
+# CircleCI's free 30,000 credits/month plan removes the constraint.
+#
+# Required CircleCI project env vars (Project Settings → Environment Variables):
+#
+#   GITHUB_TOKEN          — Personal access token with `repo` scope. Used
+#                            by the publish job to create the GitHub release.
+#                            Generate at https://github.com/settings/tokens/new
+#                            with Contents:Write + Metadata:Read.
+#   R2_ACCOUNT_ID         — Cloudflare account ID. Used to build the R2
+#                            S3-compatible endpoint URL.
+#   R2_ACCESS_KEY_ID      — R2 access key for the artui-releases bucket.
+#   R2_SECRET_ACCESS_KEY  — Matching R2 secret access key.
+#
+# These mirror the GHA secrets the original release.yml used. No NPM_TOKEN
+# is required because artui doesn't auto-publish to the npm registry from
+# CI; npm publish is a manual step from the npm/ subdirectory.
 
 version: 2.1
 
 # ── Executors ────────────────────────────────────────────────────────────
 #
-# `cimg/rust:1.95` ships with Rust 1.95 + rustfmt + clippy preinstalled
-# and a working `~/.cargo` layout, so we don't burn time on toolchain
-# setup. Tracks the local development toolchain (cargo 1.95.0) so CI and
-# local builds resolve identical dependency graphs — important because
-# transitive deps like `ignore` 0.4.25 and `idna_adapter` 1.2.2 require
-# `edition2024` (stabilized in Rust 1.85), and an older image tag like
-# `cimg/rust:1.83` failed to compile them. Bump this when you bump the
-# local toolchain; mismatch causes "feature `edition2024` is required"
-# errors at `cargo build` time.
+# Three flavours:
 #
-# Resource class `medium` (4 vCPU / 8 GB) is plenty for an artui-sized
-# cargo build and stays inside the free-tier credit ceiling.
+#   rust-linux        — `cimg/rust:1.95` Docker image. Used for CI and the
+#                        Linux release builds. Fast spin-up, cheapest
+#                        credit class.
+#   rust-linux-cross  — same image, but the build job installs zig +
+#                        cargo-zigbuild for cross-compiling Linux aarch64
+#                        from x86_64. Avoids a slow ARM runner.
+#   rust-macos        — CircleCI's macos.m1.medium runner. Native ARM, can
+#                        cross-compile to x86_64 via `cargo build --target`.
+#                        ~10× the credit cost of Linux per minute, used
+#                        only for the two macOS targets.
+#   rust-windows      — CircleCI's windows.medium runner. Builds both
+#                        windows-x86_64 and windows-aarch64 via
+#                        `cargo build --target`.
+#
+# Tracking the local development toolchain (cargo 1.95.0) keeps CI and
+# local builds reproducible — bump the image tag when you bump the local
+# toolchain. Mismatched versions surface as "feature `edition2024` is
+# required" errors at cargo build time.
+
+orbs:
+  win: circleci/windows@5.0
+
 executors:
   rust-linux:
     docker:
@@ -35,37 +66,71 @@ executors:
     resource_class: medium
     working_directory: ~/artui
 
+  rust-linux-cross:
+    docker:
+      - image: cimg/rust:1.95
+    resource_class: medium
+    working_directory: ~/artui
+
+  rust-macos:
+    macos:
+      xcode: 16.0.0
+    resource_class: macos.m1.medium.gen1
+    working_directory: ~/artui
+
 # ── Reusable steps ───────────────────────────────────────────────────────
-#
-# Caching mirrors `Swatinem/rust-cache@v2`'s shape: registry index + git
-# checkouts + the `target/` build directory, keyed on the OS arch and the
-# Cargo.lock checksum. A no-op run (docs-only push) restores the cache and
-# completes in ~30s; a clean run after a Cargo.lock bump rebuilds from
-# scratch and saves a fresh cache for next time.
 commands:
   restore_rust_cache:
     description: "Restore cargo registry, git, and target/ caches"
+    parameters:
+      target:
+        type: string
+        default: "default"
     steps:
       - restore_cache:
           keys:
-            # Most-specific first — exact Cargo.lock match wins.
-            - artui-rust-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
-            # Partial fallback so we still benefit from registry/git
-            # warmup when only Cargo.lock has changed.
-            - artui-rust-v1-{{ arch }}-
+            - artui-rust-v2-{{ arch }}-<< parameters.target >>-{{ checksum "Cargo.lock" }}
+            - artui-rust-v2-{{ arch }}-<< parameters.target >>-
 
   save_rust_cache:
     description: "Persist cargo registry, git, and target/ caches"
+    parameters:
+      target:
+        type: string
+        default: "default"
     steps:
       - save_cache:
-          key: artui-rust-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+          key: artui-rust-v2-{{ arch }}-<< parameters.target >>-{{ checksum "Cargo.lock" }}
           paths:
             - ~/.cargo/registry
             - ~/.cargo/git
             - target
 
+  # Resolve the tag for the running release pipeline. CircleCI exposes
+  # the tag in `CIRCLE_TAG` for tag-triggered runs; we strip the leading
+  # `v` and persist both forms to a workspace file so downstream jobs
+  # can read them without re-parsing.
+  resolve_tag:
+    description: "Persist CIRCLE_TAG and stripped version to release-meta"
+    steps:
+      - run:
+          name: Resolve tag and version
+          command: |
+            set -e
+            TAG="${CIRCLE_TAG}"
+            if [ -z "$TAG" ]; then
+              echo "ERROR: CIRCLE_TAG is empty — release jobs require a tag" >&2
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+            mkdir -p /tmp/release-meta
+            echo "$TAG" > /tmp/release-meta/tag
+            echo "$VERSION" > /tmp/release-meta/version
+            echo "tag=$TAG version=$VERSION"
+
 # ── Jobs ─────────────────────────────────────────────────────────────────
 jobs:
+  # ── CI jobs (every push) ───────────────────────────────────────────────
   lint:
     executor: rust-linux
     environment:
@@ -98,10 +163,6 @@ jobs:
       - restore_rust_cache
       - run:
           name: cargo test
-          # Default features only — see the lint job above for why.
-          # `tests/lsp_integration.rs` is `#![cfg(feature = "lsp-integration")]`-
-          # gated, so it won't compile without the flag and the runtime
-          # `which::which("rust-analyzer")` skip-guard never fires here.
           command: cargo test --all-targets
       - save_rust_cache
 
@@ -115,21 +176,255 @@ jobs:
       - restore_rust_cache
       - run:
           name: cargo build --release
-          # Sanity check that the release profile compiles. The actual
-          # release artifacts (cross-compiled, archived, R2-uploaded)
-          # come from `.github/workflows/release.yml` on tag push.
           command: cargo build --release --all-targets
       - save_rust_cache
 
+  # ── Release jobs (tag push only) ───────────────────────────────────────
+  #
+  # Each release-build job builds one target and persists the archive
+  # (tar.gz on Linux/macOS, zip on Windows) to the workspace under
+  # `dist/`. The downstream `release-publish` job collects all six
+  # archives, computes checksums, uploads to R2, and creates the GitHub
+  # release.
+
+  release-build-linux-x86_64:
+    executor: rust-linux
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "linux-x86_64"
+      - run:
+          name: cargo build --release --target x86_64-unknown-linux-gnu
+          command: |
+            rustup target add x86_64-unknown-linux-gnu
+            cargo build --release --target x86_64-unknown-linux-gnu --bin artui
+      - run:
+          name: Stage tar.gz
+          command: bash .circleci/stage_unix.sh x86_64-unknown-linux-gnu linux-x86_64
+      - persist_to_workspace:
+          root: ~/artui
+          paths:
+            - dist/
+      - save_rust_cache:
+          target: "linux-x86_64"
+
+  release-build-linux-aarch64:
+    executor: rust-linux-cross
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "linux-aarch64"
+      - run:
+          name: Install zig + cargo-zigbuild
+          # zigbuild lets us cross-compile Linux aarch64 from x86_64
+          # without paying for a separate ARM runner. Stable on
+          # cimg/rust:1.95.
+          command: |
+            set -e
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq xz-utils
+            curl -fsSL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | sudo tar -xJ -C /usr/local/
+            sudo ln -sf /usr/local/zig-linux-x86_64-0.13.0/zig /usr/local/bin/zig
+            zig version
+            cargo install cargo-zigbuild --locked --version 0.19.7
+            rustup target add aarch64-unknown-linux-gnu
+      - run:
+          name: cargo zigbuild --release --target aarch64-unknown-linux-gnu
+          command: cargo zigbuild --release --target aarch64-unknown-linux-gnu --bin artui
+      - run:
+          name: Stage tar.gz
+          command: bash .circleci/stage_unix.sh aarch64-unknown-linux-gnu linux-aarch64
+      - persist_to_workspace:
+          root: ~/artui
+          paths:
+            - dist/
+      - save_rust_cache:
+          target: "linux-aarch64"
+
+  release-build-macos-x86_64:
+    executor: rust-macos
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "macos-x86_64"
+      - run:
+          name: Install Rust + x86_64 target
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            rustup target add x86_64-apple-darwin
+      - run:
+          name: cargo build --release --target x86_64-apple-darwin
+          command: cargo build --release --target x86_64-apple-darwin --bin artui
+      - run:
+          name: Stage tar.gz
+          command: bash .circleci/stage_unix.sh x86_64-apple-darwin macos-x86_64
+      - persist_to_workspace:
+          root: ~/artui
+          paths:
+            - dist/
+      - save_rust_cache:
+          target: "macos-x86_64"
+
+  release-build-macos-aarch64:
+    executor: rust-macos
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "macos-aarch64"
+      - run:
+          name: Install Rust + aarch64 target
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            rustup target add aarch64-apple-darwin
+      - run:
+          name: cargo build --release --target aarch64-apple-darwin
+          command: cargo build --release --target aarch64-apple-darwin --bin artui
+      - run:
+          name: Stage tar.gz
+          command: bash .circleci/stage_unix.sh aarch64-apple-darwin macos-aarch64
+      - persist_to_workspace:
+          root: ~/artui
+          paths:
+            - dist/
+      - save_rust_cache:
+          target: "macos-aarch64"
+
+  release-build-windows-x86_64:
+    executor:
+      name: win/default
+      shell: bash.exe
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "windows-x86_64"
+      - run:
+          name: Install Rust
+          shell: bash.exe
+          command: |
+            choco install -y rustup.install --no-progress
+            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            rustup default stable
+            rustup target add x86_64-pc-windows-msvc
+            rustc --version
+      - run:
+          name: cargo build --release --target x86_64-pc-windows-msvc
+          shell: bash.exe
+          command: |
+            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            cargo build --release --target x86_64-pc-windows-msvc --bin artui
+      - run:
+          name: Stage zip
+          shell: powershell.exe
+          command: powershell -ExecutionPolicy Bypass -File .circleci/stage_windows.ps1 x86_64-pc-windows-msvc windows-x86_64
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+      - save_rust_cache:
+          target: "windows-x86_64"
+
+  release-build-windows-aarch64:
+    executor:
+      name: win/default
+      shell: bash.exe
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - restore_rust_cache:
+          target: "windows-aarch64"
+      - run:
+          name: Install Rust + aarch64 target
+          shell: bash.exe
+          command: |
+            choco install -y rustup.install --no-progress
+            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            rustup default stable
+            rustup target add aarch64-pc-windows-msvc
+      - run:
+          name: cargo build --release --target aarch64-pc-windows-msvc
+          shell: bash.exe
+          command: |
+            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            cargo build --release --target aarch64-pc-windows-msvc --bin artui
+      - run:
+          name: Stage zip
+          shell: powershell.exe
+          command: powershell -ExecutionPolicy Bypass -File .circleci/stage_windows.ps1 aarch64-pc-windows-msvc windows-aarch64
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+      - save_rust_cache:
+          target: "windows-aarch64"
+
+  release-publish:
+    executor: rust-linux
+    environment:
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - resolve_tag
+      - attach_workspace:
+          at: ~/artui
+      - run:
+          name: List artifacts
+          command: ls -la dist/
+      - run:
+          name: Compute checksums
+          command: |
+            set -e
+            cd dist
+            sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256
+            cat checksums.sha256
+      - run:
+          name: Install AWS CLI v2 for R2 upload
+          command: |
+            set -e
+            curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            sudo /tmp/aws/install --update
+            aws --version
+      - run:
+          name: Upload artifacts to Cloudflare R2
+          command: bash .circleci/upload_r2.sh
+      - run:
+          name: Publish GitHub release
+          command: bash .circleci/publish_github.sh
+
 # ── Workflows ────────────────────────────────────────────────────────────
 #
-# Single workflow `ci` triggered on every push and PR (CircleCI's default).
-# Lint + test run in parallel; build runs after both pass. Mirrors the
-# `needs: [lint, test]` chain in the original GHA `ci.yml`.
-#
-# Note: CircleCI fires on tag pushes too unless filtered out. We exclude
-# tags here so release tags (handled by GHA `release.yml`) don't double-fire
-# CircleCI CI runs and waste credits.
+# `ci` fires on every branch push and PR (tag pushes filtered out).
+# `release` fires only on `v*` tag pushes. The two workflows are
+# completely independent — release jobs require the tag filter so they
+# never run on branch pushes, and the CI jobs explicitly ignore tags
+# so they don't double-fire when a release tag is pushed.
 workflows:
   ci:
     jobs:
@@ -147,4 +442,56 @@ workflows:
             - test
           filters:
             tags:
+              ignore: /.*/
+
+  release:
+    jobs:
+      - release-build-linux-x86_64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-build-linux-aarch64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-build-macos-x86_64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-build-macos-aarch64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-build-windows-x86_64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-build-windows-aarch64:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - release-publish:
+          requires:
+            - release-build-linux-x86_64
+            - release-build-linux-aarch64
+            - release-build-macos-x86_64
+            - release-build-macos-aarch64
+            - release-build-windows-x86_64
+            - release-build-windows-aarch64
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
               ignore: /.*/

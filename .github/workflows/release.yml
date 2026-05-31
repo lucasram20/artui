@@ -1,19 +1,27 @@
-name: Release
+name: Release (fallback)
+
+# Release moved to CircleCI in v0.7.0 — see `.circleci/config.yml`
+# `release` workflow. The reason: this workflow ran out of GHA minutes
+# mid-publish during v0.6.0; CircleCI's free 30,000 credits/month plan
+# absorbs the cross-platform matrix without that constraint.
+#
+# This workflow is preserved as a manual fallback. Trigger it from the
+# Actions tab via "Run workflow" → enter the existing tag (e.g. v0.7.1)
+# when CircleCI's release pipeline is unavailable. It is NOT triggered
+# by tag push anymore, so the same `git tag vX.Y.Z && git push origin
+# vX.Y.Z` flow only triggers CircleCI.
+#
+# To re-enable on tag push, swap the `on:` block back to the
+# `push: tags: ['v*']` form (kept commented below for reference).
 
 on:
-  # Triggered when you push a manual tag from your local CLI:
-  #   git tag v0.3.5 && git push origin v0.3.5
-  # Manual tag pushes are NOT subject to GitHub's
-  # "default GITHUB_TOKEN cannot trigger other workflows" rule, since
-  # they originate from a real user push, not from another workflow.
-  push:
-    tags:
-      - 'v*'
-  # Manual fallback for re-running the build for an existing tag.
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build (e.g. v0.3.5)"
+        description: "Existing tag to build (e.g. v0.7.1)"
         required: true
 
 permissions:
