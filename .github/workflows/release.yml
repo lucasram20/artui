@@ -24,17 +24,27 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build ${{ matrix.display_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
+        # `display_name` is what shows up in the GitHub Actions UI —
+        # human-friendly OS + arch labels so the run list reads cleanly.
+        # `target` is the canonical Rust target triple and stays
+        # unchanged: asset filenames, the R2 latest/checksums.sha256
+        # entries, and install.sh/install.ps1 all key off it. The
+        # "unknown" segment is the Rust convention for "vendor-agnostic"
+        # (glibc Linux runs on Debian, Fedora, Arch, Ubuntu, …) — not a
+        # build status indicator.
         include:
-          - target: x86_64-unknown-linux-gnu
+          - display_name: Linux x86_64 (glibc)
+            target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-          - target: aarch64-unknown-linux-gnu
+          - display_name: Linux aarch64 (glibc)
+            target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
             cross: true
@@ -42,16 +52,20 @@ jobs:
           # macos-13 (Intel) runners have a tiny pool and queue for
           # 10+ minutes; macos-14 is plentiful and builds x86_64 just
           # as well via `cargo build --target`.
-          - target: x86_64-apple-darwin
+          - display_name: macOS x86_64 (Intel)
+            target: x86_64-apple-darwin
             os: macos-14
             archive: tar.gz
-          - target: aarch64-apple-darwin
+          - display_name: macOS aarch64 (Apple Silicon)
+            target: aarch64-apple-darwin
             os: macos-14
             archive: tar.gz
-          - target: x86_64-pc-windows-msvc
+          - display_name: Windows x86_64 (MSVC)
+            target: x86_64-pc-windows-msvc
             os: windows-2025-vs2026
             archive: zip
-          - target: aarch64-pc-windows-msvc
+          - display_name: Windows aarch64 (MSVC)
+            target: aarch64-pc-windows-msvc
             os: windows-2025-vs2026
             archive: zip
     steps:
