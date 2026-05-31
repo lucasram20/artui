@@ -43,12 +43,71 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
         lines.push(Line::from(""));
     }
 
+    // Active todo list (Phase N5) — render below the transcript so it
+    // sits next to the spinner while the agent is working. Rendering
+    // last keeps it visible without scroll math intervening.
+    if !app.todos.is_empty() {
+        lines.extend(render_todo_list(app, theme_id));
+        lines.push(Line::from(""));
+    }
+
     let scroll = transcript_scroll_offset(app, area);
     let paragraph = Paragraph::new(lines)
         .style(Style::default().fg(palette.text).bg(palette.bg))
         .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
+}
+
+/// Render the active todo list as a checklist with header showing
+/// "[done/total tasks]". Pending items render in muted color, the active
+/// `in_progress` item gets the accent color so the user can spot
+/// what's running, and completed items are dimmed and struck-through.
+fn render_todo_list(app: &App, theme_id: ThemeId) -> Vec<Line<'static>> {
+    use crate::tools::todo_write::TodoStatus;
+    let palette = theme::palette(theme_id);
+    let total = app.todos.len();
+    let done = app
+        .todos
+        .iter()
+        .filter(|t| t.status == TodoStatus::Completed)
+        .count();
+    let mut lines = Vec::with_capacity(total + 2);
+
+    lines.push(Line::from(vec![
+        Span::styled(
+            "★ ",
+            Style::default()
+                .fg(palette.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("Tasks ({done}/{total} done)"),
+            Style::default()
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]));
+
+    for todo in &app.todos {
+        let (color, modifier) = match todo.status {
+            TodoStatus::Pending => (palette.muted, Modifier::empty()),
+            TodoStatus::InProgress => (palette.accent, Modifier::BOLD),
+            TodoStatus::Completed => (palette.muted, Modifier::DIM | Modifier::CROSSED_OUT),
+        };
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                format!("{} ", todo.status.glyph()),
+                Style::default().fg(color).add_modifier(modifier),
+            ),
+            Span::styled(
+                todo.subject.clone(),
+                Style::default().fg(color).add_modifier(modifier),
+            ),
+        ]));
+    }
+    lines
 }
 
 fn thinking_line(
@@ -60,7 +119,7 @@ fn thinking_line(
     let palette = theme::palette(theme_id);
     let elapsed = app
         .thinking_elapsed()
-        .map(|duration| format!(" ({}s • esc to interrupt)", duration.as_secs()))
+        .map(|duration| format_thinking_meta(app, duration))
         .unwrap_or_default();
     let phrase = if app.mode == UiMode::Streaming {
         format!("{}{}", app.thinking_phrase(), elapsed)
@@ -86,6 +145,101 @@ fn thinking_line(
                 .add_modifier(Modifier::BOLD),
         ),
     ])
+}
+
+/// Format the spinner header trailing meta block: elapsed wall-clock and
+/// cumulative output tokens for the active turn. Mirrors Claude Code's
+/// `(12m 50s · ↓ 26.3k tokens)` shape so the user can see at a glance how
+/// long the agent has been working and how many tokens it's burning.
+fn format_thinking_meta(app: &App, duration: std::time::Duration) -> String {
+    let mut meta = String::from(" (");
+    meta.push_str(&format_elapsed(duration));
+    if app.turn_output_tokens > 0 {
+        meta.push_str(" · ↓ ");
+        meta.push_str(&format_token_count(app.turn_output_tokens));
+        meta.push_str(" tokens");
+    }
+    meta.push_str(" · esc to interrupt)");
+    meta
+}
+
+/// Render an elapsed `Duration` as `42s` / `12m 50s` / `1h 5m`. Drops the
+/// seconds entirely when over an hour to keep the header narrow on small
+/// terminals.
+fn format_elapsed(duration: std::time::Duration) -> String {
+    let secs = duration.as_secs();
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        let m = secs / 60;
+        let s = secs % 60;
+        format!("{m}m {s}s")
+    } else {
+        let h = secs / 3600;
+        let m = (secs % 3600) / 60;
+        format!("{h}h {m}m")
+    }
+}
+
+/// Render a raw token count as `780` / `4.2k` / `1.2M`. Tracks Claude
+/// Code's display style so users moving between tools see the same shape.
+fn format_token_count(tokens: u32) -> String {
+    if tokens < 1_000 {
+        format!("{tokens}")
+    } else if tokens < 1_000_000 {
+        let k = tokens as f64 / 1_000.0;
+        // Drop the trailing `.0` for clean integer thousands.
+        if (k - k.round()).abs() < 0.05 {
+            format!("{:.0}k", k)
+        } else {
+            format!("{:.1}k", k)
+        }
+    } else {
+        format!("{:.1}M", tokens as f64 / 1_000_000.0)
+    }
+}
+
+#[cfg(test)]
+mod chat_meta_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn elapsed_under_minute() {
+        assert_eq!(format_elapsed(Duration::from_secs(42)), "42s");
+    }
+
+    #[test]
+    fn elapsed_minutes_and_seconds() {
+        assert_eq!(format_elapsed(Duration::from_secs(12 * 60 + 50)), "12m 50s");
+    }
+
+    #[test]
+    fn elapsed_hours_and_minutes() {
+        assert_eq!(format_elapsed(Duration::from_secs(3600 + 5 * 60)), "1h 5m");
+    }
+
+    #[test]
+    fn token_count_below_1k() {
+        assert_eq!(format_token_count(780), "780");
+    }
+
+    #[test]
+    fn token_count_thousands_with_decimal() {
+        assert_eq!(format_token_count(4_200), "4.2k");
+        assert_eq!(format_token_count(26_300), "26.3k");
+    }
+
+    #[test]
+    fn token_count_round_thousands_drop_decimal() {
+        assert_eq!(format_token_count(5_000), "5k");
+        assert_eq!(format_token_count(10_000), "10k");
+    }
+
+    #[test]
+    fn token_count_millions() {
+        assert_eq!(format_token_count(1_200_000), "1.2M");
+    }
 }
 
 fn transcript_scroll_offset(app: &App, area: Rect) -> u16 {

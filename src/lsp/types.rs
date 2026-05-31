@@ -80,15 +80,26 @@ impl ServerSpec {
     }
 }
 
-/// Operations the `lsp` tool currently dispatches.
+/// Operations the `lsp` tool dispatches.
 ///
-/// Phase N1 ships [`LspAction::Definition`], [`LspAction::Hover`], and
-/// [`LspAction::Status`]. Phases N2/N3/N4 extend this enum.
+/// Phase N1: [`Self::Definition`], [`Self::Hover`], [`Self::Status`].
+/// Phase N2: [`Self::References`], [`Self::Implementation`],
+///   [`Self::TypeDefinition`], [`Self::DocumentSymbols`],
+///   [`Self::WorkspaceSymbols`], [`Self::Diagnostics`].
+/// Phase N4: [`Self::Rename`], [`Self::CodeActions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LspAction {
     Definition,
     Hover,
     Status,
+    References,
+    Implementation,
+    TypeDefinition,
+    DocumentSymbols,
+    WorkspaceSymbols,
+    Diagnostics,
+    Rename,
+    CodeActions,
 }
 
 impl LspAction {
@@ -99,6 +110,14 @@ impl LspAction {
             "definition" => Some(Self::Definition),
             "hover" => Some(Self::Hover),
             "status" => Some(Self::Status),
+            "references" => Some(Self::References),
+            "implementation" => Some(Self::Implementation),
+            "type_definition" => Some(Self::TypeDefinition),
+            "document_symbols" => Some(Self::DocumentSymbols),
+            "workspace_symbols" => Some(Self::WorkspaceSymbols),
+            "diagnostics" => Some(Self::Diagnostics),
+            "rename" => Some(Self::Rename),
+            "code_actions" => Some(Self::CodeActions),
             _ => None,
         }
     }
@@ -108,7 +127,21 @@ impl LspAction {
             Self::Definition => "definition",
             Self::Hover => "hover",
             Self::Status => "status",
+            Self::References => "references",
+            Self::Implementation => "implementation",
+            Self::TypeDefinition => "type_definition",
+            Self::DocumentSymbols => "document_symbols",
+            Self::WorkspaceSymbols => "workspace_symbols",
+            Self::Diagnostics => "diagnostics",
+            Self::Rename => "rename",
+            Self::CodeActions => "code_actions",
         }
+    }
+
+    /// Mutating ops route through the approval engine. Read-only ops bypass
+    /// it (indistinguishable from `read_file`).
+    pub fn is_mutating(self) -> bool {
+        matches!(self, Self::Rename | Self::CodeActions)
     }
 }
 
@@ -123,6 +156,9 @@ pub struct LocationView {
     pub line: u32,
     /// 1-based column number.
     pub column: u32,
+    /// Optional preview line — populated for `references` so the model
+    /// sees the surrounding context. Empty for `definition` hits.
+    pub preview: Option<String>,
 }
 
 /// Rendered `textDocument/hover` payload — markdown stripped to plain text
@@ -130,4 +166,30 @@ pub struct LocationView {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HoverView {
     pub contents: String,
+}
+
+/// One symbol from `textDocument/documentSymbol` — flattened with depth so
+/// the renderer can emit a tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolView {
+    /// Display name, e.g. `LspManager` or `for_path`.
+    pub name: String,
+    /// LSP `SymbolKind` rendered as a short tag (`fn`, `struct`, `mod`, …).
+    pub kind: &'static str,
+    /// Indent depth (0 = top-level).
+    pub depth: u32,
+    /// 1-based line of the symbol's selection range.
+    pub line: u32,
+    /// 1-based column of the symbol's selection range.
+    pub column: u32,
+}
+
+/// One diagnostic, post-render. Severity tag + position + message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticView {
+    pub path: PathBuf,
+    pub line: u32,
+    pub column: u32,
+    pub severity: &'static str,
+    pub message: String,
 }

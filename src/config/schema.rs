@@ -396,6 +396,16 @@ pub struct LspConfig {
     /// Per-request timeout (seconds). Override per-server via
     /// `~/.config/artui/lsp.toml` (Phase N2+).
     pub request_timeout_secs: u32,
+    /// Phase N3 — when true, every successful `apply_patch` runs a
+    /// writethrough pass that pushes the new file contents to the LSP and
+    /// waits for `publishDiagnostics`, then appends the diagnostics to the
+    /// tool result so the model sees its own breakage immediately.
+    pub writethrough: bool,
+    /// Phase N3 — wall-clock budget for the post-apply_patch
+    /// `publishDiagnostics` poll. Tight enough to keep the agent loop
+    /// snappy, loose enough that rust-analyzer's incremental check has
+    /// time to land. Default 750 ms.
+    pub diagnostics_timeout_ms: u32,
 }
 
 impl Default for LspConfig {
@@ -405,6 +415,8 @@ impl Default for LspConfig {
             warmup_on_startup: true,
             log_messages: false,
             request_timeout_secs: 10,
+            writethrough: true,
+            diagnostics_timeout_ms: 750,
         }
     }
 }

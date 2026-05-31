@@ -115,13 +115,43 @@ fn leak_str(s: &str) -> &'static str {
     Box::leak(s.to_owned().into_boxed_str())
 }
 
-/// State the client cares about per open file. Phase N1 doesn't actually
-/// open files (no didOpen / didChange), but the field is here so Phase N3
-/// can extend without an API churn.
+/// Bridge a `WorkspaceSymbol` nested entry into a `SymbolInformation` so the
+/// renderer only deals with one shape.
+#[allow(deprecated)]
+fn workspace_symbol_to_info(
+    name: String,
+    kind: lsp_types::SymbolKind,
+    location: lsp_types::Location,
+) -> lsp_types::SymbolInformation {
+    lsp_types::SymbolInformation {
+        name,
+        kind,
+        tags: None,
+        deprecated: None,
+        location,
+        container_name: None,
+    }
+}
+
+/// State the client cares about per open file. Phase N3's writethrough
+/// uses [`Self::open_files`] to track per-file `version` so we can send
+/// the correct `didChange` increments.
 #[derive(Debug, Default)]
 struct ClientState {
     diagnostics: HashMap<PathBuf, Vec<Diagnostic>>,
     capabilities: Option<ServerCapabilities>,
+    open_files: HashMap<PathBuf, OpenFile>,
+}
+
+#[derive(Debug, Clone)]
+struct OpenFile {
+    version: i32,
+    /// Language id (e.g. "rust", "python") sent in `didOpen`. Stored for
+    /// observability — re-sent on every `didChange` would duplicate it,
+    /// so we cache it here for any future code that wants to know what
+    /// language id the server sees for this path.
+    #[allow(dead_code)]
+    language_id: String,
 }
 
 pub struct LspClient {
@@ -421,6 +451,407 @@ impl LspClient {
         .map_err(|_| anyhow!("hover request timed out"))?
         .with_context(|| format!("hover request to {} failed", self.server_id))?;
         Ok(response)
+    }
+
+    // ── Phase N2: read-only completeness ──────────────────────────────
+
+    /// `textDocument/references` — find all callers/usages.
+    pub async fn references(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+        include_declaration: bool,
+    ) -> Result<Vec<lsp_types::Location>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.references_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise references capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::ReferenceParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_position(line, column),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: lsp_types::ReferenceContext {
+                include_declaration,
+            },
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::References>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("references request timed out"))?
+        .with_context(|| format!("references request to {} failed", self.server_id))?;
+        Ok(response.unwrap_or_default())
+    }
+
+    /// `textDocument/implementation` — find concrete impls of a trait/iface.
+    pub async fn implementation(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.implementation_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise implementation capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::request::GotoImplementationParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_position(line, column),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::GotoImplementation>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("implementation request timed out"))?
+        .with_context(|| format!("implementation request to {} failed", self.server_id))?;
+        Ok(response)
+    }
+
+    /// `textDocument/typeDefinition` — find the type of a value.
+    pub async fn type_definition(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.type_definition_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise type_definition capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::request::GotoTypeDefinitionParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_position(line, column),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::GotoTypeDefinition>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("type_definition request timed out"))?
+        .with_context(|| format!("type_definition request to {} failed", self.server_id))?;
+        Ok(response)
+    }
+
+    /// `textDocument/documentSymbol` — list symbols in a file.
+    pub async fn document_symbols(
+        &self,
+        path: &Path,
+    ) -> Result<Option<lsp_types::DocumentSymbolResponse>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.document_symbol_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise document_symbols capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::DocumentSymbolParams {
+            text_document: TextDocumentIdentifier { uri },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::DocumentSymbolRequest>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("document_symbols request timed out"))?
+        .with_context(|| format!("document_symbols request to {} failed", self.server_id))?;
+        Ok(response)
+    }
+
+    /// `workspace/symbol` — find symbols by name across the workspace.
+    pub async fn workspace_symbols(
+        &self,
+        query: &str,
+    ) -> Result<Vec<lsp_types::SymbolInformation>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.workspace_symbol_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise workspace_symbols capability",
+                self.server_id
+            ));
+        }
+        let params = lsp_types::WorkspaceSymbolParams {
+            query: query.to_owned(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::WorkspaceSymbolRequest>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("workspace_symbols request timed out"))?
+        .with_context(|| format!("workspace_symbols request to {} failed", self.server_id))?;
+        // The legacy `WorkspaceSymbolResponse::Flat(Vec<SymbolInformation>)` is
+        // what most servers still return; the newer `Nested` variant wraps
+        // `WorkspaceSymbol` (no `Location` until resolved). We coerce to the
+        // flat form because the renderer only needs name + path + position.
+        let flat = match response {
+            Some(lsp_types::WorkspaceSymbolResponse::Flat(items)) => items,
+            Some(lsp_types::WorkspaceSymbolResponse::Nested(items)) => items
+                .into_iter()
+                .filter_map(|item| match item.location {
+                    lsp_types::OneOf::Left(loc) => {
+                        Some(workspace_symbol_to_info(item.name, item.kind, loc))
+                    }
+                    lsp_types::OneOf::Right(_) => None,
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        Ok(flat)
+    }
+
+    /// Read-only snapshot of the diagnostics cache. Returns the diagnostics
+    /// pushed by the server via `publishDiagnostics`. When `path` is `None`,
+    /// returns every tracked file's diagnostics.
+    pub async fn cached_diagnostics(&self, path: Option<&Path>) -> Vec<(PathBuf, Vec<Diagnostic>)> {
+        let state = self.state.lock().await;
+        match path {
+            Some(p) => {
+                if let Some(diags) = state.diagnostics.get(p) {
+                    vec![(p.to_path_buf(), diags.clone())]
+                } else {
+                    Vec::new()
+                }
+            }
+            None => state
+                .diagnostics
+                .iter()
+                .map(|(p, d)| (p.clone(), d.clone()))
+                .collect(),
+        }
+    }
+
+    // ── Phase N3: writethrough — didOpen/didChange tracking ────────────
+
+    /// Record a file as open and notify the server. Sends `didOpen` on the
+    /// first call for `path`, `didChange` on subsequent calls. Bumps the
+    /// per-file version counter so the server can correlate diagnostics.
+    pub async fn track(&self, path: &Path, contents: &str) -> Result<i32> {
+        let uri = path_to_url(path)?;
+        let language_id =
+            language_id_for_extension(path.extension().and_then(|s| s.to_str()).unwrap_or(""))
+                .to_owned();
+        let socket = self.socket.lock().await.clone();
+        let mut state = self.state.lock().await;
+        match state.open_files.get_mut(path) {
+            Some(open) => {
+                open.version = open.version.saturating_add(1);
+                let version = open.version;
+                let params = lsp_types::DidChangeTextDocumentParams {
+                    text_document: lsp_types::VersionedTextDocumentIdentifier { uri, version },
+                    content_changes: vec![lsp_types::TextDocumentContentChangeEvent {
+                        range: None,
+                        range_length: None,
+                        text: contents.to_owned(),
+                    }],
+                };
+                socket
+                    .notify::<lsp_types::notification::DidChangeTextDocument>(params)
+                    .with_context(|| {
+                        format!("didChange notification to {} failed", self.server_id)
+                    })?;
+                Ok(version)
+            }
+            None => {
+                let version: i32 = 1;
+                let params = lsp_types::DidOpenTextDocumentParams {
+                    text_document: lsp_types::TextDocumentItem {
+                        uri,
+                        language_id: language_id.clone(),
+                        version,
+                        text: contents.to_owned(),
+                    },
+                };
+                socket
+                    .notify::<lsp_types::notification::DidOpenTextDocument>(params)
+                    .with_context(|| {
+                        format!("didOpen notification to {} failed", self.server_id)
+                    })?;
+                state.open_files.insert(
+                    path.to_path_buf(),
+                    OpenFile {
+                        version,
+                        language_id,
+                    },
+                );
+                Ok(version)
+            }
+        }
+    }
+
+    /// Send `didClose` and forget about `path`.
+    pub async fn untrack(&self, path: &Path) -> Result<()> {
+        let uri = path_to_url(path)?;
+        let socket = self.socket.lock().await.clone();
+        let mut state = self.state.lock().await;
+        if state.open_files.remove(path).is_none() {
+            return Ok(());
+        }
+        let params = lsp_types::DidCloseTextDocumentParams {
+            text_document: TextDocumentIdentifier { uri },
+        };
+        socket
+            .notify::<lsp_types::notification::DidCloseTextDocument>(params)
+            .with_context(|| format!("didClose notification to {} failed", self.server_id))?;
+        Ok(())
+    }
+
+    /// Current version for an open file (`None` if not tracked).
+    pub async fn open_version(&self, path: &Path) -> Option<i32> {
+        self.state
+            .lock()
+            .await
+            .open_files
+            .get(path)
+            .map(|f| f.version)
+    }
+
+    // ── Phase N4: mutating ops ─────────────────────────────────────────
+
+    /// `textDocument/prepareRename` — capability gate before rename.
+    pub async fn prepare_rename(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+    ) -> Result<Option<lsp_types::PrepareRenameResponse>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.rename_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise rename capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri },
+            position: lsp_position(line, column),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::PrepareRenameRequest>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("prepare_rename request timed out"))?
+        .with_context(|| format!("prepare_rename request to {} failed", self.server_id))?;
+        Ok(response)
+    }
+
+    /// `textDocument/rename` — request a workspace edit renaming the symbol
+    /// at `(line, column)` to `new_name`. The caller renders the
+    /// `WorkspaceEdit` as a unified diff and routes through approval.
+    pub async fn rename(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+        new_name: &str,
+    ) -> Result<Option<lsp_types::WorkspaceEdit>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.rename_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise rename capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        let params = lsp_types::RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_position(line, column),
+            },
+            new_name: new_name.to_owned(),
+            work_done_progress_params: WorkDoneProgressParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::Rename>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("rename request timed out"))?
+        .with_context(|| format!("rename request to {} failed", self.server_id))?;
+        Ok(response)
+    }
+
+    /// `textDocument/codeAction` — list available actions at a position.
+    pub async fn code_actions(
+        &self,
+        path: &Path,
+        line: u32,
+        column: u32,
+    ) -> Result<Vec<lsp_types::CodeActionOrCommand>> {
+        let caps = self.capabilities().await;
+        if caps.and_then(|c| c.code_action_provider).is_none() {
+            return Err(anyhow!(
+                "server `{}` does not advertise code_actions capability",
+                self.server_id
+            ));
+        }
+        let uri = path_to_url(path)?;
+        // We request actions for a single-character range at the cursor —
+        // matches what an editor sends when a user invokes the menu.
+        let pos = lsp_position(line, column);
+        let range = lsp_types::Range {
+            start: pos,
+            end: pos,
+        };
+        let params = lsp_types::CodeActionParams {
+            text_document: TextDocumentIdentifier { uri },
+            range,
+            context: lsp_types::CodeActionContext {
+                diagnostics: Vec::new(),
+                only: None,
+                trigger_kind: Some(lsp_types::CodeActionTriggerKind::INVOKED),
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+        let socket = self.socket.lock().await.clone();
+        let response = tokio::time::timeout(
+            DEFAULT_REQUEST_TIMEOUT,
+            socket.request::<lsp_types::request::CodeActionRequest>(params),
+        )
+        .await
+        .map_err(|_| anyhow!("code_actions request timed out"))?
+        .with_context(|| format!("code_actions request to {} failed", self.server_id))?;
+        Ok(response.unwrap_or_default())
     }
 
     /// Send `shutdown` + `exit`, then wait briefly for the child to exit.

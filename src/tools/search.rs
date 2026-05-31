@@ -185,6 +185,8 @@ mod tests {
             events: tx,
             max_read_file_chars: 10000,
             lsp_manager: None,
+            lsp_writethrough: false,
+            lsp_diagnostics_timeout_ms: 750,
         }
     }
 

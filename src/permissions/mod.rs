@@ -39,6 +39,23 @@ const READ_ONLY_TOOLS: &[&str] = &["read_file", "glob", "search"];
 /// Tools that write to the workspace.
 const WRITE_TOOLS: &[&str] = &["apply_patch", "shell"];
 
+/// `lsp` actions that mutate the workspace and therefore must route
+/// through the same approval flow as `apply_patch`. Phase N4.
+const LSP_MUTATING_ACTIONS: &[&str] = &["rename", "code_actions"];
+
+/// `lsp` actions that are pure reads — same safety class as `read_file`.
+const LSP_READONLY_ACTIONS: &[&str] = &[
+    "definition",
+    "hover",
+    "status",
+    "references",
+    "implementation",
+    "type_definition",
+    "document_symbols",
+    "workspace_symbols",
+    "diagnostics",
+];
+
 /// Classifies tool calls into permission decisions.
 #[derive(Debug, Clone)]
 pub struct PermissionEngine {
@@ -86,6 +103,16 @@ impl PermissionEngine {
         if let Some(decision) = self.overrides.get(&call.name).copied() {
             return decision;
         }
+
+        // The `lsp` tool is multi-action. The same dispatcher serves
+        // read-only ops (definition/hover/...) and mutating ops
+        // (rename/code_actions with apply). Classify by the action arg
+        // so read-only calls don't trigger the approval modal but
+        // mutating calls go through the same flow as apply_patch.
+        if call.name == "lsp" {
+            return self.classify_lsp_call(call);
+        }
+
         // Read-only tools always allowed
         if READ_ONLY_TOOLS.contains(&call.name.as_str()) {
             return PermissionDecision::Allow;
@@ -108,6 +135,44 @@ impl PermissionEngine {
         }
         // Unknown tools: Ask
         PermissionDecision::Ask
+    }
+
+    /// Sub-classifier for `lsp` calls: dispatch on the `action` arg so the
+    /// approval flow sees rename/code_actions as Ask-class mutations and
+    /// every other action as a read-only allow.
+    fn classify_lsp_call(&self, call: &ToolCall) -> PermissionDecision {
+        let action = call
+            .arguments
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if LSP_READONLY_ACTIONS.contains(&action) {
+            return PermissionDecision::Allow;
+        }
+        if !LSP_MUTATING_ACTIONS.contains(&action) {
+            // Unknown action — let the tool surface the friendly error
+            // string by Allow-ing the call. The tool's own validator
+            // returns "unknown action `X`" which the agent can route
+            // around without an approval round-trip.
+            return PermissionDecision::Allow;
+        }
+        // Mutating: code_actions without `apply` is the listing variant
+        // (read-only); only the apply variant is a write.
+        if action == "code_actions"
+            && call
+                .arguments
+                .get("apply")
+                .and_then(|v| v.as_str())
+                .map(str::is_empty)
+                .unwrap_or(true)
+        {
+            return PermissionDecision::Allow;
+        }
+        // True mutation: same gate as apply_patch.
+        match self.agent {
+            PrimaryAgent::Plan => PermissionDecision::Deny,
+            PrimaryAgent::Build => PermissionDecision::Ask,
+        }
     }
 
     /// Update the active agent.
@@ -265,6 +330,100 @@ mod tests {
             name: "dangerous_tool".to_owned(),
             arguments: json!({}),
         };
+        assert_eq!(engine.classify(&call), PermissionDecision::Deny);
+    }
+
+    #[test]
+    fn lsp_readonly_actions_auto_allow() {
+        let engine = PermissionEngine::new(PrimaryAgent::Build);
+        for action in LSP_READONLY_ACTIONS {
+            let call = ToolCall {
+                id: "c-lsp-ro".to_owned(),
+                name: "lsp".to_owned(),
+                arguments: json!({"action": *action}),
+            };
+            assert_eq!(
+                engine.classify(&call),
+                PermissionDecision::Allow,
+                "lsp action `{action}` should be auto-allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn lsp_rename_asks_in_build() {
+        let engine = PermissionEngine::new(PrimaryAgent::Build);
+        let call = ToolCall {
+            id: "c-rename".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({"action": "rename", "path": "src/lib.rs", "line": 1, "column": 4, "new_name": "Foo"}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn lsp_rename_denied_in_plan() {
+        let engine = PermissionEngine::new(PrimaryAgent::Plan);
+        let call = ToolCall {
+            id: "c-rename".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({"action": "rename", "path": "src/lib.rs", "line": 1, "column": 4, "new_name": "Foo"}),
+        };
+        assert_eq!(engine.classify(&call), PermissionDecision::Deny);
+    }
+
+    #[test]
+    fn lsp_code_actions_listing_is_readonly() {
+        let engine = PermissionEngine::new(PrimaryAgent::Build);
+        // No `apply` arg → listing variant, read-only.
+        let listing = ToolCall {
+            id: "c-ca-list".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({"action": "code_actions", "path": "src/lib.rs", "line": 1, "column": 1}),
+        };
+        assert_eq!(engine.classify(&listing), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn lsp_code_actions_apply_asks_in_build() {
+        let engine = PermissionEngine::new(PrimaryAgent::Build);
+        let apply = ToolCall {
+            id: "c-ca-apply".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({
+                "action": "code_actions",
+                "path": "src/lib.rs", "line": 1, "column": 1,
+                "apply": "Add missing import"
+            }),
+        };
+        assert_eq!(engine.classify(&apply), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn lsp_unknown_action_defaults_to_allow_so_tool_can_emit_friendly_error() {
+        let engine = PermissionEngine::new(PrimaryAgent::Build);
+        let call = ToolCall {
+            id: "c-unknown".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({"action": "telepathy"}),
+        };
+        // The tool's own validator returns "unknown action `telepathy`",
+        // which is more useful than an approval round-trip for what is
+        // really a malformed request.
+        assert_eq!(engine.classify(&call), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn lsp_rename_override_respected() {
+        let mut raw = HashMap::new();
+        raw.insert("lsp".to_owned(), "deny".to_owned());
+        let engine = PermissionEngine::with_overrides(PrimaryAgent::Build, &raw);
+        let call = ToolCall {
+            id: "c-rename-deny".to_owned(),
+            name: "lsp".to_owned(),
+            arguments: json!({"action": "rename", "path": "src/lib.rs", "line": 1, "column": 4, "new_name": "Foo"}),
+        };
+        // Override on the tool name short-circuits the lsp sub-classifier.
         assert_eq!(engine.classify(&call), PermissionDecision::Deny);
     }
 }

@@ -1,10 +1,21 @@
 //! `lsp` tool — language-server-backed code intelligence.
 //!
-//! Phase N1 ships three actions:
+//! Phase N1 ships:
+//!   - `definition` — resolve a symbol to its declaration site(s)
+//!   - `hover`      — fetch type info / docs at a position
+//!   - `status`     — report which servers are running
 //!
-//! - `definition` — resolve a symbol to its declaration site(s)
-//! - `hover` — fetch type info / docs at a position
-//! - `status` — report which servers are running for the workspace
+//! Phase N2 adds the rest of the read-only surface:
+//!   - `references`        — find every caller / usage of the symbol
+//!   - `implementation`    — find concrete impls of a trait/iface
+//!   - `type_definition`   — find the type of a value
+//!   - `document_symbols`  — list symbols in a file (tree-rendered)
+//!   - `workspace_symbols` — search symbols across the workspace by name
+//!   - `diagnostics`       — read the cached `publishDiagnostics` for a path
+//!
+//! Phase N4 adds mutating ops, gated behind the approval engine:
+//!   - `rename`       — `textDocument/rename` → `WorkspaceEdit` → approval
+//!   - `code_actions` — list available actions; `apply` arg invokes one
 //!
 //! Capability gating: each action checks the server's
 //! `ServerCapabilities` and returns a clear "server `X` does not advertise
@@ -15,13 +26,15 @@
 //! to keep Windows path handling honest.
 //!
 //! Read-only operations bypass the approval engine — they're indistinguishable
-//! from `read_file` for safety. Mutating operations land in Phase N4.
+//! from `read_file` for safety. Mutating operations use the same approval
+//! pipeline as `apply_patch`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
+use crate::lsp::edits;
 use crate::lsp::render;
 use crate::lsp::types::LspAction;
 use crate::providers::ToolSpec;
@@ -39,10 +52,12 @@ impl Tool for LspTool {
         ToolSpec {
             name: "lsp".to_owned(),
             description: "Language-server-backed code intelligence. Actions: \
-                `definition` (jump to declaration), `hover` (type info / docs), \
-                `status` (which servers are running). Uses installed servers \
-                like rust-analyzer, gopls, pyright, typescript-language-server, \
-                clangd. Path is workspace-relative; line and column are 1-based."
+                `definition`, `hover`, `references`, `implementation`, `type_definition`, \
+                `document_symbols`, `workspace_symbols`, `diagnostics`, `rename`, \
+                `code_actions`, `status`. Uses installed servers like rust-analyzer, \
+                gopls, pyright, typescript-language-server, clangd. Path is \
+                workspace-relative; line and column are 1-based. `rename` and \
+                `code_actions` (with `apply`) route through the approval engine."
                 .to_owned(),
             parameters: json!({
                 "type": "object",
@@ -50,22 +65,43 @@ impl Tool for LspTool {
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["definition", "hover", "status"],
+                        "enum": [
+                            "definition", "hover", "status",
+                            "references", "implementation", "type_definition",
+                            "document_symbols", "workspace_symbols", "diagnostics",
+                            "rename", "code_actions"
+                        ],
                         "description": "Operation to perform"
                     },
                     "path": {
                         "type": "string",
-                        "description": "Workspace-relative path. Required for definition/hover."
+                        "description": "Workspace-relative path. Required for definition / hover / references / implementation / type_definition / document_symbols / diagnostics / rename / code_actions."
                     },
                     "line": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "1-based line number (required for definition/hover)"
+                        "description": "1-based line number (required for position-based actions)"
                     },
                     "column": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "1-based column number (required for definition/hover)"
+                        "description": "1-based column number (required for position-based actions)"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search string for `workspace_symbols`."
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "New identifier for `rename`."
+                    },
+                    "include_declaration": {
+                        "type": "boolean",
+                        "description": "For `references`: include the declaration in the result list (default true)."
+                    },
+                    "apply": {
+                        "type": "string",
+                        "description": "For `code_actions`: title of the action to apply. Listing variant returns the menu when omitted."
                     }
                 }
             }),
@@ -80,7 +116,9 @@ impl Tool for LspTool {
             return ToolResult::error(
                 ctx.call_id,
                 format!(
-                    "unknown action `{action_str}` (expected one of: definition, hover, status)"
+                    "unknown action `{action_str}` (expected one of: definition, hover, status, \
+                     references, implementation, type_definition, document_symbols, \
+                     workspace_symbols, diagnostics, rename, code_actions)"
                 ),
             );
         };
@@ -96,6 +134,14 @@ impl Tool for LspTool {
             LspAction::Status => execute_status(manager, ctx).await,
             LspAction::Definition => execute_definition(manager, args, ctx).await,
             LspAction::Hover => execute_hover(manager, args, ctx).await,
+            LspAction::References => execute_references(manager, args, ctx).await,
+            LspAction::Implementation => execute_implementation(manager, args, ctx).await,
+            LspAction::TypeDefinition => execute_type_definition(manager, args, ctx).await,
+            LspAction::DocumentSymbols => execute_document_symbols(manager, args, ctx).await,
+            LspAction::WorkspaceSymbols => execute_workspace_symbols(manager, args, ctx).await,
+            LspAction::Diagnostics => execute_diagnostics(manager, args, ctx).await,
+            LspAction::Rename => execute_rename(manager, args, ctx).await,
+            LspAction::CodeActions => execute_code_actions(manager, args, ctx).await,
         }
     }
 }
@@ -150,7 +196,7 @@ async fn execute_definition(
     args: Value,
     ctx: ToolContext,
 ) -> ToolResult {
-    let Some((path, line, column)) = parse_position_args(&args, &ctx) else {
+    let Some((path, line, column)) = parse_position_args(&args) else {
         return ToolResult::error(
             ctx.call_id,
             "definition requires `path`, `line`, and `column`".to_owned(),
@@ -184,7 +230,7 @@ async fn execute_hover(
     args: Value,
     ctx: ToolContext,
 ) -> ToolResult {
-    let Some((path, line, column)) = parse_position_args(&args, &ctx) else {
+    let Some((path, line, column)) = parse_position_args(&args) else {
         return ToolResult::error(
             ctx.call_id,
             "hover requires `path`, `line`, and `column`".to_owned(),
@@ -215,7 +261,380 @@ async fn execute_hover(
     }
 }
 
-fn parse_position_args(args: &Value, _ctx: &ToolContext) -> Option<(PathBuf, u32, u32)> {
+async fn execute_references(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some((path, line, column)) = parse_position_args(&args) else {
+        return ToolResult::error(
+            ctx.call_id,
+            "references requires `path`, `line`, and `column`".to_owned(),
+        );
+    };
+    let include_declaration = args
+        .get("include_declaration")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let resolved = resolve_path(&path, &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+
+    let response = {
+        let client = arc_client.lock().await;
+        client
+            .references(&resolved, line, column, include_declaration)
+            .await
+    };
+
+    match response {
+        Ok(locations) => {
+            let total = locations.len();
+            let views = render::references_from_locations(locations, read_line_at);
+            let formatted = render::format_references(&views, &ctx.workspace_root, total);
+            ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+        }
+        Err(error) => ToolResult::error(ctx.call_id, format!("{error:#}")),
+    }
+}
+
+async fn execute_implementation(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some((path, line, column)) = parse_position_args(&args) else {
+        return ToolResult::error(
+            ctx.call_id,
+            "implementation requires `path`, `line`, and `column`".to_owned(),
+        );
+    };
+    let resolved = resolve_path(&path, &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+    let response = {
+        let client = arc_client.lock().await;
+        client.implementation(&resolved, line, column).await
+    };
+    match response {
+        Ok(Some(payload)) => {
+            let views = render::locations_from_response(payload);
+            let formatted = if views.is_empty() {
+                "no implementations found".to_owned()
+            } else {
+                render::format_locations(&views, &ctx.workspace_root)
+            };
+            ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+        }
+        Ok(None) => ToolResult::ok(ctx.call_id, "no implementations found".to_owned()),
+        Err(error) => ToolResult::error(ctx.call_id, format!("{error:#}")),
+    }
+}
+
+async fn execute_type_definition(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some((path, line, column)) = parse_position_args(&args) else {
+        return ToolResult::error(
+            ctx.call_id,
+            "type_definition requires `path`, `line`, and `column`".to_owned(),
+        );
+    };
+    let resolved = resolve_path(&path, &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+    let response = {
+        let client = arc_client.lock().await;
+        client.type_definition(&resolved, line, column).await
+    };
+    match response {
+        Ok(Some(payload)) => {
+            let views = render::locations_from_response(payload);
+            let formatted = if views.is_empty() {
+                "no type definition found".to_owned()
+            } else {
+                render::format_locations(&views, &ctx.workspace_root)
+            };
+            ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+        }
+        Ok(None) => ToolResult::ok(ctx.call_id, "no type definition found".to_owned()),
+        Err(error) => ToolResult::error(ctx.call_id, format!("{error:#}")),
+    }
+}
+
+async fn execute_document_symbols(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return ToolResult::error(ctx.call_id, "document_symbols requires `path`".to_owned());
+    };
+    let resolved = resolve_path(Path::new(path), &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+    let response = {
+        let client = arc_client.lock().await;
+        client.document_symbols(&resolved).await
+    };
+    match response {
+        Ok(Some(payload)) => {
+            let views = render::flatten_document_symbols(payload);
+            let formatted = render::format_document_symbols(&views);
+            ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+        }
+        Ok(None) => ToolResult::ok(ctx.call_id, "(no symbols)".to_owned()),
+        Err(error) => ToolResult::error(ctx.call_id, format!("{error:#}")),
+    }
+}
+
+async fn execute_workspace_symbols(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+
+    // workspace/symbol can run against any spawned client. If none is
+    // running, ask the model to bootstrap by hitting `definition` first.
+    let snapshot = manager.status_snapshot().await;
+    let Some(entry) = snapshot.first() else {
+        return ToolResult::ok(
+            ctx.call_id,
+            "no language server is running yet — call `definition` or `hover` on a workspace file first to spawn one"
+                .to_owned(),
+        );
+    };
+    let arc_client = match manager
+        .get_or_spawn_existing(entry.server_id.clone(), entry.root.clone())
+        .await
+    {
+        Some(c) => c,
+        None => return ToolResult::error(ctx.call_id, "lost language server handle".to_owned()),
+    };
+    let response = {
+        let client = arc_client.lock().await;
+        client.workspace_symbols(query).await
+    };
+    match response {
+        Ok(symbols) => {
+            let formatted = render::format_workspace_symbols(&symbols, &ctx.workspace_root);
+            ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+        }
+        Err(error) => ToolResult::error(ctx.call_id, format!("{error:#}")),
+    }
+}
+
+async fn execute_diagnostics(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let path_opt = args.get("path").and_then(|v| v.as_str());
+
+    // No path → return all cached diagnostics across all running servers.
+    let snapshot = manager.status_snapshot().await;
+    if snapshot.is_empty() {
+        return ToolResult::ok(
+            ctx.call_id,
+            "no language server is running yet — diagnostics cache is empty".to_owned(),
+        );
+    }
+
+    let mut all_views = Vec::new();
+    for entry in &snapshot {
+        let Some(arc_client) = manager
+            .get_or_spawn_existing(entry.server_id.clone(), entry.root.clone())
+            .await
+        else {
+            continue;
+        };
+        let path_filter: Option<PathBuf> =
+            path_opt.map(|p| resolve_path(Path::new(p), &ctx.workspace_root));
+        let cached = {
+            let client = arc_client.lock().await;
+            client.cached_diagnostics(path_filter.as_deref()).await
+        };
+        for (path, diags) in cached {
+            all_views.extend(render::diagnostic_views(&path, &diags));
+        }
+    }
+
+    let formatted = render::format_diagnostics(&all_views, &ctx.workspace_root);
+    ToolResult::ok(ctx.call_id, cap_output(formatted, ctx.max_read_file_chars))
+}
+
+async fn execute_rename(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some((path, line, column)) = parse_position_args(&args) else {
+        return ToolResult::error(
+            ctx.call_id,
+            "rename requires `path`, `line`, and `column`".to_owned(),
+        );
+    };
+    let Some(new_name) = args.get("new_name").and_then(|v| v.as_str()) else {
+        return ToolResult::error(ctx.call_id, "rename requires `new_name`".to_owned());
+    };
+    if new_name.trim().is_empty() {
+        return ToolResult::error(
+            ctx.call_id,
+            "rename `new_name` must not be empty".to_owned(),
+        );
+    }
+
+    let resolved = resolve_path(&path, &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+
+    // 1) prepareRename to gate non-renameable positions early.
+    let prepare = {
+        let client = arc_client.lock().await;
+        client.prepare_rename(&resolved, line, column).await
+    };
+    if let Err(error) = prepare {
+        return ToolResult::error(ctx.call_id, format!("{error:#}"));
+    }
+
+    // 2) rename → WorkspaceEdit
+    let edit = {
+        let client = arc_client.lock().await;
+        client.rename(&resolved, line, column, new_name).await
+    };
+    let edit = match edit {
+        Ok(Some(e)) => e,
+        Ok(None) => {
+            return ToolResult::ok(
+                ctx.call_id,
+                "rename produced no edits (server returned null)".to_owned(),
+            )
+        }
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+
+    // 3) Apply the WorkspaceEdit to disk through the same path apply_patch
+    //    uses. The apply_patch tool is the canonical write site, so the
+    //    edit fanout reuses its workspace-relative file write logic.
+    let summary = render::format_workspace_edit_summary(&edit, &ctx.workspace_root);
+    match edits::apply_workspace_edit(&edit, &ctx.workspace_root).await {
+        Ok(report) => {
+            let body = format!(
+                "{summary}\n\napplied {} of {} files",
+                report.applied, report.total
+            );
+            ToolResult::ok(ctx.call_id, cap_output(body, ctx.max_read_file_chars))
+        }
+        Err(error) => ToolResult::error(ctx.call_id, format!("{summary}\n\n{error:#}")),
+    }
+}
+
+async fn execute_code_actions(
+    manager: std::sync::Arc<crate::lsp::LspManager>,
+    args: Value,
+    ctx: ToolContext,
+) -> ToolResult {
+    let Some((path, line, column)) = parse_position_args(&args) else {
+        return ToolResult::error(
+            ctx.call_id,
+            "code_actions requires `path`, `line`, and `column`".to_owned(),
+        );
+    };
+    let resolved = resolve_path(&path, &ctx.workspace_root);
+    let arc_client = match manager.for_path(&resolved, &ctx.workspace_root).await {
+        Ok(client) => client,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+    let response = {
+        let client = arc_client.lock().await;
+        client.code_actions(&resolved, line, column).await
+    };
+    let actions = match response {
+        Ok(actions) => actions,
+        Err(error) => return ToolResult::error(ctx.call_id, format!("{error:#}")),
+    };
+
+    // Listing variant: `apply` not provided.
+    let apply = args.get("apply").and_then(|v| v.as_str());
+    if apply.is_none() {
+        if actions.is_empty() {
+            return ToolResult::ok(ctx.call_id, "(no code actions available)".to_owned());
+        }
+        let mut out = String::new();
+        for (i, a) in actions.iter().enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+            let title = match a {
+                lsp_types::CodeActionOrCommand::CodeAction(action) => action.title.as_str(),
+                lsp_types::CodeActionOrCommand::Command(cmd) => cmd.title.as_str(),
+            };
+            out.push_str(&format!("[{i}] {title}"));
+        }
+        out.push_str("\n\n(Pass `apply: \"<title>\"` to invoke an action.)");
+        return ToolResult::ok(ctx.call_id, cap_output(out, ctx.max_read_file_chars));
+    }
+
+    // Apply variant: find by title (model passes the displayed string).
+    let apply_title = apply.unwrap();
+    let chosen = actions.iter().find(|a| match a {
+        lsp_types::CodeActionOrCommand::CodeAction(action) => action.title == apply_title,
+        lsp_types::CodeActionOrCommand::Command(cmd) => cmd.title == apply_title,
+    });
+    let Some(chosen) = chosen else {
+        return ToolResult::error(
+            ctx.call_id,
+            format!("no code action titled `{apply_title}` (use the listing variant first)"),
+        );
+    };
+
+    match chosen {
+        lsp_types::CodeActionOrCommand::CodeAction(action) => {
+            if let Some(edit) = &action.edit {
+                let summary = render::format_workspace_edit_summary(edit, &ctx.workspace_root);
+                match edits::apply_workspace_edit(edit, &ctx.workspace_root).await {
+                    Ok(report) => ToolResult::ok(
+                        ctx.call_id,
+                        format!(
+                            "{summary}\n\napplied {} of {} files",
+                            report.applied, report.total
+                        ),
+                    ),
+                    Err(error) => ToolResult::error(ctx.call_id, format!("{summary}\n\n{error:#}")),
+                }
+            } else {
+                ToolResult::ok(
+                    ctx.call_id,
+                    format!(
+                        "code action `{}` produced no edits (server-side command not executed; \
+                         executeCommand is out of scope for v0.7.0)",
+                        action.title
+                    ),
+                )
+            }
+        }
+        lsp_types::CodeActionOrCommand::Command(_) => ToolResult::ok(
+            ctx.call_id,
+            "server-side commands (executeCommand) are not yet supported".to_owned(),
+        ),
+    }
+}
+
+fn parse_position_args(args: &Value) -> Option<(PathBuf, u32, u32)> {
     let path = args.get("path").and_then(|v| v.as_str())?;
     let line = args
         .get("line")
@@ -237,6 +656,15 @@ fn resolve_path(path: &std::path::Path, workspace_root: &std::path::Path) -> Pat
     } else {
         workspace_root.join(path)
     }
+}
+
+/// Read a single line from disk (1-based). Returns None on IO failure.
+fn read_line_at(path: &Path, line: u32) -> Option<String> {
+    let contents = std::fs::read_to_string(path).ok()?;
+    contents
+        .lines()
+        .nth(line.saturating_sub(1) as usize)
+        .map(|s| s.to_owned())
 }
 
 fn cap_output(mut s: String, max_chars: usize) -> String {
@@ -267,6 +695,8 @@ mod tests {
             events: tx,
             max_read_file_chars: 10_000,
             lsp_manager: manager,
+            lsp_writethrough: false,
+            lsp_diagnostics_timeout_ms: 750,
         }
     }
 
@@ -298,7 +728,9 @@ root_markers = ["Cargo.toml"]
         let dir = tempfile::TempDir::new().unwrap();
         let (manager, _rx) = build_manager();
         let ctx = test_ctx_with_manager(dir.path(), Some(manager));
-        let result = LspTool.execute(json!({"action": "rename"}), ctx).await;
+        let result = LspTool
+            .execute(json!({"action": "open_file_in_editor"}), ctx)
+            .await;
         assert!(result.is_error());
         let msg = result.error.unwrap();
         assert!(msg.contains("unknown action"), "got: {msg}");
@@ -349,18 +781,106 @@ root_markers = ["Cargo.toml"]
     #[tokio::test]
     async fn definition_returns_clear_error_for_unsupported_extension() {
         let dir = tempfile::TempDir::new().unwrap();
-        std::fs::write(dir.path().join("note.zig"), "// zig").unwrap();
+        std::fs::write(dir.path().join("note.xyz"), "// xyz").unwrap();
         let (manager, _rx) = build_manager();
         let ctx = test_ctx_with_manager(dir.path(), Some(manager));
         let result = LspTool
             .execute(
-                json!({"action": "definition", "path": "note.zig", "line": 1, "column": 1}),
+                json!({"action": "definition", "path": "note.xyz", "line": 1, "column": 1}),
                 ctx,
             )
             .await;
         assert!(result.is_error());
         let msg = result.error.unwrap();
         assert!(msg.contains("no language server"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn references_requires_position_args() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(json!({"action": "references", "path": "main.rs"}), ctx)
+            .await;
+        assert!(result.is_error());
+        assert!(result.error.unwrap().contains("references requires"));
+    }
+
+    #[tokio::test]
+    async fn document_symbols_requires_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(json!({"action": "document_symbols"}), ctx)
+            .await;
+        assert!(result.is_error());
+        assert!(result.error.unwrap().contains("requires `path`"));
+    }
+
+    #[tokio::test]
+    async fn workspace_symbols_explains_no_running_server() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(json!({"action": "workspace_symbols", "query": "Foo"}), ctx)
+            .await;
+        assert!(!result.is_error());
+        assert!(result.content.contains("no language server is running"));
+    }
+
+    #[tokio::test]
+    async fn diagnostics_explains_empty_cache() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool.execute(json!({"action": "diagnostics"}), ctx).await;
+        assert!(!result.is_error());
+        assert!(result.content.contains("no language server is running"));
+    }
+
+    #[tokio::test]
+    async fn rename_requires_new_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(
+                json!({"action": "rename", "path": "main.rs", "line": 1, "column": 4}),
+                ctx,
+            )
+            .await;
+        assert!(result.is_error());
+        assert!(result.error.unwrap().contains("new_name"));
+    }
+
+    #[tokio::test]
+    async fn rename_rejects_empty_new_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(
+                json!({"action": "rename", "path": "main.rs", "line": 1, "column": 4, "new_name": "   "}),
+                ctx,
+            )
+            .await;
+        assert!(result.is_error());
+        assert!(result.error.unwrap().contains("must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn code_actions_requires_position_args() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (manager, _rx) = build_manager();
+        let ctx = test_ctx_with_manager(dir.path(), Some(manager));
+        let result = LspTool
+            .execute(json!({"action": "code_actions", "path": "main.rs"}), ctx)
+            .await;
+        assert!(result.is_error());
+        assert!(result.error.unwrap().contains("requires"));
     }
 
     #[test]

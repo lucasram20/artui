@@ -8,6 +8,7 @@ pub mod registry;
 pub mod search;
 pub mod shell;
 pub mod task;
+pub mod todo_write;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,6 +33,13 @@ pub struct ToolContext {
     /// `lsp` tool requires it and is only registered when the manager
     /// exists.
     pub lsp_manager: Option<Arc<crate::lsp::LspManager>>,
+    /// Phase N3 — when true, `apply_patch` runs a writethrough pass after
+    /// every successful patch. Mirrors `[lsp] writethrough` in the global
+    /// config.
+    pub lsp_writethrough: bool,
+    /// Phase N3 — wall-clock budget for the post-apply_patch diagnostics
+    /// poll. Mirrors `[lsp] diagnostics_timeout_ms`.
+    pub lsp_diagnostics_timeout_ms: u32,
     // pub permissions: Arc<PermissionEngine>,  // Phase D
     // pub cancel: CancellationToken,           // Phase C
 }

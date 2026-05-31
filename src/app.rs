@@ -206,6 +206,9 @@ pub enum AppEvent {
         path: std::path::PathBuf,
         count: usize,
     },
+    /// Phase N5 — agent emitted a fresh todo list via the `todo_write`
+    /// tool. The TUI replaces its rendered checklist with the new list.
+    TodoUpdate(Vec<crate::tools::todo_write::Todo>),
 }
 
 #[derive(Debug)]
@@ -379,6 +382,12 @@ pub struct ProviderRequest {
     pub permissions: std::sync::Arc<tokio::sync::Mutex<crate::permissions::PermissionEngine>>,
     /// LSP manager (Phase N1). `None` when `[lsp] enabled = false`.
     pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
+    /// Phase N3 — writethrough enabled flag, threaded through to the
+    /// agent loop config so apply_patch reads it from `ToolContext`.
+    pub lsp_writethrough: bool,
+    /// Phase N3 — wall-clock budget for the post-apply_patch
+    /// publishDiagnostics poll.
+    pub lsp_diagnostics_timeout_ms: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -459,6 +468,15 @@ pub struct App {
     /// agent loop pulls this through `ToolContext` so the `lsp` tool can
     /// dispatch to it.
     pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
+    /// Cumulative token usage for the active turn — input + output. Reset
+    /// when a new turn starts. Surfaces in the spinner header as
+    /// `(12m 50s · ↓ 26.3k tokens)`.
+    pub turn_input_tokens: u32,
+    pub turn_output_tokens: u32,
+    /// Phase N5 — active todo list, populated by the `todo_write` tool.
+    /// Empty when the agent isn't doing multi-step work. Cleared when a
+    /// new turn starts.
+    pub todos: Vec<crate::tools::todo_write::Todo>,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -534,6 +552,9 @@ impl App {
             pending_approval: None,
             permissions: permissions_engine,
             lsp_manager: None,
+            turn_input_tokens: 0,
+            turn_output_tokens: 0,
+            todos: Vec::new(),
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -791,6 +812,9 @@ impl App {
         self.transcript.push(Message::new(Role::Assistant, ""));
         self.mode = UiMode::Streaming;
         self.status = "Streaming response".to_owned();
+        self.turn_input_tokens = 0;
+        self.turn_output_tokens = 0;
+        self.todos.clear();
         self.start_thinking_animation();
 
         // Build model messages: replace the last user message with expanded content
@@ -818,6 +842,8 @@ impl App {
             hooks: self.hooks.clone(),
             permissions: std::sync::Arc::clone(&self.permissions),
             lsp_manager: self.lsp_manager.clone(),
+            lsp_writethrough: self.config.lsp.writethrough,
+            lsp_diagnostics_timeout_ms: self.config.lsp.diagnostics_timeout_ms,
         }))
     }
 
@@ -1034,8 +1060,17 @@ impl App {
             AppEvent::Model(ModelEvent::ToolCallStart { .. })
             | AppEvent::Model(ModelEvent::ToolCallArgsDelta { .. })
             | AppEvent::Model(ModelEvent::ToolCallEnd { .. })
-            | AppEvent::Model(ModelEvent::ReasoningDelta(_))
-            | AppEvent::Model(ModelEvent::Usage { .. }) => {}
+            | AppEvent::Model(ModelEvent::ReasoningDelta(_)) => {}
+            AppEvent::Model(ModelEvent::Usage {
+                input_tokens,
+                output_tokens,
+            }) => {
+                // Cumulative across the turn — provider may emit multiple
+                // Usage events per turn (one per agent-loop step) so we
+                // sum rather than replace.
+                self.turn_input_tokens = self.turn_input_tokens.saturating_add(input_tokens);
+                self.turn_output_tokens = self.turn_output_tokens.saturating_add(output_tokens);
+            }
             AppEvent::Quote(quote) => {
                 self.quote = Some(quote);
             }
@@ -1068,6 +1103,9 @@ impl App {
                 } else {
                     format!("{server_id}: {label} ({count} diagnostics)")
                 };
+            }
+            AppEvent::TodoUpdate(todos) => {
+                self.todos = todos;
             }
         }
     }

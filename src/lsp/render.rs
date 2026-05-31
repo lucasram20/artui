@@ -1,13 +1,16 @@
 //! Rendering helpers — turn `lsp_types` payloads into strings the model
 //! can act on without further parsing.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use lsp_types::{
-    GotoDefinitionResponse, Hover, HoverContents, Location, LocationLink, MarkedString, Range, Url,
+    Diagnostic, DiagnosticSeverity, DocumentSymbol, DocumentSymbolResponse, GotoDefinitionResponse,
+    Hover, HoverContents, Location, LocationLink, MarkedString, Range, SymbolInformation,
+    SymbolKind, TextEdit, Url, WorkspaceEdit,
 };
 
-use super::types::{HoverView, LocationView};
+use super::types::{DiagnosticView, HoverView, LocationView, SymbolView};
 
 /// Maximum hits we hand back to the model for a definition / implementation /
 /// type-definition response. Mirrors oh-my-pi's cap.
@@ -58,11 +61,13 @@ fn location_view(uri: &Url, range: &Range) -> Option<LocationView> {
         path,
         line: range.start.line.saturating_add(1),
         column: range.start.character.saturating_add(1),
+        preview: None,
     })
 }
 
 /// Format a list of [`LocationView`] entries as one line per hit, paths made
-/// relative to `workspace_root` when possible.
+/// relative to `workspace_root` when possible. References-style entries
+/// with a `preview` field render the preview line indented.
 pub fn format_locations(locations: &[LocationView], workspace_root: &Path) -> String {
     if locations.is_empty() {
         return "no definition found".to_owned();
@@ -74,6 +79,372 @@ pub fn format_locations(locations: &[LocationView], workspace_root: &Path) -> St
         }
         let display = relativize(&loc.path, workspace_root);
         out.push_str(&format!("{display}:{}:{}", loc.line, loc.column));
+        if let Some(preview) = &loc.preview {
+            out.push_str("\n  ");
+            out.push_str(preview.trim());
+        }
+    }
+    out
+}
+
+/// Cap on `references` results — same shape as `MAX_LOCATION_HITS` for
+/// the `definition` family, but separately tunable since reference sets
+/// can be much larger (a popular trait can have hundreds of usages).
+pub const MAX_REFERENCES_HITS: usize = 50;
+
+/// Convert raw `lsp_types::Location`s (from `references`) into
+/// [`LocationView`]s with preview populated where possible.
+///
+/// `read_preview` is a callback that returns the line content at
+/// `(path, 1-based-line)`. Tests pass a stub; the production caller
+/// reads from disk via `std::fs::read_to_string` + `lines().nth()`.
+pub fn references_from_locations<F>(
+    locations: Vec<Location>,
+    mut read_preview: F,
+) -> Vec<LocationView>
+where
+    F: FnMut(&Path, u32) -> Option<String>,
+{
+    let mut out = Vec::with_capacity(locations.len().min(MAX_REFERENCES_HITS));
+    for loc in locations {
+        if out.len() >= MAX_REFERENCES_HITS {
+            break;
+        }
+        let Some(path) = loc.uri.to_file_path().ok() else {
+            continue;
+        };
+        let line = loc.range.start.line.saturating_add(1);
+        let column = loc.range.start.character.saturating_add(1);
+        let preview = read_preview(&path, line);
+        out.push(LocationView {
+            path,
+            line,
+            column,
+            preview,
+        });
+    }
+    out
+}
+
+/// Format a list of references with the same `path:line:col` header but
+/// a 2-space-indented preview line under each.
+pub fn format_references(views: &[LocationView], workspace_root: &Path, total: usize) -> String {
+    if views.is_empty() {
+        return "no references found".to_owned();
+    }
+    let mut out = format_locations(views, workspace_root);
+    if total > views.len() {
+        out.push_str(&format!(
+            "\n\n(showing {} of {} references — narrow with workspace_symbols query)",
+            views.len(),
+            total
+        ));
+    }
+    out
+}
+
+// ── Symbol rendering (Phase N2) ──────────────────────────────────────────
+
+/// Map an LSP `SymbolKind` to a short, model-friendly tag. Mirrors what an
+/// editor's outline view shows.
+pub fn symbol_kind_tag(kind: SymbolKind) -> &'static str {
+    match kind {
+        SymbolKind::FILE => "file",
+        SymbolKind::MODULE => "mod",
+        SymbolKind::NAMESPACE => "ns",
+        SymbolKind::PACKAGE => "pkg",
+        SymbolKind::CLASS => "class",
+        SymbolKind::METHOD => "fn",
+        SymbolKind::PROPERTY => "prop",
+        SymbolKind::FIELD => "field",
+        SymbolKind::CONSTRUCTOR => "ctor",
+        SymbolKind::ENUM => "enum",
+        SymbolKind::INTERFACE => "trait",
+        SymbolKind::FUNCTION => "fn",
+        SymbolKind::VARIABLE => "var",
+        SymbolKind::CONSTANT => "const",
+        SymbolKind::STRING => "str",
+        SymbolKind::NUMBER => "num",
+        SymbolKind::BOOLEAN => "bool",
+        SymbolKind::ARRAY => "array",
+        SymbolKind::OBJECT => "obj",
+        SymbolKind::KEY => "key",
+        SymbolKind::NULL => "null",
+        SymbolKind::ENUM_MEMBER => "variant",
+        SymbolKind::STRUCT => "struct",
+        SymbolKind::EVENT => "event",
+        SymbolKind::OPERATOR => "op",
+        SymbolKind::TYPE_PARAMETER => "tparam",
+        _ => "?",
+    }
+}
+
+/// Flatten a `documentSymbol` response into [`SymbolView`] entries with
+/// indentation depth set so the renderer can emit a tree.
+pub fn flatten_document_symbols(response: DocumentSymbolResponse) -> Vec<SymbolView> {
+    let mut out = Vec::new();
+    match response {
+        DocumentSymbolResponse::Flat(items) => {
+            for item in items {
+                let pos = item.location.range.start;
+                out.push(SymbolView {
+                    name: item.name,
+                    kind: symbol_kind_tag(item.kind),
+                    depth: 0,
+                    line: pos.line.saturating_add(1),
+                    column: pos.character.saturating_add(1),
+                });
+            }
+        }
+        DocumentSymbolResponse::Nested(items) => {
+            for item in items {
+                walk_symbol(&item, 0, &mut out);
+            }
+        }
+    }
+    out
+}
+
+fn walk_symbol(sym: &DocumentSymbol, depth: u32, out: &mut Vec<SymbolView>) {
+    out.push(SymbolView {
+        name: sym.name.clone(),
+        kind: symbol_kind_tag(sym.kind),
+        depth,
+        line: sym.selection_range.start.line.saturating_add(1),
+        column: sym.selection_range.start.character.saturating_add(1),
+    });
+    if let Some(children) = &sym.children {
+        for child in children {
+            walk_symbol(child, depth + 1, out);
+        }
+    }
+}
+
+/// Format a list of [`SymbolView`]s as a tree:
+///
+///     [struct] App
+///       [fn] new
+///       [fn] handle_event
+///     [fn] format_locations
+pub fn format_document_symbols(symbols: &[SymbolView]) -> String {
+    if symbols.is_empty() {
+        return "(no symbols)".to_owned();
+    }
+    let mut out = String::new();
+    for (i, sym) in symbols.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        for _ in 0..sym.depth {
+            out.push_str("  ");
+        }
+        out.push_str(&format!(
+            "[{}] {}  ({}:{})",
+            sym.kind, sym.name, sym.line, sym.column
+        ));
+    }
+    out
+}
+
+/// Cap on `workspace_symbols` results — large queries can return thousands.
+pub const MAX_WORKSPACE_SYMBOL_HITS: usize = 50;
+
+/// Render a `workspace/symbol` flat-list response.
+#[allow(deprecated)]
+pub fn format_workspace_symbols(symbols: &[SymbolInformation], workspace_root: &Path) -> String {
+    if symbols.is_empty() {
+        return "(no matching symbols)".to_owned();
+    }
+    let mut out = String::new();
+    for (i, sym) in symbols.iter().take(MAX_WORKSPACE_SYMBOL_HITS).enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let path = sym
+            .location
+            .uri
+            .to_file_path()
+            .map(|p| relativize(&p, workspace_root))
+            .unwrap_or_else(|_| sym.location.uri.to_string());
+        let pos = sym.location.range.start;
+        out.push_str(&format!(
+            "[{}] {}  ({}:{}:{})",
+            symbol_kind_tag(sym.kind),
+            sym.name,
+            path,
+            pos.line.saturating_add(1),
+            pos.character.saturating_add(1),
+        ));
+    }
+    if symbols.len() > MAX_WORKSPACE_SYMBOL_HITS {
+        out.push_str(&format!(
+            "\n\n(showing {} of {} — narrow `query` to filter)",
+            MAX_WORKSPACE_SYMBOL_HITS,
+            symbols.len()
+        ));
+    }
+    out
+}
+
+// ── Diagnostics rendering (Phase N2 + N3) ────────────────────────────────
+
+/// Convert an LSP `DiagnosticSeverity` into a short tag.
+pub fn diagnostic_severity_tag(sev: Option<DiagnosticSeverity>) -> &'static str {
+    match sev {
+        Some(DiagnosticSeverity::ERROR) => "error",
+        Some(DiagnosticSeverity::WARNING) => "warn",
+        Some(DiagnosticSeverity::INFORMATION) => "info",
+        Some(DiagnosticSeverity::HINT) => "hint",
+        _ => "diag",
+    }
+}
+
+/// Build [`DiagnosticView`] entries from a slice of LSP `Diagnostic`s for
+/// a given path.
+pub fn diagnostic_views(path: &Path, diagnostics: &[Diagnostic]) -> Vec<DiagnosticView> {
+    diagnostics
+        .iter()
+        .map(|d| DiagnosticView {
+            path: path.to_path_buf(),
+            line: d.range.start.line.saturating_add(1),
+            column: d.range.start.character.saturating_add(1),
+            severity: diagnostic_severity_tag(d.severity),
+            message: d.message.clone(),
+        })
+        .collect()
+}
+
+/// Format a slice of [`DiagnosticView`] as one line per diagnostic. Stable
+/// ordering — sort by path, then line.
+pub fn format_diagnostics(views: &[DiagnosticView], workspace_root: &Path) -> String {
+    if views.is_empty() {
+        return "(clean)".to_owned();
+    }
+    let mut sorted = views.to_vec();
+    sorted.sort_by(|a, b| {
+        a.path
+            .cmp(&b.path)
+            .then(a.line.cmp(&b.line))
+            .then(a.column.cmp(&b.column))
+    });
+    let mut out = String::new();
+    for (i, d) in sorted.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let display = relativize(&d.path, workspace_root);
+        out.push_str(&format!(
+            "{display}:{}:{} [{}] {}",
+            d.line, d.column, d.severity, d.message
+        ));
+    }
+    out
+}
+
+/// Filter diagnostics to those within `±buffer` lines of any line in
+/// `changed_lines`. Used by writethrough so the model only sees diagnostics
+/// caused by its edits, not pre-existing issues elsewhere.
+pub fn filter_diagnostics_to_changed_region(
+    views: Vec<DiagnosticView>,
+    changed_lines: &[u32],
+    buffer: u32,
+) -> (Vec<DiagnosticView>, usize) {
+    if changed_lines.is_empty() {
+        return (Vec::new(), views.len());
+    }
+    let in_window = |line: u32| {
+        changed_lines
+            .iter()
+            .any(|&c| line + buffer >= c && c + buffer >= line)
+    };
+    let total = views.len();
+    let kept: Vec<_> = views.into_iter().filter(|v| in_window(v.line)).collect();
+    let elsewhere = total - kept.len();
+    (kept, elsewhere)
+}
+
+// ── WorkspaceEdit → unified diff (Phase N4) ──────────────────────────────
+
+/// Render a [`WorkspaceEdit`] as a per-file summary the approval modal can
+/// show. Each entry is `(path, edit-count, edits)` so the caller can sum or
+/// expand on demand.
+pub fn workspace_edit_summary(
+    edit: &WorkspaceEdit,
+    workspace_root: &Path,
+) -> Vec<(String, usize, Vec<TextEdit>)> {
+    let mut by_path: BTreeMap<String, Vec<TextEdit>> = BTreeMap::new();
+
+    if let Some(changes) = &edit.changes {
+        for (uri, edits) in changes {
+            let display = uri
+                .to_file_path()
+                .map(|p| relativize(&p, workspace_root))
+                .unwrap_or_else(|_| uri.to_string());
+            by_path.entry(display).or_default().extend(edits.clone());
+        }
+    }
+    if let Some(doc_changes) = &edit.document_changes {
+        match doc_changes {
+            lsp_types::DocumentChanges::Edits(edits) => {
+                for ed in edits {
+                    let display = ed
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .map(|p| relativize(&p, workspace_root))
+                        .unwrap_or_else(|_| ed.text_document.uri.to_string());
+                    let plain: Vec<TextEdit> = ed
+                        .edits
+                        .iter()
+                        .filter_map(|e| match e {
+                            lsp_types::OneOf::Left(te) => Some(te.clone()),
+                            lsp_types::OneOf::Right(_) => None,
+                        })
+                        .collect();
+                    by_path.entry(display).or_default().extend(plain);
+                }
+            }
+            lsp_types::DocumentChanges::Operations(_) => {
+                // Resource-creation/rename/delete ops are out of scope for
+                // N4. The renderer will surface a summary line so the
+                // model knows it skipped something.
+            }
+        }
+    }
+
+    by_path
+        .into_iter()
+        .map(|(path, edits)| (path, edits.len(), edits))
+        .collect()
+}
+
+/// Format a [`WorkspaceEdit`] as a human-readable summary block:
+///
+///     ── Workspace edit (3 files, 12 edits) ──
+///     src/lib.rs (4 edits)
+///     src/app.rs (5 edits)
+///     src/lsp/mod.rs (3 edits)
+pub fn format_workspace_edit_summary(edit: &WorkspaceEdit, workspace_root: &Path) -> String {
+    let summary = workspace_edit_summary(edit, workspace_root);
+    if summary.is_empty() {
+        return "(empty workspace edit — server returned nothing to apply)".to_owned();
+    }
+    let total_files = summary.len();
+    let total_edits: usize = summary.iter().map(|(_, n, _)| n).sum();
+    let mut out = format!(
+        "── Workspace edit ({} {}, {} {}) ──",
+        total_files,
+        if total_files == 1 { "file" } else { "files" },
+        total_edits,
+        if total_edits == 1 { "edit" } else { "edits" }
+    );
+    for (path, count, _) in &summary {
+        out.push('\n');
+        out.push_str(&format!(
+            "{path} ({} {})",
+            count,
+            if *count == 1 { "edit" } else { "edits" }
+        ));
     }
     out
 }
@@ -231,6 +602,7 @@ mod tests {
             path: workspace.join("src").join("lib.rs"),
             line: 12,
             column: 8,
+            preview: None,
         }];
         let out = format_locations(&views, &workspace);
         // OS-native separator; assert containment so we don't bake `/` vs `\\` in.

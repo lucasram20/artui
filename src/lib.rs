@@ -707,6 +707,8 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     hooks: request.hooks,
                     permissions: Some(request.permissions),
                     lsp_manager: request.lsp_manager,
+                    lsp_writethrough: request.lsp_writethrough,
+                    lsp_diagnostics_timeout_ms: request.lsp_diagnostics_timeout_ms,
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(

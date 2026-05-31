@@ -30,12 +30,16 @@
 //! [MPL-2.0]: https://github.com/helix-editor/helix/blob/master/LICENSE
 
 pub mod client;
+pub mod edits;
 pub mod manager;
 pub mod registry;
 pub mod render;
 pub mod types;
+pub mod writethrough;
 
 pub use client::LspClient;
+pub use edits::{apply_workspace_edit, ApplyReport};
 pub use manager::{LspManager, WarmupReport};
 pub use registry::ServerRegistry;
-pub use types::{HoverView, LocationView, LspAction, ServerSpec};
+pub use types::{DiagnosticView, HoverView, LocationView, LspAction, ServerSpec, SymbolView};
+pub use writethrough::{after_edit, EditedFile, WritethroughOutcome};
