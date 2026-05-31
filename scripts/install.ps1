@@ -2,7 +2,7 @@
 #
 # Usage:
 #   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
-#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.6.0
+#   irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex -ArgumentList -Version v0.6.1
 #
 # Resolves the latest version from the public Cloudflare R2 mirror first
 # (zero-auth, works for everyone). Falls back to the GitHub API when R2 is
@@ -96,7 +96,7 @@ if ($Version -eq 'latest') {
     # Prefer the public R2 mirror — works for everyone, including users
     # without GitHub access while the source repo is private. The
     # `latest/checksums.sha256` file embeds the version in each archive
-    # filename: `artui-0.6.0-windows-x86_64.zip`. Anchor the regex to a
+    # filename: `artui-0.6.1-windows-x86_64.zip`. Anchor the regex to a
     # known OS token so a permissive pre-release-suffix branch can't
     # greedily eat into the OS portion of the filename.
     try {
@@ -120,7 +120,7 @@ if ($Version -eq 'latest') {
             if (-not $Token) {
                 Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).'
             }
-            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.6.0"
+            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.6.1"
             exit 1
         }
     }

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
-#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.6.0
+#   curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.6.1
 #
 # Detects arch (x86_64/aarch64), downloads the matching release binary
 # from the public Cloudflare R2 mirror, falls back to GitHub releases on
@@ -190,7 +190,7 @@ if [ "$VERSION" = "latest" ]; then
   # Prefer R2: a `latest/VERSION` text file the upload step keeps current.
   if curl -fIsS "${R2_BASE}/latest/checksums.sha256" >/dev/null 2>&1; then
     # checksums.sha256 names the binaries with their version embedded.
-    # e.g. "artui-0.6.0-linux-x86_64.tar.gz"
+    # e.g. "artui-0.6.1-linux-x86_64.tar.gz"
     TAG="v$(curl -fsSL "${R2_BASE}/latest/checksums.sha256" \
       | sed -n 's/.*artui-\([0-9.][0-9.]*\)-.*/\1/p' | head -1 || true)"
   fi
