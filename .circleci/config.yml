@@ -5,20 +5,18 @@
 #   1. CI (`ci` workflow) — fires on every branch push + PR. Lint, test,
 #      build sanity-check on Linux. Replaces the GHA CI workflow which
 #      ran out of GHA's 2,000 min/month private-repo allowance.
-#   2. Release (`release` workflow) — fires on `v*` tag push. Cross-
-#      compiles to 3 targets — linux-x86_64, macos-x86_64, windows-x86_64
-#      — uploads archives to Cloudflare R2, and publishes a GitHub
-#      release. Replaces the GHA release workflow which used the same
-#      minute pool as CI.
+#   2. Release (`release` workflow) — fires on `v*` tag push. Builds
+#      x86_64 binaries for Linux and Windows, uploads archives to
+#      Cloudflare R2, and publishes a GitHub release. Replaces the GHA
+#      release workflow which used the same minute pool as CI.
 #
-# Why three targets, not six: CircleCI's free-tier macOS concurrency is
-# limited (1-2 parallel macOS jobs). Building both x86_64 and aarch64
-# for each OS doubled the queue depth and burned credits faster than
-# the budget allowed. Dropping to x86_64-only gets the bulk of users
-# (Apple Silicon runs x86_64 transparently via Rosetta 2; Windows-on-
-# ARM runs x86_64 via Microsoft's emulator since 2020). Linux ARM
-# users (RPi, Graviton) fall through to `cargo install` from source —
-# the install scripts surface a clear message instead of 404ing.
+# Why two targets, not six: CircleCI's free-tier macOS minutes are 0
+# (the M1 jobs sit in the queue with a CONCURRENCY LIMIT badge until
+# they time out), and aarch64 cross-compiles aren't worth the build
+# time / brittleness for the user base size. Mac users `cargo install
+# --git https://github.com/lucasram20/artui` from source. Linux ARM
+# users (RPi, Graviton) do the same. Windows-on-ARM runs the
+# x86_64 binary via Microsoft's emulator since 2020.
 #
 # Why the migration: GHA's release workflow ran out of minutes mid-
 # publish during the v0.6.0 release. The artifacts built fine but the
@@ -44,19 +42,19 @@ version: 2.1
 
 # ── Executors ────────────────────────────────────────────────────────────
 #
-# Two flavours:
+# One Linux flavour:
 #
-#   rust-linux   — `cimg/rust:1.95` Docker image. Used for CI and the
-#                   Linux release build + the publish job (gh + aws).
+#   rust-linux   — `cimg/rust:1.95` Docker image. Used for CI, the Linux
+#                   release build, and the publish job (gh + aws).
 #                   Cheapest credit class.
-#   rust-macos   — CircleCI's macos.m1.medium runner. Native ARM with
-#                   `cargo build --target x86_64-apple-darwin` cross-
-#                   compile so we get an Apple Silicon-compatible binary
-#                   without paying for two macOS jobs. ~10× the credit
-#                   cost of Linux per minute, used only for the macOS
-#                   release build.
 #   (Windows)    — handled via the win/default orb, no executor block;
 #                   built into the windows-x86_64 job directly.
+#
+# macOS was previously a third executor (`rust-macos` on macos.m1.medium)
+# but CircleCI's free tier doesn't grant macOS minutes — the job sat in
+# the queue with a CONCURRENCY LIMIT badge until it timed out. Mac users
+# now `cargo install --git https://github.com/lucasram20/artui` from
+# source. install.sh surfaces a clear message instead of 404'ing.
 #
 # Tracking the local development toolchain (cargo 1.95.0) keeps CI and
 # local builds reproducible — bump the image tag when you bump the local
@@ -71,12 +69,6 @@ executors:
     docker:
       - image: cimg/rust:1.95
     resource_class: medium
-    working_directory: ~/artui
-
-  rust-macos:
-    macos:
-      xcode: 16.0.0
-    resource_class: macos.m1.medium.gen1
     working_directory: ~/artui
 
 # ── Reusable steps ───────────────────────────────────────────────────────
@@ -213,36 +205,6 @@ jobs:
       - save_rust_cache:
           target: "linux-x86_64"
 
-  release-build-macos-x86_64:
-    executor: rust-macos
-    environment:
-      CARGO_INCREMENTAL: "0"
-      CARGO_TERM_COLOR: always
-    steps:
-      - checkout
-      - resolve_tag
-      - restore_rust_cache:
-          target: "macos-x86_64"
-      - run:
-          name: Install Rust + x86_64 target
-          command: |
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
-            source $BASH_ENV
-            rustup target add x86_64-apple-darwin
-      - run:
-          name: cargo build --release --target x86_64-apple-darwin
-          command: cargo build --release --target x86_64-apple-darwin --bin artui
-      - run:
-          name: Stage tar.gz
-          command: bash .circleci/stage_unix.sh x86_64-apple-darwin macos-x86_64
-      - persist_to_workspace:
-          root: ~/artui
-          paths:
-            - dist/
-      - save_rust_cache:
-          target: "macos-x86_64"
-
   release-build-windows-x86_64:
     executor:
       name: win/default
@@ -349,12 +311,6 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - release-build-macos-x86_64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
       - release-build-windows-x86_64:
           filters:
             tags:
@@ -364,7 +320,6 @@ workflows:
       - release-publish:
           requires:
             - release-build-linux-x86_64
-            - release-build-macos-x86_64
             - release-build-windows-x86_64
           filters:
             tags:

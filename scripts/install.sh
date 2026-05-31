@@ -157,31 +157,39 @@ UNAME_S="$(uname -s)"
 UNAME_M="$(uname -m)"
 
 case "$UNAME_S" in
-  Linux)  OS="linux" ;;
-  Darwin) OS="macos" ;;
+  Linux)
+    OS="linux"
+    ;;
+  Darwin)
+    # macOS binaries aren't published — CircleCI free-tier macOS minutes
+    # are 0, and we don't have budget for a paid plan. Mac users build
+    # from source instead. Cargo is the standard Rust toolchain so
+    # this is the same flow every Rust developer uses.
+    err "macOS binaries aren't published. Build from source:"
+    err "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    err "  cargo install --git https://github.com/lucasram20/artui"
+    err "Or set ARTUI_FROM_SOURCE=1 and re-run this script after installing Rust."
+    if [ "${ARTUI_FROM_SOURCE:-0}" != "1" ]; then
+      exit 1
+    fi
+    OS="macos"
+    ;;
   *) err "unsupported OS: $UNAME_S"; exit 1 ;;
 esac
 
 case "$UNAME_M" in
   x86_64|amd64)  ARCH="x86_64" ;;
   aarch64|arm64)
-    # ARM64 handling depends on OS:
-    # - macOS Apple Silicon runs x86_64 binaries transparently via
-    #   Rosetta 2, so we serve the macos-x86_64 archive there.
-    # - Linux ARM (RPi, AWS Graviton, etc.) has no equivalent fallback;
-    #   we exit with a clear message pointing users at `cargo install`.
-    if [ "$OS" = "macos" ]; then
-      warn "Apple Silicon detected; using the x86_64 binary via Rosetta 2."
-      warn "Install Rosetta if missing: softwareupdate --install-rosetta --agree-to-license"
-      ARCH="x86_64"
-    else
-      err "Linux aarch64 binaries aren't published. Build from source:"
-      err "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-      err "  ARTUI_FROM_SOURCE=1 curl -fsSL <this-script-url> | sh"
-      err "Or clone + cargo install:"
-      err "  git clone https://github.com/lucasram20/artui && cd artui && cargo install --path ."
+    # ARM64 handling: Linux ARM and macOS Apple Silicon both fall
+    # through to source-build. Windows ARM runs x86_64 via emulation
+    # so install.ps1 handles it differently.
+    err "ARM64 binaries aren't published. Build from source:"
+    err "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    err "  cargo install --git https://github.com/lucasram20/artui"
+    if [ "${ARTUI_FROM_SOURCE:-0}" != "1" ]; then
       exit 1
     fi
+    ARCH="aarch64"
     ;;
   *) err "unsupported arch: $UNAME_M"; exit 1 ;;
 esac
