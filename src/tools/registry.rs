@@ -11,6 +11,7 @@ use super::lsp::LspTool;
 use super::read_file::ReadFileTool;
 use super::search::SearchTool;
 use super::shell::ShellTool;
+use super::todo_write::TodoWriteTool;
 use super::{Tool, ToolContext, ToolResult};
 
 /// Registry of available tools. Immutable after construction.
@@ -32,6 +33,8 @@ impl ToolRegistry {
         tools.insert(apply_patch.spec().name.clone(), apply_patch);
         let shell = Arc::new(ShellTool);
         tools.insert(shell.spec().name.clone(), shell);
+        let todo_write = Arc::new(TodoWriteTool);
+        tools.insert(todo_write.spec().name.clone(), todo_write);
         // Note: `task` tool is registered separately via `with_task_tool`
         // because it needs a provider reference.
         // Note: `lsp` tool is registered via `with_lsp_tool` and only when
@@ -115,6 +118,8 @@ mod tests {
             events: tx,
             max_read_file_chars: 10000,
             lsp_manager: None,
+            lsp_writethrough: false,
+            lsp_diagnostics_timeout_ms: 750,
         }
     }
 

@@ -130,12 +130,12 @@ Releases are tag-driven — no automation pushes a release on every commit. To s
 
 ```bash
 # Bump versions in lockstep
-sed -i 's/^version = ".*"/version = "0.5.0"/' Cargo.toml
-(cd npm && npm version --no-git-tag-version 0.5.0)
+sed -i 's/^version = ".*"/version = "0.6.0"/' Cargo.toml
+(cd npm && npm version --no-git-tag-version 0.6.0)
 cargo update -p artui --offline
 
-git commit -am "chore(release): 0.5.0"
-git tag v0.5.0
+git commit -am "chore(release): 0.6.0"
+git tag v0.6.0
 git push origin main --tags
 ```
 
@@ -144,7 +144,7 @@ The tag triggers `.github/workflows/release.yml`, which cross-compiles for Linux
 If a build fails or you want to rebuild an existing tag:
 
 ```bash
-gh workflow run release.yml -f tag=v0.5.0
+gh workflow run release.yml -f tag=v0.6.0
 ```
 
 artui auto-checks for new versions at startup and surfaces a banner when severity meets `[updates] notify_level` (default: major bumps only). Configure or disable in `~/.config/artui/config.toml`.

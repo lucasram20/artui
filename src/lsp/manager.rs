@@ -110,6 +110,20 @@ impl LspManager {
         Ok(arc)
     }
 
+    /// Look up an existing cached client without spawning. Returns `None`
+    /// when there's no client for `(server_id, root)` yet — callers use
+    /// this for actions that should run against an already-running client
+    /// (workspace_symbols, diagnostics fan-out) without forcing a fresh
+    /// spawn for an unrelated path.
+    pub async fn get_or_spawn_existing(
+        &self,
+        server_id: String,
+        root: PathBuf,
+    ) -> Option<ClientHandle> {
+        let clients = self.clients.read().await;
+        clients.get(&(server_id, root)).cloned()
+    }
+
     /// Walk `cwd` looking for project markers and pre-spawn matching clients.
     ///
     /// Cancel-safe: stop polling as soon as we've collected enough samples.

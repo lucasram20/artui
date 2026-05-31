@@ -199,11 +199,98 @@ impl Tool for ApplyPatchTool {
             .collect::<Vec<_>>()
             .join("\n");
 
+        // Phase N3 — writethrough. Push edited file contents into the LSP
+        // and surface diagnostics back into this tool result so the model
+        // sees its own breakage in the same turn it caused it. Skipped
+        // when the manager is absent (LSP disabled), the writethrough flag
+        // is off, or the patch only deleted files.
+        let mut writethrough_block = String::new();
+        if let Some(manager) = ctx.lsp_manager.as_ref() {
+            if ctx.lsp_writethrough {
+                let edits = collect_writethrough_edits(&changes);
+                if !edits.is_empty() {
+                    let outcome = crate::lsp::after_edit(
+                        manager,
+                        &ctx.workspace_root,
+                        &edits,
+                        std::time::Duration::from_millis(
+                            ctx.lsp_diagnostics_timeout_ms.max(50) as u64
+                        ),
+                    )
+                    .await;
+                    writethrough_block =
+                        crate::lsp::writethrough::format_outcome(&outcome, &ctx.workspace_root);
+                }
+            }
+        }
+
         ToolResult::ok(
             ctx.call_id,
-            format!("Patch applied successfully:\n{summary}"),
+            format!("Patch applied successfully:\n{summary}{writethrough_block}"),
         )
     }
+}
+
+/// Collect the writethrough edits that should be pushed to the LSP after
+/// `apply_patch` lands. Skips deletions (no contents to type-check) and
+/// computes the changed-line set from a unified-diff walk so writethrough
+/// can scope diagnostics to changed regions.
+fn collect_writethrough_edits(changes: &[FileChange]) -> Vec<crate::lsp::EditedFile> {
+    let mut edits: Vec<crate::lsp::EditedFile> = Vec::new();
+    for change in changes {
+        match change {
+            FileChange::Create { path, content } => {
+                let total_lines = content.lines().count() as u32;
+                edits.push(crate::lsp::EditedFile {
+                    path: path.clone(),
+                    contents: content.clone(),
+                    changed_lines: (1..=total_lines.max(1)).collect(),
+                });
+            }
+            FileChange::Update {
+                path,
+                original,
+                new_content,
+            } => {
+                let changed_lines = compute_changed_lines(original, new_content);
+                edits.push(crate::lsp::EditedFile {
+                    path: path.clone(),
+                    contents: new_content.clone(),
+                    changed_lines,
+                });
+            }
+            FileChange::Delete { .. } => {
+                // Skipped — N3 writethrough cares about content; deletions
+                // are surfaced via the LSP's own file-watcher (didChangeWatchedFiles).
+            }
+        }
+    }
+    edits
+}
+
+/// Diff `original` vs `new_content` line-by-line and return the 1-based
+/// line numbers in `new_content` that don't appear at the same position in
+/// `original`. Cheap and good enough for diagnostic scoping — exact diff is
+/// unnecessary because the writethrough's `±buffer` already absorbs small
+/// alignment slop.
+fn compute_changed_lines(original: &str, new_content: &str) -> Vec<u32> {
+    let orig: Vec<&str> = original.lines().collect();
+    let new_lines: Vec<&str> = new_content.lines().collect();
+    let mut changed = Vec::new();
+    let max = new_lines.len().max(orig.len());
+    for i in 0..max {
+        let o = orig.get(i).copied().unwrap_or("");
+        let n = new_lines.get(i).copied().unwrap_or("");
+        if o != n {
+            changed.push((i as u32) + 1);
+        }
+    }
+    if changed.is_empty() && !new_lines.is_empty() {
+        // Edge case: identical content but the patch said something
+        // changed. Default to line 1 so writethrough still runs.
+        changed.push(1);
+    }
+    changed
 }
 
 // ---------------------------------------------------------------------------
@@ -723,6 +810,8 @@ mod tests {
             events: tx,
             max_read_file_chars: 10000,
             lsp_manager: None,
+            lsp_writethrough: false,
+            lsp_diagnostics_timeout_ms: 750,
         }
     }
 

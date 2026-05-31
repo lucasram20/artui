@@ -42,6 +42,12 @@ pub struct AgentLoopConfig {
     /// `lsp` tool). `None` disables LSP entirely — matches `[lsp] enabled =
     /// false` in the global config.
     pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
+    /// Phase N3 — when true, `apply_patch` runs a writethrough pass after
+    /// every successful patch.
+    pub lsp_writethrough: bool,
+    /// Phase N3 — wall-clock budget for the post-apply_patch
+    /// publishDiagnostics poll.
+    pub lsp_diagnostics_timeout_ms: u32,
 }
 
 impl Default for AgentLoopConfig {
@@ -57,6 +63,8 @@ impl Default for AgentLoopConfig {
             hooks: HookConfig::default(),
             permissions: None,
             lsp_manager: None,
+            lsp_writethrough: true,
+            lsp_diagnostics_timeout_ms: 750,
         }
     }
 }
@@ -304,6 +312,8 @@ pub async fn run_turn(
                                 events: event_tx.clone(),
                                 max_read_file_chars: config.max_read_file_chars,
                                 lsp_manager: config.lsp_manager.clone(),
+                                lsp_writethrough: config.lsp_writethrough,
+                                lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -318,6 +328,8 @@ pub async fn run_turn(
                                 events: event_tx.clone(),
                                 max_read_file_chars: config.max_read_file_chars,
                                 lsp_manager: config.lsp_manager.clone(),
+                                lsp_writethrough: config.lsp_writethrough,
+                                lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -331,6 +343,8 @@ pub async fn run_turn(
                         events: event_tx.clone(),
                         max_read_file_chars: config.max_read_file_chars,
                         lsp_manager: config.lsp_manager.clone(),
+                        lsp_writethrough: config.lsp_writethrough,
+                        lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                     };
                     registry.dispatch(call, ctx).await
                 }
