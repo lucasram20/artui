@@ -6,12 +6,37 @@
 # from the CircleCI project env. Skipped silently when R2_ACCOUNT_ID is
 # unset so a forked repo without R2 credentials can still ship through
 # CI without modification.
+#
+# IMPORTANT: R2 needs an S3-compatible API token, not a generic
+# Cloudflare API token. The S3-compatible Access Key ID is exactly
+# 32 hex chars; the secret is ~64 chars. If you see a "Credential
+# access key has length 16, should be 32" error, you generated a
+# generic Cloudflare token (the OAuth-style ones). Recreate from
+# Cloudflare dashboard → R2 → "Manage R2 API Tokens" →
+# "Create R2 API Token" with `Object Read & Write` scoped to the
+# artui-releases bucket.
 
 set -euo pipefail
 
 if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_SECRET_ACCESS_KEY:-}" ]; then
   echo "R2 credentials not set; skipping R2 upload (artifacts still go to GitHub Releases)."
   exit 0
+fi
+
+# Validate the access key length up front so the failure message is
+# useful. R2's S3 API rejects 16-char keys (those are generic
+# Cloudflare API tokens, not S3-compatible R2 tokens) with a confusing
+# "Credential access key has length 16, should be 32" error from the
+# AWS SDK side. Failing here with a clearer pointer saves a debug round
+# trip.
+ACCESS_KEY_LEN="${#R2_ACCESS_KEY_ID}"
+if [ "$ACCESS_KEY_LEN" -ne 32 ]; then
+  echo "ERROR: R2_ACCESS_KEY_ID is $ACCESS_KEY_LEN chars; R2's S3-compatible API requires exactly 32 chars." >&2
+  echo "       You probably generated a generic Cloudflare API token." >&2
+  echo "       Fix: Cloudflare dashboard -> R2 -> Manage R2 API Tokens -> Create R2 API Token" >&2
+  echo "            with Object Read & Write scope on the artui-releases bucket." >&2
+  echo "       The Access Key ID shown in the post-create dialog is the 32-char value." >&2
+  exit 1
 fi
 
 TAG="$(cat /tmp/release-meta/tag)"

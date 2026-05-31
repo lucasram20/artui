@@ -1,0 +1,95 @@
+name: Trigger CircleCI release pipeline
+
+# Fires only when a GitHub Release is published (or edited from
+# pre-release → published). Calls CircleCI's v2 API to start the
+# `release` workflow with the release tag as a parameter. CircleCI's
+# release workflow no longer fires on raw tag push — the publish-to-
+# Releases step is the manual gate that authorizes the full
+# cross-platform build + R2 upload.
+#
+# This workflow runs in a tiny ubuntu-latest container with one curl
+# call. <10 sec runtime, ~1 GHA minute per release. Stays well under
+# the 2,000 min/month free private-repo allowance.
+#
+# Required GHA repo secrets:
+#   CIRCLECI_API_TOKEN  - CircleCI personal API token. Generate at
+#                          https://app.circleci.com/settings/user/tokens
+#                          User-scope token with read/write project
+#                          permissions on lucasram20/artui.
+#
+# Workflow:
+#   1. Create a draft / pre-release on GitHub manually (gh release
+#      create v0.7.0 --draft, or via the Releases UI).
+#   2. Edit the release notes, attach pre-built binaries from a prior
+#      run if you want, etc.
+#   3. Click "Publish release". This fires `release: published` and
+#      this workflow calls CircleCI's API.
+#   4. CircleCI runs the release workflow on the tag's commit, builds
+#      Linux + Windows binaries, uploads to R2, and uses
+#      `gh release upload --clobber` to attach them to the release
+#      you just published.
+#
+# Edge case: if the release was created with a tag that doesn't yet
+# exist on the remote, CircleCI will fail to checkout. Always create
+# the tag (git tag + git push) before publishing the release.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  trigger:
+    name: POST CircleCI v2 pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger CircleCI release workflow
+        env:
+          CIRCLECI_API_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CIRCLECI_API_TOKEN}" ]; then
+            echo "ERROR: CIRCLECI_API_TOKEN secret is not set in this repo." >&2
+            echo "       Generate at https://app.circleci.com/settings/user/tokens" >&2
+            echo "       and add as a repository secret named CIRCLECI_API_TOKEN." >&2
+            exit 1
+          fi
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "Release '$TAG' is marked as pre-release; skipping CircleCI trigger."
+            echo "Edit the release and uncheck 'pre-release' to fire the build."
+            exit 0
+          fi
+
+          echo "Triggering CircleCI release pipeline for tag $TAG..."
+          response="$(curl -fsS \
+            -X POST \
+            -H "Circle-Token: $CIRCLECI_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://circleci.com/api/v2/project/gh/lucasram20/artui/pipeline" \
+            -d @- <<EOF
+          {
+            "tag": "$TAG",
+            "parameters": {
+              "run-release-workflow": true,
+              "release-tag": "$TAG"
+            }
+          }
+          EOF
+          )"
+          echo "CircleCI response:"
+          echo "$response" | python3 -m json.tool || echo "$response"
+
+          # Extract the pipeline number for the run summary.
+          number="$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || true)"
+          if [ -n "$number" ]; then
+            echo ""
+            echo "Pipeline started: https://app.circleci.com/pipelines/github/lucasram20/artui/$number"
+            echo "Watch the release workflow there. The release-publish job will"
+            echo "attach the built artifacts to release $TAG via gh release upload."
+          fi

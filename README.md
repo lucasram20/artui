@@ -128,25 +128,38 @@ Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serd
 
 ## Releases
 
-Releases are tag-driven — no automation pushes a release on every commit. To ship:
+Releases are **publish-driven** — building a release requires a human to click "Publish release" on GitHub. Tag pushes alone don't trigger anything; the `release-trigger.yml` GHA workflow listens for `release: published` and POSTs to CircleCI's API to start the cross-platform build.
 
 ```bash
-# Bump versions in lockstep
-sed -i 's/^version = ".*"/version = "0.6.1"/' Cargo.toml
-(cd npm && npm version --no-git-tag-version 0.6.1)
+# 1. Bump versions in lockstep
+sed -i 's/^version = ".*"/version = "0.7.0"/' Cargo.toml
+(cd npm && npm version --no-git-tag-version 0.7.0)
 cargo update -p artui --offline
 
-git commit -am "chore(release): 0.6.1"
-git tag v0.6.1
-git push origin main --tags
+git commit -am "chore(release): 0.7.0"
+git push origin main
+
+# 2. Tag the commit and push the tag
+git tag v0.7.0
+git push origin v0.7.0
+
+# 3. Draft a release. Edit notes, attach changelog, etc.
+gh release create v0.7.0 --draft --notes-from-tag
+
+# 4. When you're ready, publish it (or click "Publish release" in the
+#    GitHub Releases UI). This fires CircleCI's release pipeline:
+#    Linux + Windows builds → R2 upload → artifact attach.
+gh release edit v0.7.0 --draft=false
 ```
 
-The tag triggers `.circleci/config.yml`'s `release` workflow, which cross-compiles for Linux / macOS / Windows × `x86_64` / `aarch64` and uploads archives to GitHub Releases + the R2 mirror.
+Pre-releases (`gh release create v0.7.0-rc1 --prerelease`) are explicitly skipped by the trigger workflow — uncheck the pre-release flag to actually fire the build. This lets you draft, edit, and validate notes without burning CI credits.
 
-If a build fails or you want to rebuild an existing tag from CircleCI's UI, click "Rerun" on the failed pipeline. The GHA `release.yml` is preserved as a `workflow_dispatch`-only fallback:
+CI runs on every branch push but skips docs-only commits (anything that only touches `*.md`, `docs/**`, `npm/**`, `cloudflare/**`, `.gitignore`, etc.). Add `[ci force]` to a commit subject to override the path filter, or `[ci skip]` to skip even build-relevant changes.
+
+The GHA `release.yml` is preserved as a `workflow_dispatch`-only fallback — trigger via the Actions tab if CircleCI is unavailable:
 
 ```bash
-gh workflow run release.yml -f tag=v0.6.1
+gh workflow run release.yml -f tag=v0.7.0
 ```
 
 artui auto-checks for new versions at startup and surfaces a banner when severity meets `[updates] notify_level` (default: major bumps only). Configure or disable in `~/.config/artui/config.toml`.
