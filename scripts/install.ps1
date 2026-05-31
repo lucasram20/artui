@@ -86,7 +86,7 @@ if (-not (Confirm-Install)) {
 $arch = if ([Environment]::Is64BitOperatingSystem) { 'x86_64' } else { 'i686' }
 if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { $arch = 'aarch64' }
 
-$target = "$arch-pc-windows-msvc"
+$target = "windows-$arch"
 Step "Target $target"
 
 if ($Version -eq 'latest') {
@@ -96,12 +96,12 @@ if ($Version -eq 'latest') {
     # Prefer the public R2 mirror — works for everyone, including users
     # without GitHub access while the source repo is private. The
     # `latest/checksums.sha256` file embeds the version in each archive
-    # filename: `artui-0.4.0-x86_64-pc-windows-msvc.zip`. Anchor the
-    # regex to a known arch token so a permissive pre-release-suffix
-    # branch can't greedily eat into the arch portion of the filename.
+    # filename: `artui-0.4.0-windows-x86_64.zip`. Anchor the regex to a
+    # known OS token so a permissive pre-release-suffix branch can't
+    # greedily eat into the OS portion of the filename.
     try {
         $checksums = Invoke-RestMethod -Uri "$R2Base/latest/checksums.sha256" -UseBasicParsing -ErrorAction Stop
-        $match = [regex]::Match($checksums, 'artui-([0-9]+\.[0-9]+\.[0-9]+)-(?:aarch64|x86_64|i686|arm64)')
+        $match = [regex]::Match($checksums, 'artui-([0-9]+\.[0-9]+\.[0-9]+)-(?:linux|macos|windows)')
         if ($match.Success) {
             $resolved = "v$($match.Groups[1].Value)"
         }

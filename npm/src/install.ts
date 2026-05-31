@@ -44,19 +44,23 @@ function detectPlatform(): PlatformDescriptor {
   const platform = process.platform;
   const arch = process.arch;
   const isWin = platform === "win32";
+  // Asset names follow `<os>-<arch>` to match the friendly labels on
+  // the GitHub release page (linux-x86_64, macos-aarch64,
+  // windows-x86_64, …). The Rust target triple lives only inside the
+  // CI build step and isn't user-facing.
   const target =
     platform === "linux" && arch === "x64"
-      ? "x86_64-unknown-linux-gnu"
+      ? "linux-x86_64"
       : platform === "linux" && arch === "arm64"
-        ? "aarch64-unknown-linux-gnu"
+        ? "linux-aarch64"
         : platform === "darwin" && arch === "x64"
-          ? "x86_64-apple-darwin"
+          ? "macos-x86_64"
           : platform === "darwin" && arch === "arm64"
-            ? "aarch64-apple-darwin"
+            ? "macos-aarch64"
             : isWin && arch === "x64"
-              ? "x86_64-pc-windows-msvc"
+              ? "windows-x86_64"
               : isWin && arch === "arm64"
-                ? "aarch64-pc-windows-msvc"
+                ? "windows-aarch64"
                 : "";
   if (!target) throw new Error(`Unsupported platform/arch: ${platform}/${arch}`);
   return { target, archive: isWin ? "zip" : "tar.gz", binary: isWin ? "artui.exe" : "artui" };

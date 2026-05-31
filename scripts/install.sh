@@ -157,8 +157,8 @@ UNAME_S="$(uname -s)"
 UNAME_M="$(uname -m)"
 
 case "$UNAME_S" in
-  Linux)  OS="unknown-linux-gnu" ;;
-  Darwin) OS="apple-darwin" ;;
+  Linux)  OS="linux" ;;
+  Darwin) OS="macos" ;;
   *) err "unsupported OS: $UNAME_S"; exit 1 ;;
 esac
 
@@ -168,7 +168,7 @@ case "$UNAME_M" in
   *) err "unsupported arch: $UNAME_M"; exit 1 ;;
 esac
 
-TARGET="${ARCH}-${OS}"
+TARGET="${OS}-${ARCH}"
 step "Target ${C_CYAN}${TARGET}${C_RESET}"
 
 mkdir -p "$INSTALL_DIR"
@@ -190,7 +190,7 @@ if [ "$VERSION" = "latest" ]; then
   # Prefer R2: a `latest/VERSION` text file the upload step keeps current.
   if curl -fIsS "${R2_BASE}/latest/checksums.sha256" >/dev/null 2>&1; then
     # checksums.sha256 names the binaries with their version embedded.
-    # e.g. "artui-0.3.4-x86_64-unknown-linux-gnu.tar.gz"
+    # e.g. "artui-0.4.0-linux-x86_64.tar.gz"
     TAG="v$(curl -fsSL "${R2_BASE}/latest/checksums.sha256" \
       | sed -n 's/.*artui-\([0-9.][0-9.]*\)-.*/\1/p' | head -1 || true)"
   fi
