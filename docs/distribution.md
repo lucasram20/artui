@@ -36,12 +36,12 @@ Each tagged release uploads **two copies** of every artifact:
 ```
 s3://artui-releases/
   ├─ v0.4.0/
-  │   ├─ artui-0.4.0-x86_64-unknown-linux-gnu.tar.gz
-  │   ├─ artui-0.4.0-aarch64-apple-darwin.tar.gz
-  │   ├─ artui-0.4.0-x86_64-pc-windows-msvc.zip
+  │   ├─ artui-0.4.0-linux-x86_64.tar.gz
+  │   ├─ artui-0.4.0-macos-aarch64.tar.gz
+  │   ├─ artui-0.4.0-windows-x86_64.zip
   │   └─ checksums.sha256
   └─ latest/                     ← overwritten on every release
-      ├─ artui-0.4.0-x86_64-unknown-linux-gnu.tar.gz
+      ├─ artui-0.4.0-linux-x86_64.tar.gz
       └─ checksums.sha256
 ```
 
