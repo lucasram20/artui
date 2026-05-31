@@ -23,6 +23,15 @@ if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_S
   exit 0
 fi
 
+# Strip any whitespace / CR / LF from the env values. CircleCI's env var
+# UI doesn't trim trailing newlines on paste; if a user pasted a value
+# with a trailing \n, the AWS SDK signs `secret + "\n"` while R2 expects
+# `secret` alone, producing the maddening SignatureDoesNotMatch error.
+# Normalize defensively.
+R2_ACCOUNT_ID="$(printf '%s' "$R2_ACCOUNT_ID" | tr -d ' \t\r\n')"
+R2_ACCESS_KEY_ID="$(printf '%s' "$R2_ACCESS_KEY_ID" | tr -d ' \t\r\n')"
+R2_SECRET_ACCESS_KEY="$(printf '%s' "$R2_SECRET_ACCESS_KEY" | tr -d ' \t\r\n')"
+
 # Validate the access key length up front so the failure message is
 # useful. R2's S3 API rejects 16-char keys (those are generic
 # Cloudflare API tokens, not S3-compatible R2 tokens) with a confusing
@@ -32,12 +41,31 @@ fi
 ACCESS_KEY_LEN="${#R2_ACCESS_KEY_ID}"
 if [ "$ACCESS_KEY_LEN" -ne 32 ]; then
   echo "ERROR: R2_ACCESS_KEY_ID is $ACCESS_KEY_LEN chars; R2's S3-compatible API requires exactly 32 chars." >&2
-  echo "       You probably generated a generic Cloudflare API token." >&2
+  echo "       You probably generated a generic Cloudflare API token (cfat-...)." >&2
   echo "       Fix: Cloudflare dashboard -> R2 -> Manage R2 API Tokens -> Create R2 API Token" >&2
   echo "            with Object Read & Write scope on the artui-releases bucket." >&2
   echo "       The Access Key ID shown in the post-create dialog is the 32-char value." >&2
   exit 1
 fi
+
+# Validate the secret length too. R2 secrets are 64 hex chars. A
+# truncated paste or a copied "Token value" (cfat-...) will fail
+# signing with SignatureDoesNotMatch — same surface as a wrong key.
+SECRET_LEN="${#R2_SECRET_ACCESS_KEY}"
+if [ "$SECRET_LEN" -ne 64 ]; then
+  echo "ERROR: R2_SECRET_ACCESS_KEY is $SECRET_LEN chars; R2's S3-compatible API requires exactly 64 chars." >&2
+  echo "       Re-roll the token in Cloudflare R2 dashboard and copy the *Secret Access Key*" >&2
+  echo "       value (NOT the 'Token value'/cfat-... string)." >&2
+  exit 1
+fi
+
+# Log fingerprint markers to make debugging less mysterious — first/last
+# 4 chars of each value so you can sanity-check against the Cloudflare
+# token-creation page without exposing the full credential in the log.
+echo "R2 credentials sanity check:"
+echo "  R2_ACCOUNT_ID         = ${R2_ACCOUNT_ID:0:4}…${R2_ACCOUNT_ID: -4} (${#R2_ACCOUNT_ID} chars)"
+echo "  R2_ACCESS_KEY_ID      = ${R2_ACCESS_KEY_ID:0:4}…${R2_ACCESS_KEY_ID: -4} (${#R2_ACCESS_KEY_ID} chars)"
+echo "  R2_SECRET_ACCESS_KEY  = ${R2_SECRET_ACCESS_KEY:0:4}…${R2_SECRET_ACCESS_KEY: -4} (${#R2_SECRET_ACCESS_KEY} chars)"
 
 TAG="$(cat /tmp/release-meta/tag)"
 ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
