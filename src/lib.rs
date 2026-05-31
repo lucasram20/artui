@@ -3,6 +3,7 @@ pub mod app;
 pub mod auth;
 pub mod config;
 pub mod hooks;
+pub mod lsp;
 pub mod mcp;
 pub mod permissions;
 pub mod providers;
@@ -57,12 +58,42 @@ pub async fn run() -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::channel(64);
     let mut app = App::new(config.clone(), provider);
 
+    // Construct the LspManager (Phase N1). When `[lsp] enabled = false`,
+    // the manager is None — the `lsp` tool isn't registered, the agent
+    // never sees it, and there are zero language-server child processes.
+    let workspace = std::env::current_dir().unwrap_or_default();
+    if config.lsp.enabled {
+        match lsp::ServerRegistry::load() {
+            Ok(registry) => {
+                let manager = Arc::new(lsp::LspManager::new(registry, event_tx.clone()));
+                app.lsp_manager = Some(Arc::clone(&manager));
+                // Replace the tool registry with one that includes the
+                // lsp tool. Subsequent MCP merging (below) layers on top.
+                let registry = tools::registry::ToolRegistry::new().with_lsp_tool();
+                app.tool_registry = Arc::new(registry);
+                if config.lsp.warmup_on_startup {
+                    let manager_for_warmup = Arc::clone(&manager);
+                    let warmup_cwd = workspace.clone();
+                    tokio::spawn(async move {
+                        let _ = manager_for_warmup.warmup(&warmup_cwd).await;
+                    });
+                }
+            }
+            Err(error) => {
+                tracing::warn!(target: "lsp", "failed to load LSP registry: {error:#}");
+            }
+        }
+    }
+
     // Spawn MCP servers and merge their tools into the registry before any
     // turn runs. MCP failures are non-fatal: registered as ServerStatus::Failed.
-    let workspace = std::env::current_dir().unwrap_or_default();
     let mcp_cfg = mcp::load_mcp_config(&workspace);
     if !mcp_cfg.servers.is_empty() {
+        // Re-seed the registry, preserving the lsp tool when LSP is on.
         let mut registry = tools::registry::ToolRegistry::new();
+        if config.lsp.enabled && app.lsp_manager.is_some() {
+            registry = registry.with_lsp_tool();
+        }
         let statuses = mcp::register_servers(&mcp_cfg, &mut registry).await;
         app.tool_registry = Arc::new(registry);
         app.mcp_servers = statuses;
@@ -675,6 +706,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     compaction_keep_recent_tokens: request.compaction_keep_recent_tokens,
                     hooks: request.hooks,
                     permissions: Some(request.permissions),
+                    lsp_manager: request.lsp_manager,
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(

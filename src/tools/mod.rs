@@ -2,6 +2,7 @@
 
 pub mod apply_patch;
 pub mod glob;
+pub mod lsp;
 pub mod read_file;
 pub mod registry;
 pub mod search;
@@ -9,6 +10,7 @@ pub mod shell;
 pub mod task;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -25,6 +27,11 @@ pub struct ToolContext {
     pub cwd: PathBuf,
     pub events: mpsc::Sender<AppEvent>,
     pub max_read_file_chars: usize,
+    /// Optional handle to the workspace's `LspManager`. Populated when
+    /// `[lsp] enabled = true`. Tools that don't need LSP ignore this; the
+    /// `lsp` tool requires it and is only registered when the manager
+    /// exists.
+    pub lsp_manager: Option<Arc<crate::lsp::LspManager>>,
     // pub permissions: Arc<PermissionEngine>,  // Phase D
     // pub cancel: CancellationToken,           // Phase C
 }

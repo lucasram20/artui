@@ -722,6 +722,7 @@ mod tests {
             cwd: workspace.to_path_buf(),
             events: tx,
             max_read_file_chars: 10000,
+            lsp_manager: None,
         }
     }
 
