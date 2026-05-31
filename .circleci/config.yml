@@ -16,14 +16,22 @@ version: 2.1
 
 # ── Executors ────────────────────────────────────────────────────────────
 #
-# `cimg/rust:1.83` ships with rustfmt + clippy preinstalled and a working
-# `~/.cargo` layout, so we don't burn time on toolchain setup. Resource
-# class `medium` (4 vCPU / 8 GB) is plenty for an artui-sized cargo build
-# and stays inside the free-tier credit ceiling.
+# `cimg/rust:1.95` ships with Rust 1.95 + rustfmt + clippy preinstalled
+# and a working `~/.cargo` layout, so we don't burn time on toolchain
+# setup. Tracks the local development toolchain (cargo 1.95.0) so CI and
+# local builds resolve identical dependency graphs — important because
+# transitive deps like `ignore` 0.4.25 and `idna_adapter` 1.2.2 require
+# `edition2024` (stabilized in Rust 1.85), and an older image tag like
+# `cimg/rust:1.83` failed to compile them. Bump this when you bump the
+# local toolchain; mismatch causes "feature `edition2024` is required"
+# errors at `cargo build` time.
+#
+# Resource class `medium` (4 vCPU / 8 GB) is plenty for an artui-sized
+# cargo build and stays inside the free-tier credit ceiling.
 executors:
   rust-linux:
     docker:
-      - image: cimg/rust:1.83
+      - image: cimg/rust:1.95
     resource_class: medium
     working_directory: ~/artui
 
