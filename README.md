@@ -130,21 +130,21 @@ Releases are tag-driven — no automation pushes a release on every commit. To s
 
 ```bash
 # Bump versions in lockstep
-sed -i 's/^version = ".*"/version = "0.6.0"/' Cargo.toml
-(cd npm && npm version --no-git-tag-version 0.6.0)
+sed -i 's/^version = ".*"/version = "0.6.1"/' Cargo.toml
+(cd npm && npm version --no-git-tag-version 0.6.1)
 cargo update -p artui --offline
 
-git commit -am "chore(release): 0.6.0"
-git tag v0.6.0
+git commit -am "chore(release): 0.6.1"
+git tag v0.6.1
 git push origin main --tags
 ```
 
-The tag triggers `.github/workflows/release.yml`, which cross-compiles for Linux / macOS / Windows × `x86_64` / `aarch64` and uploads archives to GitHub Releases + the R2 mirror.
+The tag triggers `.circleci/config.yml`'s `release` workflow, which cross-compiles for Linux / macOS / Windows × `x86_64` / `aarch64` and uploads archives to GitHub Releases + the R2 mirror.
 
-If a build fails or you want to rebuild an existing tag:
+If a build fails or you want to rebuild an existing tag from CircleCI's UI, click "Rerun" on the failed pipeline. The GHA `release.yml` is preserved as a `workflow_dispatch`-only fallback:
 
 ```bash
-gh workflow run release.yml -f tag=v0.6.0
+gh workflow run release.yml -f tag=v0.6.1
 ```
 
 artui auto-checks for new versions at startup and surfaces a banner when severity meets `[updates] notify_level` (default: major bumps only). Configure or disable in `~/.config/artui/config.toml`.
