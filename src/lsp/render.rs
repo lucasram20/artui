@@ -145,9 +145,22 @@ mod tests {
     use super::*;
     use lsp_types::{MarkupContent, MarkupKind, Position};
 
-    fn loc(uri: &str, line: u32, col: u32) -> Location {
+    /// Build a `file://` URL that round-trips cleanly on every platform.
+    /// Plain `file:///x/...` URLs are valid on Unix but fail
+    /// `Url::to_file_path()` on Windows because they lack a drive letter,
+    /// so we go through `Url::from_file_path` with the platform-native
+    /// temp dir to get a path the OS actually believes in.
+    fn fixture_uri() -> Url {
+        let mut path = std::env::temp_dir();
+        path.push("artui-render-test");
+        path.push("lib.rs");
+        Url::from_file_path(&path)
+            .expect("temp_dir should yield a path that round-trips through file://")
+    }
+
+    fn loc(uri: Url, line: u32, col: u32) -> Location {
         Location {
-            uri: Url::parse(uri).unwrap(),
+            uri,
             range: Range {
                 start: Position {
                     line,
@@ -163,7 +176,7 @@ mod tests {
 
     #[test]
     fn scalar_definition_renders_one_hit() {
-        let resp = GotoDefinitionResponse::Scalar(loc("file:///x/src/lib.rs", 5, 4));
+        let resp = GotoDefinitionResponse::Scalar(loc(fixture_uri(), 5, 4));
         let views = locations_from_response(resp);
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].line, 6);
@@ -172,7 +185,7 @@ mod tests {
 
     #[test]
     fn array_definition_caps_at_max_hits() {
-        let many: Vec<_> = (0..20).map(|i| loc("file:///x/lib.rs", i, 0)).collect();
+        let many: Vec<_> = (0..20).map(|i| loc(fixture_uri(), i, 0)).collect();
         let resp = GotoDefinitionResponse::Array(many);
         let views = locations_from_response(resp);
         assert_eq!(views.len(), MAX_LOCATION_HITS);
@@ -182,7 +195,7 @@ mod tests {
     fn link_definition_uses_target_selection_range() {
         let link = LocationLink {
             origin_selection_range: None,
-            target_uri: Url::parse("file:///x/lib.rs").unwrap(),
+            target_uri: fixture_uri(),
             target_range: Range {
                 start: Position {
                     line: 0,
@@ -212,19 +225,22 @@ mod tests {
 
     #[test]
     fn format_locations_relativizes_to_workspace() {
-        let workspace = std::path::PathBuf::from("/work/proj");
+        let mut workspace = std::env::temp_dir();
+        workspace.push("artui-render-fmt");
         let views = vec![LocationView {
-            path: workspace.join("src/lib.rs"),
+            path: workspace.join("src").join("lib.rs"),
             line: 12,
             column: 8,
         }];
         let out = format_locations(&views, &workspace);
-        assert_eq!(out, "src/lib.rs:12:8");
+        // OS-native separator; assert containment so we don't bake `/` vs `\\` in.
+        assert!(out.contains("lib.rs:12:8"), "got: {out}");
+        assert!(out.contains("src"), "got: {out}");
     }
 
     #[test]
     fn format_locations_handles_empty() {
-        let workspace = std::path::PathBuf::from("/work/proj");
+        let workspace = std::env::temp_dir();
         let out = format_locations(&[], &workspace);
         assert_eq!(out, "no definition found");
     }
