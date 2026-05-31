@@ -124,7 +124,7 @@ Universal skill paths supported: `~/.agents/skills/`, `<workspace>/.agents/skill
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-Freemodel%20relay-F38020?logo=cloudflare&logoColor=white)
 ![Cloudflare R2](https://img.shields.io/badge/Cloudflare%20R2-Release%20mirror-F38020?logo=cloudflare&logoColor=white)
 
-Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serde TOML config. Cloudflare Workers fronts the freemodel provider relay (keeps the upstream API key server-side); Cloudflare R2 hosts the install-script binaries and `latest/` pointer so the curl/PowerShell one-liners work zero-auth. Targets Linux, macOS, Windows (`x86_64` and `aarch64`).
+Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serde TOML config. Cloudflare Workers fronts the freemodel provider relay (keeps the upstream API key server-side); Cloudflare R2 hosts the install-script binaries and `latest/` pointer so the curl/PowerShell one-liners work zero-auth. Prebuilt binaries ship for Linux / macOS / Windows on `x86_64`. Apple Silicon and Windows ARM run the x86_64 binary transparently via Rosetta 2 / x86 emulation; Linux ARM users build from source via `cargo install`.
 
 ## Releases
 
