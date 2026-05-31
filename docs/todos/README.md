@@ -42,6 +42,23 @@ artui at v0.3.x has architecture parity with Claude Code / Codex / OpenCode / pi
 | 6 | M6 | [phase-m6-codebase-indexer.md](phase-m6-codebase-indexer.md) | Tree-sitter symbols + BM25 chunks |
 | 7 | M7 | [phase-m7-deep-subagents.md](phase-m7-deep-subagents.md) | Depth-N subagent trees |
 | 8 | M8 | [phase-m8-production-polish.md](phase-m8-production-polish.md) | Telemetry, crash reporter, a11y, mdBook docs |
+| 9 | M9 | [phase-m9-agent-browser-web-tool.md](phase-m9-agent-browser-web-tool.md) | Bundle Vercel agent-browser as a `web_*` tool family |
+
+## Phase N — Language Server Protocol support (v0.5.x → v0.7.x)
+
+LSP integration so the agent can call into rust-analyzer / gopls / pyright /
+typescript-language-server / clangd for definitions, references, hover,
+diagnostics, rename, and code actions. Reference design: oh-my-pi
+`packages/coding-agent/src/lsp/`. Full architecture in
+[`docs/specs/lsp.md`](../specs/lsp.md). See
+[phase-n-README.md](phase-n-README.md) for ordering.
+
+| Order | Phase | Ticket | Outcome |
+|---|---|---|---|
+| 1 | N1 | [phase-n1-lsp-skeleton.md](phase-n1-lsp-skeleton.md) | `lsp/` module + `async-lsp` + `lsp` tool with definition/hover/status; vendored ~80-server registry from helix-editor |
+| 2 | N2 | [phase-n2-lsp-readonly-ops.md](phase-n2-lsp-readonly-ops.md) | references, implementation, type_definition, document_symbols, workspace_symbols, cached diagnostics |
+| 3 | N3 | [phase-n3-lsp-writethrough.md](phase-n3-lsp-writethrough.md) | Post-`apply_patch` `publishDiagnostics` pull; diagnostics rendered into the same tool result |
+| 4 | N4 | [phase-n4-lsp-mutating-ops.md](phase-n4-lsp-mutating-ops.md) | rename + code_actions through approval engine; `workspace/applyEdit` handling |
 
 ## Conventions
 
