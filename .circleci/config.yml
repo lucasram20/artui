@@ -1,0 +1,135 @@
+# CircleCI configuration for artui.
+#
+# This file takes over CI duty from `.github/workflows/ci.yml`. The GHA CI
+# workflow is kept in the repo with `workflow_dispatch`-only triggers as a
+# manual fallback in case CircleCI is unavailable.
+#
+# `.github/workflows/release.yml` is unchanged and continues to handle tag
+# pushes (cross-compiling to 6 targets, R2 upload, GitHub release publish).
+# Branch pushes go through CircleCI; tag pushes go through GHA. No overlap.
+#
+# Why the migration: GHA private-repo allowance is 2,000 minutes/month and
+# the multi-OS test matrix burned through it. CircleCI's free plan grants
+# 30,000 credits/month, ~3,000 Linux build-minutes — 50% more headroom.
+
+version: 2.1
+
+# ── Executors ────────────────────────────────────────────────────────────
+#
+# `cimg/rust:1.83` ships with rustfmt + clippy preinstalled and a working
+# `~/.cargo` layout, so we don't burn time on toolchain setup. Resource
+# class `medium` (4 vCPU / 8 GB) is plenty for an artui-sized cargo build
+# and stays inside the free-tier credit ceiling.
+executors:
+  rust-linux:
+    docker:
+      - image: cimg/rust:1.83
+    resource_class: medium
+    working_directory: ~/artui
+
+# ── Reusable steps ───────────────────────────────────────────────────────
+#
+# Caching mirrors `Swatinem/rust-cache@v2`'s shape: registry index + git
+# checkouts + the `target/` build directory, keyed on the OS arch and the
+# Cargo.lock checksum. A no-op run (docs-only push) restores the cache and
+# completes in ~30s; a clean run after a Cargo.lock bump rebuilds from
+# scratch and saves a fresh cache for next time.
+commands:
+  restore_rust_cache:
+    description: "Restore cargo registry, git, and target/ caches"
+    steps:
+      - restore_cache:
+          keys:
+            # Most-specific first — exact Cargo.lock match wins.
+            - artui-rust-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+            # Partial fallback so we still benefit from registry/git
+            # warmup when only Cargo.lock has changed.
+            - artui-rust-v1-{{ arch }}-
+
+  save_rust_cache:
+    description: "Persist cargo registry, git, and target/ caches"
+    steps:
+      - save_cache:
+          key: artui-rust-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+            - ~/.cargo/git
+            - target
+
+# ── Jobs ─────────────────────────────────────────────────────────────────
+jobs:
+  lint:
+    executor: rust-linux
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - restore_rust_cache
+      - run:
+          name: rustfmt --check
+          command: cargo fmt --all -- --check
+      - run:
+          name: clippy (deny warnings)
+          command: cargo clippy --all-targets --all-features -- -D warnings
+      - save_rust_cache
+
+  test:
+    executor: rust-linux
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+    steps:
+      - checkout
+      - restore_rust_cache
+      - run:
+          name: cargo test
+          # `--all-targets --all-features` matches the GHA workflow we're
+          # replacing. Covers lib + integration tests + doctests + bins.
+          command: cargo test --all-targets --all-features
+      - save_rust_cache
+
+  build:
+    executor: rust-linux
+    environment:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+    steps:
+      - checkout
+      - restore_rust_cache
+      - run:
+          name: cargo build --release
+          # Sanity check that the release profile compiles. The actual
+          # release artifacts (cross-compiled, archived, R2-uploaded)
+          # come from `.github/workflows/release.yml` on tag push.
+          command: cargo build --release --all-targets --all-features
+      - save_rust_cache
+
+# ── Workflows ────────────────────────────────────────────────────────────
+#
+# Single workflow `ci` triggered on every push and PR (CircleCI's default).
+# Lint + test run in parallel; build runs after both pass. Mirrors the
+# `needs: [lint, test]` chain in the original GHA `ci.yml`.
+#
+# Note: CircleCI fires on tag pushes too unless filtered out. We exclude
+# tags here so release tags (handled by GHA `release.yml`) don't double-fire
+# CircleCI CI runs and waste credits.
+workflows:
+  ci:
+    jobs:
+      - lint:
+          filters:
+            tags:
+              ignore: /.*/
+      - test:
+          filters:
+            tags:
+              ignore: /.*/
+      - build:
+          requires:
+            - lint
+            - test
+          filters:
+            tags:
+              ignore: /.*/
