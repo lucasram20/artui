@@ -121,8 +121,10 @@ Universal skill paths supported: `~/.agents/skills/`, `<workspace>/.agents/skill
 ![Reqwest](https://img.shields.io/badge/Reqwest-HTTP-0088CC)
 ![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-111111)
 ![OpenAI Compatible](https://img.shields.io/badge/OpenAI--compatible-HTTP%20API-412991)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-Freemodel%20relay-F38020?logo=cloudflare&logoColor=white)
+![Cloudflare R2](https://img.shields.io/badge/Cloudflare%20R2-Release%20mirror-F38020?logo=cloudflare&logoColor=white)
 
-Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serde TOML config. Targets Linux, macOS, Windows (`x86_64` and `aarch64`).
+Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serde TOML config. Cloudflare Workers fronts the freemodel provider relay (keeps the upstream API key server-side); Cloudflare R2 hosts the install-script binaries and `latest/` pointer so the curl/PowerShell one-liners work zero-auth. Targets Linux, macOS, Windows (`x86_64` and `aarch64`).
 
 ## Releases
 
