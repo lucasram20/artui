@@ -199,6 +199,13 @@ pub enum AppEvent {
     /// Tool call needs interactive approval. Boxed because the prompt
     /// owns a oneshot sender and would balloon the AppEvent enum size.
     ApprovalRequest(Box<crate::permissions::ApprovalPrompt>),
+    /// A language server published diagnostics for `path`. Footer renders
+    /// the count; phases N2/N3 will surface the full list in tool output.
+    LspDiagnostics {
+        server_id: String,
+        path: std::path::PathBuf,
+        count: usize,
+    },
 }
 
 #[derive(Debug)]
@@ -370,6 +377,8 @@ pub struct ProviderRequest {
     /// Permission engine. Shared across requests so session-allow flags
     /// stick.
     pub permissions: std::sync::Arc<tokio::sync::Mutex<crate::permissions::PermissionEngine>>,
+    /// LSP manager (Phase N1). `None` when `[lsp] enabled = false`.
+    pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,6 +455,10 @@ pub struct App {
     pub pending_approval: Option<crate::permissions::ApprovalPrompt>,
     /// Permission engine — shared between turns so session-allow flags stick.
     pub permissions: std::sync::Arc<tokio::sync::Mutex<crate::permissions::PermissionEngine>>,
+    /// LSP manager (Phase N1). `None` when `[lsp] enabled = false`. The
+    /// agent loop pulls this through `ToolContext` so the `lsp` tool can
+    /// dispatch to it.
+    pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -520,6 +533,7 @@ impl App {
             update_info: None,
             pending_approval: None,
             permissions: permissions_engine,
+            lsp_manager: None,
             mode: UiMode::Input,
             transcript: Vec::new(),
             input: String::new(),
@@ -803,6 +817,7 @@ impl App {
             compaction_keep_recent_tokens: self.config.agent.compaction_keep_recent_tokens,
             hooks: self.hooks.clone(),
             permissions: std::sync::Arc::clone(&self.permissions),
+            lsp_manager: self.lsp_manager.clone(),
         }))
     }
 
@@ -1038,6 +1053,21 @@ impl App {
                 self.pending_approval = Some(*prompt);
                 self.mode = UiMode::Approval;
                 self.status = "Awaiting approval (a/s/d)".to_owned();
+            }
+            AppEvent::LspDiagnostics {
+                server_id,
+                path,
+                count,
+            } => {
+                let label = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                self.status = if count == 0 {
+                    format!("{server_id}: {label} clean")
+                } else {
+                    format!("{server_id}: {label} ({count} diagnostics)")
+                };
             }
         }
     }

@@ -38,6 +38,10 @@ pub struct AgentLoopConfig {
     /// because the loop needs to flip session-allow flags after the user
     /// answers an approval modal.
     pub permissions: Option<std::sync::Arc<tokio::sync::Mutex<PermissionEngine>>>,
+    /// LSP manager handed through to tools that need it (currently only the
+    /// `lsp` tool). `None` disables LSP entirely — matches `[lsp] enabled =
+    /// false` in the global config.
+    pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
 }
 
 impl Default for AgentLoopConfig {
@@ -52,6 +56,7 @@ impl Default for AgentLoopConfig {
             compaction_keep_recent_tokens: 8_000,
             hooks: HookConfig::default(),
             permissions: None,
+            lsp_manager: None,
         }
     }
 }
@@ -298,6 +303,7 @@ pub async fn run_turn(
                                 cwd: config.workspace_root.clone(),
                                 events: event_tx.clone(),
                                 max_read_file_chars: config.max_read_file_chars,
+                                lsp_manager: config.lsp_manager.clone(),
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -311,6 +317,7 @@ pub async fn run_turn(
                                 cwd: config.workspace_root.clone(),
                                 events: event_tx.clone(),
                                 max_read_file_chars: config.max_read_file_chars,
+                                lsp_manager: config.lsp_manager.clone(),
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -323,6 +330,7 @@ pub async fn run_turn(
                         cwd: config.workspace_root.clone(),
                         events: event_tx.clone(),
                         max_read_file_chars: config.max_read_file_chars,
+                        lsp_manager: config.lsp_manager.clone(),
                     };
                     registry.dispatch(call, ctx).await
                 }

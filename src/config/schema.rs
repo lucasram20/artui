@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub ui: UiConfig,
     pub updates: UpdateConfig,
     pub permissions: PermissionsConfig,
+    pub lsp: LspConfig,
 }
 
 impl Default for AppConfig {
@@ -31,6 +32,7 @@ impl Default for AppConfig {
             ui: UiConfig::default(),
             updates: UpdateConfig::default(),
             permissions: PermissionsConfig::default(),
+            lsp: LspConfig::default(),
         }
     }
 }
@@ -369,4 +371,40 @@ pub struct PermissionsConfig {
     /// `tool_name` → `"allow" | "ask" | "deny"`. Anything unrecognised is
     /// dropped silently by the engine, falling back to the default policy.
     pub tools: std::collections::HashMap<String, String>,
+}
+
+/// Configuration for the Language Server Protocol integration introduced in
+/// Phase N1.
+///
+/// `enabled = true` is the default — the `lsp` tool registers and the agent
+/// gets `definition` / `hover` / `status` actions out of the box (provided
+/// the underlying language servers are on `$PATH`). Set `enabled = false`
+/// to remove the tool from the registry entirely; the model never sees it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct LspConfig {
+    /// Master switch.
+    pub enabled: bool,
+    /// When true, walk the workspace at startup and pre-spawn matching
+    /// language servers so the first `definition` call is fast. Failures
+    /// during warmup are logged and reported by `lsp status` but never
+    /// block the agent loop.
+    pub warmup_on_startup: bool,
+    /// Forward `window/logMessage` notifications to `tracing` at INFO level
+    /// instead of DEBUG. Useful when chasing server config issues.
+    pub log_messages: bool,
+    /// Per-request timeout (seconds). Override per-server via
+    /// `~/.config/artui/lsp.toml` (Phase N2+).
+    pub request_timeout_secs: u32,
+}
+
+impl Default for LspConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            warmup_on_startup: true,
+            log_messages: false,
+            request_timeout_secs: 10,
+        }
+    }
 }

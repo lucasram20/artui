@@ -7,6 +7,7 @@ use crate::providers::{ToolCall, ToolSpec};
 
 use super::apply_patch::ApplyPatchTool;
 use super::glob::GlobTool;
+use super::lsp::LspTool;
 use super::read_file::ReadFileTool;
 use super::search::SearchTool;
 use super::shell::ShellTool;
@@ -33,7 +34,20 @@ impl ToolRegistry {
         tools.insert(shell.spec().name.clone(), shell);
         // Note: `task` tool is registered separately via `with_task_tool`
         // because it needs a provider reference.
+        // Note: `lsp` tool is registered via `with_lsp_tool` and only when
+        // an `LspManager` exists — dispatching via context-less `new()`
+        // would surface a "language server support is disabled" error to
+        // the model on every call. Wiring here would also force every test
+        // to plumb a manager.
         Self { tools }
+    }
+
+    /// Add the `lsp` tool. Called from `app.rs` after constructing
+    /// the [`crate::lsp::LspManager`]. No-op when LSP is disabled.
+    pub fn with_lsp_tool(mut self) -> Self {
+        let lsp = Arc::new(LspTool);
+        self.tools.insert(lsp.spec().name.clone(), lsp);
+        self
     }
 
     /// Create a registry for subagents. No `task` tool (prevents recursion).
@@ -100,6 +114,7 @@ mod tests {
             cwd: workspace.to_path_buf(),
             events: tx,
             max_read_file_chars: 10000,
+            lsp_manager: None,
         }
     }
 

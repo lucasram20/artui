@@ -3,7 +3,7 @@ mod schema;
 use anyhow::{Context, Result};
 
 pub use schema::{
-    AppConfig, CopilotConfig, FreemodelConfig, OllamaConfig, OpenAiAccountConfig,
+    AppConfig, CopilotConfig, FreemodelConfig, LspConfig, OllamaConfig, OpenAiAccountConfig,
     OpenAiCompatConfig, UpdateConfig,
 };
 
