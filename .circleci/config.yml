@@ -2,64 +2,108 @@
 #
 # Two pipelines live here:
 #
-#   1. CI (`ci` workflow) — fires on every branch push + PR. Lint, test,
-#      build sanity-check on Linux. Replaces the GHA CI workflow which
-#      ran out of GHA's 2,000 min/month private-repo allowance.
-#   2. Release (`release` workflow) — fires on `v*` tag push. Builds
-#      x86_64 binaries for Linux and Windows, uploads archives to
-#      Cloudflare R2, and publishes a GitHub release. Replaces the GHA
-#      release workflow which used the same minute pool as CI.
+#   1. CI (`ci` workflow) — fires on every branch push + PR. Lint,
+#      test, build sanity-check on Linux. The first step in every CI
+#      job runs `should-skip-ci.sh` which halts the job if the commit
+#      only touches docs/config files (README.md, CHANGELOG.md, .md
+#      files, docs/**, npm/**, cloudflare/**, .gitignore, etc.) — same
+#      shape as the GHA `paths:` filter we replaced. Override with
+#      `[ci force]` in the commit message.
 #
-# Why two targets, not six: CircleCI's free-tier macOS minutes are 0
-# (the M1 jobs sit in the queue with a CONCURRENCY LIMIT badge until
-# they time out), and aarch64 cross-compiles aren't worth the build
-# time / brittleness for the user base size. Mac users `cargo install
-# --git https://github.com/lucasram20/artui` from source. Linux ARM
-# users (RPi, Graviton) do the same. Windows-on-ARM runs the
-# x86_64 binary via Microsoft's emulator since 2020.
+#   2. Release (`release` workflow) — fires when the `run-release-
+#      workflow` pipeline parameter is true. The only way to set that
+#      parameter is via CircleCI's v2 API, which `.github/workflows/
+#      release-trigger.yml` calls when a GitHub Release transitions to
+#      `published`. Tag-push-only triggers were removed — publishing
+#      the GitHub Release is the human-in-the-loop gate that
+#      authorizes the full cross-platform build + R2 upload.
 #
-# Why the migration: GHA's release workflow ran out of minutes mid-
-# publish during the v0.6.0 release. The artifacts built fine but the
-# final `gh release create` step never ran. Moving the entire pipeline
-# to CircleCI's free 30,000 credits/month plan removes the constraint.
+#      Workflow:
+#       a. git tag v0.7.0 && git push origin v0.7.0 — only creates
+#          the tag on the remote.
+#       b. gh release create v0.7.0 --draft --notes "..." (or use
+#          the GitHub Releases UI) — drafts a release without firing
+#          anything.
+#       c. Edit release notes, polish them, mark as pre-release for
+#          testing if needed.
+#       d. Click "Publish release" (or `gh release edit v0.7.0
+#          --draft=false`). The release-trigger.yml GHA workflow fires
+#          and POSTs to CircleCI's API with run-release-workflow=true.
+#       e. CircleCI runs the release workflow: builds Linux + Windows
+#          binaries, uploads to R2, and uses `gh release upload
+#          --clobber` to attach the artifacts to the release.
 #
-# Required CircleCI project env vars (Project Settings → Environment Variables):
+# Why two binary targets, not six: CircleCI's free-tier macOS minutes
+# are 0 (the M1 jobs sit in the queue with a CONCURRENCY LIMIT badge
+# until they time out), and aarch64 cross-compiles aren't worth the
+# build time / brittleness for the user base size. Mac users `cargo
+# install --git https://github.com/lucasram20/artui` from source.
+# Linux ARM users (RPi, Graviton) do the same. Windows-on-ARM runs
+# the x86_64 binary via Microsoft's emulator since 2020.
 #
-#   GITHUB_TOKEN          — Personal access token with `repo` scope. Used
-#                            by the publish job to create the GitHub release.
-#                            Generate at https://github.com/settings/tokens/new
-#                            with Contents:Write + Metadata:Read.
-#   R2_ACCOUNT_ID         — Cloudflare account ID. Used to build the R2
-#                            S3-compatible endpoint URL.
-#   R2_ACCESS_KEY_ID      — R2 access key for the artui-releases bucket.
+# Required CircleCI project env vars (Project Settings →
+# Environment Variables):
+#
+#   GITHUB_TOKEN          — Personal access token. Used by the publish
+#                            job to attach release artifacts. Needs
+#                            Contents:Write + Metadata:Read on the
+#                            repo. Generate at
+#                            https://github.com/settings/tokens/new
+#   R2_ACCOUNT_ID         — Cloudflare account ID. Used to build the
+#                            R2 S3-compatible endpoint URL.
+#   R2_ACCESS_KEY_ID      — R2 *S3-compatible* access key (32 hex
+#                            chars). Generate at Cloudflare dashboard
+#                            → R2 → Manage R2 API Tokens → Create R2
+#                            API Token with Object Read & Write on
+#                            the artui-releases bucket. NOT a generic
+#                            Cloudflare API token (those are 16 chars
+#                            and the AWS SDK rejects them).
 #   R2_SECRET_ACCESS_KEY  — Matching R2 secret access key.
 #
-# These mirror the GHA secrets the original release.yml used. No NPM_TOKEN
-# is required because artui doesn't auto-publish to the npm registry from
-# CI; npm publish is a manual step from the npm/ subdirectory.
+# Required GHA repo secret (for release-trigger.yml):
+#
+#   CIRCLECI_API_TOKEN    — CircleCI user API token with project
+#                            access. Generate at
+#                            https://app.circleci.com/settings/user/tokens
+#
+# No NPM_TOKEN is required because artui doesn't auto-publish to the
+# npm registry from CI; npm publish is a manual step from npm/.
 
 version: 2.1
 
-# ── Executors ────────────────────────────────────────────────────────────
+# ── Pipeline parameters ──────────────────────────────────────────────
 #
-# One Linux flavour:
+# `run-release-workflow` toggles the release workflow on/off. Default
+# false, so a regular branch push or tag push runs only the `ci`
+# workflow. The release workflow only fires when a GitHub Release is
+# published (release-trigger.yml POSTs to CircleCI's API with this
+# parameter set to true and `release-tag` set to the tag name).
+parameters:
+  run-release-workflow:
+    type: boolean
+    default: false
+  release-tag:
+    type: string
+    default: ""
+
+# ── Executors ────────────────────────────────────────────────────────
 #
-#   rust-linux   — `cimg/rust:1.95` Docker image. Used for CI, the Linux
-#                   release build, and the publish job (gh + aws).
+#   rust-linux   — `cimg/rust:1.95` Docker image. Used for CI, the
+#                   Linux release build, and the publish job (gh + aws).
 #                   Cheapest credit class.
 #   (Windows)    — handled via the win/default orb, no executor block;
 #                   built into the windows-x86_64 job directly.
 #
-# macOS was previously a third executor (`rust-macos` on macos.m1.medium)
-# but CircleCI's free tier doesn't grant macOS minutes — the job sat in
-# the queue with a CONCURRENCY LIMIT badge until it timed out. Mac users
-# now `cargo install --git https://github.com/lucasram20/artui` from
-# source. install.sh surfaces a clear message instead of 404'ing.
+# macOS was previously a third executor (`rust-macos` on
+# macos.m1.medium) but CircleCI's free tier doesn't grant macOS
+# minutes — the job sat in the queue with a CONCURRENCY LIMIT badge
+# until it timed out. Mac users now `cargo install --git
+# https://github.com/lucasram20/artui` from source.
 #
-# Tracking the local development toolchain (cargo 1.95.0) keeps CI and
-# local builds reproducible — bump the image tag when you bump the local
-# toolchain. Mismatched versions surface as "feature `edition2024` is
-# required" errors at cargo build time.
+# Tracking the local development toolchain (cargo 1.95.0) keeps CI
+# and local builds reproducible — bump the image tag when you bump
+# the local toolchain. Mismatched versions surface as "feature
+# `edition2024` is required" errors at cargo build time.
 
 orbs:
   win: circleci/windows@5.0
@@ -71,8 +115,17 @@ executors:
     resource_class: medium
     working_directory: ~/artui
 
-# ── Reusable steps ───────────────────────────────────────────────────────
+# ── Reusable steps ───────────────────────────────────────────────────
 commands:
+  skip_if_docs_only:
+    description: "Halt the job if the commit only touches docs/config"
+    steps:
+      - run:
+          name: Path filter (skip docs-only changes)
+          # See .circleci/should-skip-ci.sh for the full ignore list
+          # and the [ci force] override semantics.
+          command: bash .circleci/should-skip-ci.sh
+
   restore_rust_cache:
     description: "Restore cargo registry, git, and target/ caches"
     parameters:
@@ -99,20 +152,33 @@ commands:
             - ~/.cargo/git
             - target
 
-  # Resolve the tag for the running release pipeline. CircleCI exposes
-  # the tag in `CIRCLE_TAG` for tag-triggered runs; we strip the leading
-  # `v` and persist both forms to a workspace file so downstream jobs
-  # can read them without re-parsing.
+  # Resolve the tag for the running release pipeline. Two paths:
+  #
+  #  1. Triggered via release-trigger.yml: CircleCI's API request
+  #     supplied a `release-tag` pipeline parameter with the tag name
+  #     (e.g. "v0.7.0") AND a `tag` field that pins the checkout to
+  #     that tag's commit. We read the parameter.
+  #
+  #  2. Manual rerun in the CircleCI UI: the parameter may be empty,
+  #     so fall back to CIRCLE_TAG (set when CircleCI receives a tag
+  #     push event).
+  #
+  # The tag is then persisted to a workspace file so downstream jobs
+  # (release-publish) can read it without re-parsing.
   resolve_tag:
-    description: "Persist CIRCLE_TAG and stripped version to release-meta"
+    description: "Persist tag and stripped version to /tmp/release-meta"
     steps:
       - run:
           name: Resolve tag and version
           command: |
             set -e
-            TAG="${CIRCLE_TAG}"
+            TAG="<< pipeline.parameters.release-tag >>"
             if [ -z "$TAG" ]; then
-              echo "ERROR: CIRCLE_TAG is empty — release jobs require a tag" >&2
+              TAG="${CIRCLE_TAG:-}"
+            fi
+            if [ -z "$TAG" ]; then
+              echo "ERROR: no release tag resolvable from pipeline parameters or CIRCLE_TAG" >&2
+              echo "       Did you trigger this workflow via the GitHub Release publish flow?" >&2
               exit 1
             fi
             VERSION="${TAG#v}"
@@ -121,9 +187,9 @@ commands:
             echo "$VERSION" > /tmp/release-meta/version
             echo "tag=$TAG version=$VERSION"
 
-# ── Jobs ─────────────────────────────────────────────────────────────────
+# ── Jobs ─────────────────────────────────────────────────────────────
 jobs:
-  # ── CI jobs (every push) ───────────────────────────────────────────────
+  # ── CI jobs (every push) ───────────────────────────────────────────
   lint:
     executor: rust-linux
     environment:
@@ -131,16 +197,17 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - checkout
+      - skip_if_docs_only
       - restore_rust_cache
       - run:
           name: rustfmt --check
           command: cargo fmt --all -- --check
       - run:
           name: clippy (deny warnings)
-          # Default features only. The `lsp-integration` feature gates an
-          # integration test that requires `rust-analyzer` on $PATH; we
-          # don't install it on the CI runner, so we exclude its source
-          # tree from clippy here. Run locally with
+          # Default features only. The `lsp-integration` feature gates
+          # an integration test that requires `rust-analyzer` on
+          # $PATH; we don't install it on the CI runner, so clippy
+          # excludes it here. Run locally with
           # `cargo clippy --all-targets --features lsp-integration`.
           command: cargo clippy --all-targets -- -D warnings
       - save_rust_cache
@@ -153,6 +220,7 @@ jobs:
       RUST_BACKTRACE: "1"
     steps:
       - checkout
+      - skip_if_docs_only
       - restore_rust_cache
       - run:
           name: cargo test
@@ -166,20 +234,14 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - checkout
+      - skip_if_docs_only
       - restore_rust_cache
       - run:
           name: cargo build --release
           command: cargo build --release --all-targets
       - save_rust_cache
 
-  # ── Release jobs (tag push only) ───────────────────────────────────────
-  #
-  # Each release-build job builds one target and persists the archive
-  # (tar.gz on Linux/macOS, zip on Windows) to the workspace under
-  # `dist/`. The downstream `release-publish` job collects all six
-  # archives, computes checksums, uploads to R2, and creates the GitHub
-  # release.
-
+  # ── Release jobs (release-trigger.yml only) ────────────────────────
   release-build-linux-x86_64:
     executor: rust-linux
     environment:
@@ -277,15 +339,21 @@ jobs:
           name: Publish GitHub release
           command: bash .circleci/publish_github.sh
 
-# ── Workflows ────────────────────────────────────────────────────────────
+# ── Workflows ────────────────────────────────────────────────────────
 #
-# `ci` fires on every branch push and PR (tag pushes filtered out).
-# `release` fires only on `v*` tag pushes. The two workflows are
-# completely independent — release jobs require the tag filter so they
-# never run on branch pushes, and the CI jobs explicitly ignore tags
-# so they don't double-fire when a release tag is pushed.
+# `ci` fires on every push (the path-filter step inside each job halts
+# docs-only changes early). Tag pushes are filtered out so a tag push
+# alone doesn't double-fire CI.
+#
+# `release` fires only when `run-release-workflow` pipeline parameter
+# is true, which only release-trigger.yml sets. This decouples the
+# expensive release pipeline from raw tag pushes — the human gate is
+# publishing the GitHub Release.
+
 workflows:
   ci:
+    when:
+      not: << pipeline.parameters.run-release-workflow >>
     jobs:
       - lint:
           filters:
@@ -304,25 +372,11 @@ workflows:
               ignore: /.*/
 
   release:
+    when: << pipeline.parameters.run-release-workflow >>
     jobs:
-      - release-build-linux-x86_64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
-      - release-build-windows-x86_64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
+      - release-build-linux-x86_64
+      - release-build-windows-x86_64
       - release-publish:
           requires:
             - release-build-linux-x86_64
             - release-build-windows-x86_64
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
