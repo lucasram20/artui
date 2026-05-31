@@ -84,7 +84,15 @@ if (-not (Confirm-Install)) {
 }
 
 $arch = if ([Environment]::Is64BitOperatingSystem) { 'x86_64' } else { 'i686' }
-if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { $arch = 'aarch64' }
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+    # Windows-on-ARM (Snapdragon X, etc.) runs x86_64 binaries
+    # transparently via Microsoft's emulator since 2020. Serving the
+    # x86_64 archive there is the correct default — native ARM64 binaries
+    # aren't published because the user base is small and CircleCI
+    # macOS concurrency makes a full 6-target matrix budget-prohibitive.
+    Warn 'Windows ARM64 detected; using the x86_64 binary via the built-in emulator.'
+    $arch = 'x86_64'
+}
 
 $target = "windows-$arch"
 Step "Target $target"

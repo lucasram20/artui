@@ -5,16 +5,25 @@
 #   1. CI (`ci` workflow) — fires on every branch push + PR. Lint, test,
 #      build sanity-check on Linux. Replaces the GHA CI workflow which
 #      ran out of GHA's 2,000 min/month private-repo allowance.
-#   2. Release (`release` workflow) — fires on `v*` tag push. Cross-compiles
-#      to 6 targets (linux-x86_64/aarch64, macos-x86_64/aarch64,
-#      windows-x86_64/aarch64), uploads archives to Cloudflare R2, and
-#      publishes a GitHub release. Replaces the GHA release workflow
-#      which used the same minute pool as CI.
+#   2. Release (`release` workflow) — fires on `v*` tag push. Cross-
+#      compiles to 3 targets — linux-x86_64, macos-x86_64, windows-x86_64
+#      — uploads archives to Cloudflare R2, and publishes a GitHub
+#      release. Replaces the GHA release workflow which used the same
+#      minute pool as CI.
 #
-# Why the migration: GHA's release workflow ran out of minutes mid-publish
-# during the v0.6.0 release. The artifacts built fine but the final
-# `gh release create` step never ran. Moving the entire pipeline to
-# CircleCI's free 30,000 credits/month plan removes the constraint.
+# Why three targets, not six: CircleCI's free-tier macOS concurrency is
+# limited (1-2 parallel macOS jobs). Building both x86_64 and aarch64
+# for each OS doubled the queue depth and burned credits faster than
+# the budget allowed. Dropping to x86_64-only gets the bulk of users
+# (Apple Silicon runs x86_64 transparently via Rosetta 2; Windows-on-
+# ARM runs x86_64 via Microsoft's emulator since 2020). Linux ARM
+# users (RPi, Graviton) fall through to `cargo install` from source —
+# the install scripts surface a clear message instead of 404ing.
+#
+# Why the migration: GHA's release workflow ran out of minutes mid-
+# publish during the v0.6.0 release. The artifacts built fine but the
+# final `gh release create` step never ran. Moving the entire pipeline
+# to CircleCI's free 30,000 credits/month plan removes the constraint.
 #
 # Required CircleCI project env vars (Project Settings → Environment Variables):
 #
@@ -35,21 +44,19 @@ version: 2.1
 
 # ── Executors ────────────────────────────────────────────────────────────
 #
-# Three flavours:
+# Two flavours:
 #
-#   rust-linux        — `cimg/rust:1.95` Docker image. Used for CI and the
-#                        Linux release builds. Fast spin-up, cheapest
-#                        credit class.
-#   rust-linux-cross  — same image, but the build job installs zig +
-#                        cargo-zigbuild for cross-compiling Linux aarch64
-#                        from x86_64. Avoids a slow ARM runner.
-#   rust-macos        — CircleCI's macos.m1.medium runner. Native ARM, can
-#                        cross-compile to x86_64 via `cargo build --target`.
-#                        ~10× the credit cost of Linux per minute, used
-#                        only for the two macOS targets.
-#   rust-windows      — CircleCI's windows.medium runner. Builds both
-#                        windows-x86_64 and windows-aarch64 via
-#                        `cargo build --target`.
+#   rust-linux   — `cimg/rust:1.95` Docker image. Used for CI and the
+#                   Linux release build + the publish job (gh + aws).
+#                   Cheapest credit class.
+#   rust-macos   — CircleCI's macos.m1.medium runner. Native ARM with
+#                   `cargo build --target x86_64-apple-darwin` cross-
+#                   compile so we get an Apple Silicon-compatible binary
+#                   without paying for two macOS jobs. ~10× the credit
+#                   cost of Linux per minute, used only for the macOS
+#                   release build.
+#   (Windows)    — handled via the win/default orb, no executor block;
+#                   built into the windows-x86_64 job directly.
 #
 # Tracking the local development toolchain (cargo 1.95.0) keeps CI and
 # local builds reproducible — bump the image tag when you bump the local
@@ -61,12 +68,6 @@ orbs:
 
 executors:
   rust-linux:
-    docker:
-      - image: cimg/rust:1.95
-    resource_class: medium
-    working_directory: ~/artui
-
-  rust-linux-cross:
     docker:
       - image: cimg/rust:1.95
     resource_class: medium
@@ -212,43 +213,6 @@ jobs:
       - save_rust_cache:
           target: "linux-x86_64"
 
-  release-build-linux-aarch64:
-    executor: rust-linux-cross
-    environment:
-      CARGO_INCREMENTAL: "0"
-      CARGO_TERM_COLOR: always
-    steps:
-      - checkout
-      - resolve_tag
-      - restore_rust_cache:
-          target: "linux-aarch64"
-      - run:
-          name: Install zig + cargo-zigbuild
-          # zigbuild lets us cross-compile Linux aarch64 from x86_64
-          # without paying for a separate ARM runner. Stable on
-          # cimg/rust:1.95.
-          command: |
-            set -e
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq xz-utils
-            curl -fsSL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | sudo tar -xJ -C /usr/local/
-            sudo ln -sf /usr/local/zig-linux-x86_64-0.13.0/zig /usr/local/bin/zig
-            zig version
-            cargo install cargo-zigbuild --locked --version 0.19.7
-            rustup target add aarch64-unknown-linux-gnu
-      - run:
-          name: cargo zigbuild --release --target aarch64-unknown-linux-gnu
-          command: cargo zigbuild --release --target aarch64-unknown-linux-gnu --bin artui
-      - run:
-          name: Stage tar.gz
-          command: bash .circleci/stage_unix.sh aarch64-unknown-linux-gnu linux-aarch64
-      - persist_to_workspace:
-          root: ~/artui
-          paths:
-            - dist/
-      - save_rust_cache:
-          target: "linux-aarch64"
-
   release-build-macos-x86_64:
     executor: rust-macos
     environment:
@@ -278,36 +242,6 @@ jobs:
             - dist/
       - save_rust_cache:
           target: "macos-x86_64"
-
-  release-build-macos-aarch64:
-    executor: rust-macos
-    environment:
-      CARGO_INCREMENTAL: "0"
-      CARGO_TERM_COLOR: always
-    steps:
-      - checkout
-      - resolve_tag
-      - restore_rust_cache:
-          target: "macos-aarch64"
-      - run:
-          name: Install Rust + aarch64 target
-          command: |
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
-            source $BASH_ENV
-            rustup target add aarch64-apple-darwin
-      - run:
-          name: cargo build --release --target aarch64-apple-darwin
-          command: cargo build --release --target aarch64-apple-darwin --bin artui
-      - run:
-          name: Stage tar.gz
-          command: bash .circleci/stage_unix.sh aarch64-apple-darwin macos-aarch64
-      - persist_to_workspace:
-          root: ~/artui
-          paths:
-            - dist/
-      - save_rust_cache:
-          target: "macos-aarch64"
 
   release-build-windows-x86_64:
     executor:
@@ -346,58 +280,6 @@ jobs:
             - dist
       - save_rust_cache:
           target: "windows-x86_64"
-
-  release-build-windows-aarch64:
-    executor:
-      name: win/default
-      shell: bash.exe
-    environment:
-      CARGO_INCREMENTAL: "0"
-      CARGO_TERM_COLOR: always
-    steps:
-      - checkout
-      - resolve_tag
-      - restore_rust_cache:
-          target: "windows-aarch64"
-      - run:
-          name: Install Rust + aarch64 target + LLVM (for ring's aarch64 build)
-          shell: bash.exe
-          # `ring` (transitive dep via reqwest → rustls) doesn't have
-          # prebuilt asm stubs for aarch64-pc-windows-msvc and falls back
-          # to compiling its assembly with clang. The Windows runner ships
-          # MSVC but not LLVM, so we install both rustup and LLVM, then
-          # point cc-rs at clang-cl via the per-target env vars below.
-          command: |
-            choco install -y rustup.install --no-progress
-            choco install -y llvm --no-progress
-            export PATH="/c/Users/circleci/.cargo/bin:/c/Program Files/LLVM/bin:$PATH"
-            rustup default stable
-            rustup target add aarch64-pc-windows-msvc
-            clang --version
-            llvm-lib /? 2>&1 | head -1 || true
-      - run:
-          name: cargo build --release --target aarch64-pc-windows-msvc
-          shell: bash.exe
-          # Tell cc-rs explicitly which compiler to use for the
-          # aarch64 target. Without these, cc-rs probes for a `clang`
-          # in PATH (finds nothing in the default Windows toolchain
-          # layout) and bails with "failed to find tool clang".
-          command: |
-            export PATH="/c/Users/circleci/.cargo/bin:/c/Program Files/LLVM/bin:$PATH"
-            export CC_aarch64_pc_windows_msvc="clang-cl"
-            export AR_aarch64_pc_windows_msvc="llvm-lib"
-            export CFLAGS_aarch64_pc_windows_msvc="--target=aarch64-pc-windows-msvc"
-            cargo build --release --target aarch64-pc-windows-msvc --bin artui
-      - run:
-          name: Stage zip
-          shell: powershell.exe
-          command: powershell -ExecutionPolicy Bypass -File .circleci/stage_windows.ps1 aarch64-pc-windows-msvc windows-aarch64
-      - persist_to_workspace:
-          root: .
-          paths:
-            - dist
-      - save_rust_cache:
-          target: "windows-aarch64"
 
   release-publish:
     executor: rust-linux
@@ -467,19 +349,7 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - release-build-linux-aarch64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
       - release-build-macos-x86_64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
-      - release-build-macos-aarch64:
           filters:
             tags:
               only: /^v.*/
@@ -491,20 +361,11 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - release-build-windows-aarch64:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
       - release-publish:
           requires:
             - release-build-linux-x86_64
-            - release-build-linux-aarch64
             - release-build-macos-x86_64
-            - release-build-macos-aarch64
             - release-build-windows-x86_64
-            - release-build-windows-aarch64
           filters:
             tags:
               only: /^v.*/

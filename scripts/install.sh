@@ -164,7 +164,25 @@ esac
 
 case "$UNAME_M" in
   x86_64|amd64)  ARCH="x86_64" ;;
-  aarch64|arm64) ARCH="aarch64" ;;
+  aarch64|arm64)
+    # ARM64 handling depends on OS:
+    # - macOS Apple Silicon runs x86_64 binaries transparently via
+    #   Rosetta 2, so we serve the macos-x86_64 archive there.
+    # - Linux ARM (RPi, AWS Graviton, etc.) has no equivalent fallback;
+    #   we exit with a clear message pointing users at `cargo install`.
+    if [ "$OS" = "macos" ]; then
+      warn "Apple Silicon detected; using the x86_64 binary via Rosetta 2."
+      warn "Install Rosetta if missing: softwareupdate --install-rosetta --agree-to-license"
+      ARCH="x86_64"
+    else
+      err "Linux aarch64 binaries aren't published. Build from source:"
+      err "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+      err "  ARTUI_FROM_SOURCE=1 curl -fsSL <this-script-url> | sh"
+      err "Or clone + cargo install:"
+      err "  git clone https://github.com/lucasram20/artui && cd artui && cargo install --path ."
+      exit 1
+    fi
+    ;;
   *) err "unsupported arch: $UNAME_M"; exit 1 ;;
 esac
 
