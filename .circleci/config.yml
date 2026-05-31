@@ -360,18 +360,33 @@ jobs:
       - restore_rust_cache:
           target: "windows-aarch64"
       - run:
-          name: Install Rust + aarch64 target
+          name: Install Rust + aarch64 target + LLVM (for ring's aarch64 build)
           shell: bash.exe
+          # `ring` (transitive dep via reqwest → rustls) doesn't have
+          # prebuilt asm stubs for aarch64-pc-windows-msvc and falls back
+          # to compiling its assembly with clang. The Windows runner ships
+          # MSVC but not LLVM, so we install both rustup and LLVM, then
+          # point cc-rs at clang-cl via the per-target env vars below.
           command: |
             choco install -y rustup.install --no-progress
-            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            choco install -y llvm --no-progress
+            export PATH="/c/Users/circleci/.cargo/bin:/c/Program Files/LLVM/bin:$PATH"
             rustup default stable
             rustup target add aarch64-pc-windows-msvc
+            clang --version
+            llvm-lib /? 2>&1 | head -1 || true
       - run:
           name: cargo build --release --target aarch64-pc-windows-msvc
           shell: bash.exe
+          # Tell cc-rs explicitly which compiler to use for the
+          # aarch64 target. Without these, cc-rs probes for a `clang`
+          # in PATH (finds nothing in the default Windows toolchain
+          # layout) and bails with "failed to find tool clang".
           command: |
-            export PATH="/c/Users/circleci/.cargo/bin:$PATH"
+            export PATH="/c/Users/circleci/.cargo/bin:/c/Program Files/LLVM/bin:$PATH"
+            export CC_aarch64_pc_windows_msvc="clang-cl"
+            export AR_aarch64_pc_windows_msvc="llvm-lib"
+            export CFLAGS_aarch64_pc_windows_msvc="--target=aarch64-pc-windows-msvc"
             cargo build --release --target aarch64-pc-windows-msvc --bin artui
       - run:
           name: Stage zip
