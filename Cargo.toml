@@ -26,6 +26,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+tar = "0.4"
 tachyonfx = "0.25"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "process", "net", "io-util"] }
@@ -37,6 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = "1"
 urlencoding = "2"
 which = "7"
+zstd = "0.13"
 
 [dev-dependencies]
 tempfile = "3"
