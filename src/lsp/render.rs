@@ -222,10 +222,12 @@ fn walk_symbol(sym: &DocumentSymbol, depth: u32, out: &mut Vec<SymbolView>) {
 
 /// Format a list of [`SymbolView`]s as a tree:
 ///
-///     [struct] App
-///       [fn] new
-///       [fn] handle_event
-///     [fn] format_locations
+/// ```text
+/// [struct] App
+///   [fn] new
+///   [fn] handle_event
+/// [fn] format_locations
+/// ```
 pub fn format_document_symbols(symbols: &[SymbolView]) -> String {
     if symbols.is_empty() {
         return "(no symbols)".to_owned();
@@ -420,10 +422,12 @@ pub fn workspace_edit_summary(
 
 /// Format a [`WorkspaceEdit`] as a human-readable summary block:
 ///
-///     ── Workspace edit (3 files, 12 edits) ──
-///     src/lib.rs (4 edits)
-///     src/app.rs (5 edits)
-///     src/lsp/mod.rs (3 edits)
+/// ```text
+/// ── Workspace edit (3 files, 12 edits) ──
+/// src/lib.rs (4 edits)
+/// src/app.rs (5 edits)
+/// src/lsp/mod.rs (3 edits)
+/// ```
 pub fn format_workspace_edit_summary(edit: &WorkspaceEdit, workspace_root: &Path) -> String {
     let summary = workspace_edit_summary(edit, workspace_root);
     if summary.is_empty() {
