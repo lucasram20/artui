@@ -710,6 +710,8 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     lsp_manager: request.lsp_manager,
                     lsp_writethrough: request.lsp_writethrough,
                     lsp_diagnostics_timeout_ms: request.lsp_diagnostics_timeout_ms,
+                    snapshots: request.snapshots,
+                    snapshot_policy: request.snapshot_policy,
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(
