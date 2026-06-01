@@ -9,6 +9,7 @@ pub mod permissions;
 pub mod providers;
 pub mod sandbox;
 pub mod session;
+pub mod snapshots;
 pub mod skills;
 pub mod tools;
 pub mod ui;

@@ -1,4 +1,4 @@
-mod schema;
+pub mod schema;
 
 use anyhow::{Context, Result};
 
