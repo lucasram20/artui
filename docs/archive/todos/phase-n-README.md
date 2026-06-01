@@ -7,7 +7,7 @@ everywhere" — without re-implementing those queries with grep + Tree-sitter.
 Reference design: **oh-my-pi** `packages/coding-agent/src/lsp/` — a Rust port
 of their writethrough-on-edit pattern, scoped to artui's tool-loop and
 approval engine. The full architecture spec lives at
-[`docs/specs/lsp.md`](../specs/lsp.md); these tickets break it into
+[`docs/spec/lsp.md`](../../spec/lsp.md); these tickets break it into
 shippable phases.
 
 Current state (v0.4.0): no LSP. Goal of this phase set: every popular CLI

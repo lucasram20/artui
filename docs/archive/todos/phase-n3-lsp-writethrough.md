@@ -1,7 +1,7 @@
 # Phase N3 — Writethrough on apply_patch
 
 **Phase:** N3 (LSP support, the killer feature)
-**Spec:** [docs/specs/lsp.md](../specs/lsp.md)
+**Spec:** [docs/spec/lsp.md](../../spec/lsp.md)
 **Depends:** N1 (skeleton), N2 (diagnostics cache), E (apply_patch)
 **Estimated PR size:** ~400 LoC
 **Target release:** v0.6.0

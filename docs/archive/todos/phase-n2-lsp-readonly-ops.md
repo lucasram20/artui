@@ -1,7 +1,7 @@
 # Phase N2 — Read-only LSP Operations
 
 **Phase:** N2 (LSP support, read-only completeness)
-**Spec:** [docs/specs/lsp.md](../specs/lsp.md)
+**Spec:** [docs/spec/lsp.md](../../spec/lsp.md)
 **Depends:** N1 (skeleton + manager + lsp tool)
 **Estimated PR size:** ~500 LoC
 **Target release:** v0.5.x patch
