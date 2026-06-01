@@ -1,7 +1,7 @@
 # Phase N4 — Mutating LSP Operations (rename + code actions)
 
 **Phase:** N4 (LSP support, mutating ops with approval)
-**Spec:** [docs/specs/lsp.md](../specs/lsp.md)
+**Spec:** [docs/spec/lsp.md](../../spec/lsp.md)
 **Depends:** N1 (skeleton), N2 (read-only ops), N3 (writethrough),
             M2 (permission ask UI)
 **Estimated PR size:** ~600 LoC

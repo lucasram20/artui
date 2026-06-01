@@ -1,7 +1,7 @@
 # Phase N1 — LSP Skeleton + Minimal Tool
 
 **Phase:** N1 (LSP support, foundation)
-**Spec:** [docs/specs/lsp.md](../specs/lsp.md)
+**Spec:** [docs/spec/lsp.md](../../spec/lsp.md)
 **Depends:** B (tool registry), F (shell tool spawn pattern)
 **Estimated PR size:** ~1500 LoC (was ~1200 — bumped to account for the
 ~80-entry vendored registry and the sync script)

@@ -418,7 +418,7 @@ src/app.rs                          (+ LspManager startup wire-up,
                                      pass through ToolContext)
 src/tools/mod.rs (ToolContext)      (+ lsp_manager: Option<Arc<LspManager>>)
 src/tools/apply_patch.rs            (+ writethrough call after a successful patch)
-docs/specs/lsp.md                   (this file — already written as the plan)
+docs/spec/lsp.md                    (this file — already written as the plan)
 docs/changelogs/CHANGELOG.md        (each phase entry)
 ```
 
