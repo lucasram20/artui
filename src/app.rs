@@ -209,6 +209,11 @@ pub enum AppEvent {
     /// Phase N5 — agent emitted a fresh todo list via the `todo_write`
     /// tool. The TUI replaces its rendered checklist with the new list.
     TodoUpdate(Vec<crate::tools::todo_write::Todo>),
+    /// Phase M3 — an auto-snapshot was taken before a risky operation.
+    /// The TUI shows a `Snapshot saved: snap_…` status line.
+    SnapshotSaved {
+        id: String,
+    },
 }
 
 #[derive(Debug)]
@@ -234,7 +239,7 @@ pub struct SlashCommand {
     pub description: &'static str,
 }
 
-pub const SLASH_COMMANDS: [SlashCommand; 15] = [
+pub const SLASH_COMMANDS: [SlashCommand; 16] = [
     SlashCommand {
         name: "/help",
         description: "Show available artui commands",
@@ -278,6 +283,10 @@ pub const SLASH_COMMANDS: [SlashCommand; 15] = [
     SlashCommand {
         name: "/permissions",
         description: "Show current permission policy and active overrides",
+    },
+    SlashCommand {
+        name: "/snapshot",
+        description: "List, restore, or clear workspace snapshots",
     },
     SlashCommand {
         name: "/mouse",
@@ -388,6 +397,11 @@ pub struct ProviderRequest {
     /// Phase N3 — wall-clock budget for the post-apply_patch
     /// publishDiagnostics poll.
     pub lsp_diagnostics_timeout_ms: u32,
+    /// Phase M3 — snapshot manager handed to the agent loop for
+    /// auto-snapshots. `None` disables snapshots.
+    pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
+    /// Phase M3 — which auto-snapshots are enabled.
+    pub snapshot_policy: crate::snapshots::SnapshotPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -468,6 +482,9 @@ pub struct App {
     /// agent loop pulls this through `ToolContext` so the `lsp` tool can
     /// dispatch to it.
     pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
+    /// Phase M3 — workspace snapshot manager. `None` when `[snapshots]
+    /// enabled = false` or the data dir can't be resolved.
+    pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
     /// Cumulative token usage for the active turn — input + output. Reset
     /// when a new turn starts. Surfaces in the spinner header as
     /// `(12m 50s · ↓ 26.3k tokens)`.
@@ -538,6 +555,13 @@ impl App {
         let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
+            snapshots: crate::snapshots::SnapshotManager::for_workspace(
+                &std::env::current_dir().unwrap_or_default(),
+                &config.snapshots,
+            )
+            .ok()
+            .flatten()
+            .map(std::sync::Arc::new),
             config,
             provider,
             auth_store,
@@ -844,6 +868,8 @@ impl App {
             lsp_manager: self.lsp_manager.clone(),
             lsp_writethrough: self.config.lsp.writethrough,
             lsp_diagnostics_timeout_ms: self.config.lsp.diagnostics_timeout_ms,
+            snapshots: self.snapshots.clone(),
+            snapshot_policy: crate::snapshots::SnapshotPolicy::from_config(&self.config.snapshots),
         }))
     }
 
@@ -1106,6 +1132,9 @@ impl App {
             }
             AppEvent::TodoUpdate(todos) => {
                 self.todos = todos;
+            }
+            AppEvent::SnapshotSaved { id } => {
+                self.status = format!("Snapshot saved: {id}");
             }
         }
     }
@@ -1822,6 +1851,68 @@ impl App {
                 );
                 self.transcript
                     .push(Message::new(Role::Assistant, lines.join("\n")));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/snapshot" | "/snapshot list" => {
+                let mut lines = vec!["# Snapshots".to_owned()];
+                match &self.snapshots {
+                    None => lines
+                        .push("(snapshots disabled — set `[snapshots] enabled = true`)".to_owned()),
+                    Some(mgr) => {
+                        let list = mgr.list();
+                        if list.is_empty() {
+                            lines.push("(no snapshots yet)".to_owned());
+                        } else {
+                            for m in list {
+                                lines.push(format!(
+                                    "- `{}`  {}  {}  {}",
+                                    m.id,
+                                    m.created_at,
+                                    m.reason.label(),
+                                    match m.backend {
+                                        crate::snapshots::Backend::Git => "git",
+                                        crate::snapshots::Backend::Tar => "tar",
+                                    }
+                                ));
+                            }
+                            lines.push("\nRestore with `/snapshot restore <id>`.".to_owned());
+                        }
+                    }
+                }
+                self.transcript
+                    .push(Message::new(Role::Assistant, lines.join("\n")));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            "/snapshot clear" => {
+                let msg = match &self.snapshots {
+                    None => "snapshots are disabled".to_owned(),
+                    Some(mgr) => {
+                        let n = mgr.list().len();
+                        match mgr.clear() {
+                            Ok(()) => format!("Cleared {n} snapshot(s)."),
+                            Err(e) => format!("clear failed: {e}"),
+                        }
+                    }
+                };
+                self.transcript.push(Message::new(Role::Assistant, msg));
+                self.mode = UiMode::Input;
+                SlashCommandResult::Handled(None)
+            }
+            other if other.starts_with("/snapshot restore ") => {
+                let id = other.trim_start_matches("/snapshot restore ").trim();
+                let msg = match &self.snapshots {
+                    None => "snapshots are disabled".to_owned(),
+                    Some(mgr) => {
+                        let sid = crate::snapshots::SnapshotId(id.to_owned());
+                        match mgr.restore(&sid) {
+                            Ok(()) => format!("Rewound workspace to `{id}`."),
+                            Err(e) => format!("restore failed: {e}"),
+                        }
+                    }
+                };
+                self.transcript.push(Message::new(Role::Assistant, msg));
                 self.mode = UiMode::Input;
                 SlashCommandResult::Handled(None)
             }

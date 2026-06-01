@@ -18,6 +18,26 @@ use crate::providers::{LlmProvider, ModelEvent, ModelRequest, ToolCall};
 use crate::tools::registry::ToolRegistry;
 use crate::tools::{ToolContext, ToolResult};
 
+/// Take an auto-snapshot if a manager is present, emitting `SnapshotSaved` on
+/// success. Never fails the turn — a snapshot is a safety net, not a gate.
+async fn maybe_snapshot(
+    config: &AgentLoopConfig,
+    reason: crate::snapshots::Reason,
+    command: Option<String>,
+    event_tx: &mpsc::Sender<AppEvent>,
+) {
+    let Some(mgr) = config.snapshots.as_ref() else {
+        return;
+    };
+    match mgr.take(reason, command) {
+        Ok(Some(id)) => {
+            let _ = event_tx.send(AppEvent::SnapshotSaved { id: id.0 }).await;
+        }
+        Ok(None) => {} // skipped (size guard) — silent
+        Err(e) => tracing::warn!("snapshot failed: {e:#}"),
+    }
+}
+
 /// Configuration for the agent loop.
 pub struct AgentLoopConfig {
     pub max_steps_per_turn: usize,
@@ -56,6 +76,11 @@ pub struct AgentLoopConfig {
     /// the most common smaller-model misfire without burning tokens
     /// on a model that's genuinely confused.
     pub max_nudges_per_turn: u32,
+    /// Snapshot manager for auto-snapshots before risky tools. `None`
+    /// disables snapshots (matches `[snapshots] enabled = false`).
+    pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
+    /// Which auto-snapshots are enabled.
+    pub snapshot_policy: crate::snapshots::SnapshotPolicy,
 }
 
 impl Default for AgentLoopConfig {
@@ -74,6 +99,12 @@ impl Default for AgentLoopConfig {
             lsp_writethrough: true,
             lsp_diagnostics_timeout_ms: 750,
             max_nudges_per_turn: 2,
+            snapshots: None,
+            snapshot_policy: crate::snapshots::SnapshotPolicy {
+                auto_pre_patch: false,
+                auto_pre_shell: false,
+                auto_per_turn: false,
+            },
         }
     }
 }
@@ -99,6 +130,10 @@ pub async fn run_turn(
     // emitted no tool calls. Capped per turn so a confused model can't
     // loop forever; resets when a tool call lands.
     let mut nudges_used: u32 = 0;
+
+    if config.snapshot_policy.auto_per_turn {
+        maybe_snapshot(config, crate::snapshots::Reason::PerTurn, None, &event_tx).await;
+    }
 
     loop {
         if cancel.is_cancelled() {
@@ -316,6 +351,28 @@ pub async fn run_turn(
                 &config.workspace_root,
             )
             .await;
+
+            // ── Auto-snapshot before risky tools ───────────────────
+            // Fires before the permission gate so it covers every allow
+            // path. apply_patch always; shell only when not read-only.
+            if call.name == "apply_patch" && config.snapshot_policy.auto_pre_patch {
+                maybe_snapshot(config, crate::snapshots::Reason::PrePatch, None, &event_tx).await;
+            } else if call.name == "shell" && config.snapshot_policy.auto_pre_shell {
+                let cmd = call
+                    .arguments
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if !crate::tools::shell::is_read_only(cmd) {
+                    maybe_snapshot(
+                        config,
+                        crate::snapshots::Reason::PreShell,
+                        Some(cmd.to_owned()),
+                        &event_tx,
+                    )
+                    .await;
+                }
+            }
 
             // ── Permission gate ─────────────────────────────────────
             // Classify the tool call, render an Approval modal when the
