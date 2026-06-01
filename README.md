@@ -87,6 +87,14 @@ default_model = "gemma4:e2b"
 
 [updates]
 notify_level = "major"   # off | major | minor | all
+
+[snapshots]
+enabled = true            # workspace rollback safety net
+auto_pre_patch = true     # snapshot before apply_patch
+auto_pre_shell = true     # snapshot before mutating shell commands
+auto_per_turn = false     # optionally snapshot at every agent turn start
+retain = 20               # keep newest N snapshots
+max_tar_mb = 512          # tar-backend size guard for non-git workspaces
 ```
 
 artui ships with built-in Freemodel, Ollama, OpenAI-compatible, and GitHub Copilot providers. First launch can use a built-in hosted provider without setup — the binary routes through a tiny Cloudflare Worker that keeps the upstream API key server-side. Sign in to Copilot from inside the TUI: `/login` → choose GitHub Copilot. See [`docs/auth.md`](docs/auth.md) for credential paths and the full provider taxonomy, and [`cloudflare/README.md`](cloudflare/README.md) for how the freemodel relay is set up if you're forking artui.
@@ -110,8 +118,19 @@ Inside the TUI:
 | `/skill list` | Manage skill overlays (Mattpocock / `skills.sh` compatible) |
 | `/mcp` | Inspect MCP server connections |
 | `/login` / `/logout` | Manage provider credentials |
+| `/snapshot` | List workspace snapshots |
+| `/snapshot restore <id>` | Restore the workspace to a snapshot |
+| `/snapshot clear` | Delete saved snapshots for this workspace |
 
 Universal skill paths supported: `~/.agents/skills/`, `<workspace>/.agents/skills/`, plus artui-specific `<workspace>/.artui/skills/`.
+
+### Workspace snapshots
+
+Workspace snapshots are enabled by default as a rollback safety net. artui stores them under `~/.local/share/artui/snapshots/<workspace_hash>/` with a local `index.json`; git workspaces use a git-tree backend that captures tracked and untracked files, while non-git workspaces fall back to compressed `tar.zst` archives.
+
+By default artui auto-snapshots before `apply_patch` and before shell commands that are not classified as read-only. It does not snapshot at every agent turn unless `[snapshots].auto_per_turn = true`. The newest `[snapshots].retain` entries are kept and older entries are pruned automatically.
+
+Use `/snapshot` (or `/snapshot list`) to see saved snapshots, `/snapshot restore <id>` to rewind the workspace, and `/snapshot clear` to delete saved snapshots for the current workspace. Restore is destructive: files added after the snapshot can be removed and modified files can be overwritten, so review or commit important work first.
 
 ## Tech stack
 

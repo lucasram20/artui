@@ -175,6 +175,19 @@ Phases N2 (read-only completeness — references, diagnostics), N3 (writethrough
 
 ## Unreleased
 
+### Added
+
+- **snapshots:** Workspace-level snapshots are enabled by default via `[snapshots]`, stored under `~/.local/share/artui/snapshots/<workspace_hash>/`, and retain the newest 20 entries unless configured otherwise.
+- **snapshots:** Added git and tar backends: git workspaces capture tracked and untracked files as git trees; non-git workspaces use compressed `tar.zst` archives with a `max_tar_mb` guard.
+- **agent:** Auto-snapshot before `apply_patch` and before non-read-only shell commands by default; optional `auto_per_turn` can snapshot at the start of every agent turn.
+- **ui:** Added `/snapshot`, `/snapshot list`, `/snapshot restore <id>`, and `/snapshot clear` slash-command flows, plus a UI notice when an auto-snapshot is saved.
+- **tests:** Added snapshot integration coverage for git capture/restore, tar fallback behavior, slash-command handling, and isolated snapshot storage.
+
+### Changed
+
+- **shell:** Added a read-only shell-command classifier so snapshot gating skips common inspection commands while still protecting mutating commands.
+- **docs:** Consolidated docs/spec layout and added the Phase M3 snapshot design and implementation plan references.
+
 ## [0.4.0](https://github.com/lucasram20/artui/compare/v0.3.10...v0.4.0) (2026-05-31)
 
 Patch release with two changes: a fix for Windows `latest`-resolution in the install script, plus a friendlier publish format for release archives so the GitHub release page no longer reads as `*-unknown-linux-gnu` to anyone not steeped in Rust target triples.
