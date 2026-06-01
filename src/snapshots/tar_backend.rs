@@ -18,21 +18,33 @@ fn is_excluded(rel: &Path) -> bool {
     })
 }
 
+/// Yield `(absolute_path, relative_path)` for every non-excluded entry under
+/// `workspace`, honoring .gitignore (via the `ignore` crate) and the builtin
+/// exclude set.
+fn walk_included(
+    workspace: &Path,
+) -> impl Iterator<Item = (std::path::PathBuf, std::path::PathBuf)> + '_ {
+    WalkBuilder::new(workspace)
+        .hidden(false)
+        .build()
+        .flatten()
+        .filter_map(move |entry| {
+            let path = entry.path().to_path_buf();
+            let rel = path.strip_prefix(workspace).ok()?.to_path_buf();
+            if rel.as_os_str().is_empty() || is_excluded(&rel) {
+                return None;
+            }
+            Some((path, rel))
+        })
+}
+
 /// Capture the workspace into `archive`. Returns `Ok(None)` if the
 /// uncompressed size would exceed `max_tar_mb` (snapshot skipped).
 pub fn take(workspace: &Path, archive: &Path, max_tar_mb: u64) -> Result<Option<()>> {
     let budget = max_tar_mb.saturating_mul(1024 * 1024);
     let mut total: u64 = 0;
-    for entry in WalkBuilder::new(workspace).hidden(false).build().flatten() {
-        let path = entry.path();
-        let rel = match path.strip_prefix(workspace) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        if rel.as_os_str().is_empty() || is_excluded(rel) {
-            continue;
-        }
-        if let Ok(meta) = entry.metadata() {
+    for (path, _rel) in walk_included(workspace) {
+        if let Ok(meta) = path.symlink_metadata() {
             if meta.is_file() {
                 total += meta.len();
                 if total > budget {
@@ -47,23 +59,15 @@ pub fn take(workspace: &Path, archive: &Path, max_tar_mb: u64) -> Result<Option<
         .context("zstd encoder")?
         .auto_finish();
     let mut builder = tar::Builder::new(encoder);
-    for entry in WalkBuilder::new(workspace).hidden(false).build().flatten() {
-        let path = entry.path();
-        let rel = match path.strip_prefix(workspace) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        if rel.as_os_str().is_empty() || is_excluded(rel) {
-            continue;
-        }
-        let meta = match entry.metadata() {
+    for (path, rel) in walk_included(workspace) {
+        let meta = match path.symlink_metadata() {
             Ok(m) => m,
             Err(_) => continue,
         };
         if meta.is_file() {
-            let mut f = File::open(path).with_context(|| format!("open {}", path.display()))?;
+            let mut f = File::open(&path).with_context(|| format!("open {}", path.display()))?;
             builder
-                .append_file(rel, &mut f)
+                .append_file(&rel, &mut f)
                 .with_context(|| format!("archive {}", rel.display()))?;
         }
     }
@@ -73,17 +77,13 @@ pub fn take(workspace: &Path, archive: &Path, max_tar_mb: u64) -> Result<Option<
 
 /// Restore: delete the current (non-excluded) file set, then extract.
 pub fn restore(workspace: &Path, archive: &Path) -> Result<()> {
-    for entry in WalkBuilder::new(workspace).hidden(false).build().flatten() {
-        let path = entry.path();
-        let rel = match path.strip_prefix(workspace) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        if rel.as_os_str().is_empty() || is_excluded(rel) {
-            continue;
-        }
-        if entry.metadata().map(|m| m.is_file()).unwrap_or(false) {
-            let _ = fs::remove_file(path);
+    for (path, _rel) in walk_included(workspace) {
+        if path
+            .symlink_metadata()
+            .map(|m| m.is_file())
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_file(&path);
         }
     }
     let file = File::open(archive).context("open snapshot archive")?;
@@ -117,7 +117,10 @@ mod tests {
 
         assert_eq!(fs::read_to_string(p.join("a.txt")).unwrap(), "original\n");
         assert_eq!(fs::read_to_string(p.join("sub/b.txt")).unwrap(), "nested\n");
-        assert!(!p.join("c.txt").exists(), "post-snapshot file should be gone after restore");
+        assert!(
+            !p.join("c.txt").exists(),
+            "post-snapshot file should be gone after restore"
+        );
     }
 
     #[test]
