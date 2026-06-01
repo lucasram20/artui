@@ -259,6 +259,46 @@ pub fn classify_deny(command: &str) -> Option<&'static str> {
     None
 }
 
+/// Conservative read-only classifier: returns true only when the command is a
+/// single, recognizably non-mutating invocation. Anything with shell operators
+/// (`|`, `&&`, `;`, `>`, `<`, backticks, `$(`) or an unknown leading token is
+/// treated as mutating so the caller snapshots first. Used by the agent loop to
+/// decide whether a `shell` call needs a pre-snapshot.
+pub fn is_read_only(command: &str) -> bool {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return true; // nothing to snapshot
+    }
+    // Any shell metacharacter that could chain/redirect/expand → mutating.
+    if trimmed
+        .chars()
+        .any(|c| matches!(c, '|' | '&' | ';' | '>' | '<' | '`'))
+        || trimmed.contains("$(")
+    {
+        return false;
+    }
+    let mut tokens = trimmed.split_whitespace();
+    let Some(cmd) = tokens.next() else {
+        return true;
+    };
+    // git is read-only only for a known read-only subcommand.
+    if cmd == "git" {
+        return matches!(
+            tokens.next(),
+            Some(
+                "status" | "log" | "diff" | "show" | "blame" | "branch" | "remote"
+                    | "rev-parse" | "ls-files" | "describe" | "config"
+            )
+        );
+    }
+    const READ_ONLY: &[&str] = &[
+        "ls", "pwd", "cat", "head", "tail", "less", "more", "file", "stat", "wc",
+        "grep", "rg", "egrep", "fgrep", "find", "fd", "echo", "which", "type",
+        "printenv", "env", "date", "whoami", "id", "du", "df", "tree",
+    ];
+    READ_ONLY.contains(&cmd)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,6 +331,28 @@ mod tests {
     fn classifier_denies_rm_rf_root() {
         assert!(classify_deny("rm -rf /").is_some());
         assert!(classify_deny("rm -rf /*").is_some());
+    }
+
+    #[test]
+    fn read_only_commands_recognized() {
+        for c in [
+            "ls", "ls -la", "cat foo.rs", "grep -r x .", "rg pattern",
+            "find . -name '*.rs'", "pwd", "git status", "git log --oneline",
+            "git diff HEAD~1", "git show", "wc -l file", "head -n5 f",
+        ] {
+            assert!(is_read_only(c), "expected read-only: {c}");
+        }
+    }
+
+    #[test]
+    fn mutating_commands_not_read_only() {
+        for c in [
+            "rm foo", "mv a b", "cargo build", "git commit -m x",
+            "git checkout main", "touch new", "echo hi > f",
+            "ls && rm x", "cat f | tee g", "make install", "npm i",
+        ] {
+            assert!(!is_read_only(c), "expected mutating: {c}");
+        }
     }
 
     #[test]
