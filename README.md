@@ -170,6 +170,10 @@ artui auto-checks for new versions at startup and surfaces a banner when severit
 | `npm install -g artui-cli` | `npm install -g artui-cli@latest` |
 | `cargo install` | `git pull && cargo install --path .` |
 
+## Roadmap & backlog
+
+Tracked on the **[artui project board](https://github.com/users/lucasram20/projects/2)** — phase tickets, parking-lot items, and live infra threads with Status / Phase / Workstream / Priority / Size fields. Historical phase docs are archived under [`docs/archive/todos/`](docs/archive/todos/) for spec-style reference.
+
 ## Documentation
 
 - [v1 agentic spec](docs/spec/artui_v1_agentic_spec.md)
