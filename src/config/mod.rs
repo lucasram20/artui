@@ -1,10 +1,10 @@
-pub mod schema;
+mod schema;
 
 use anyhow::{Context, Result};
 
 pub use schema::{
     AppConfig, CopilotConfig, FreemodelConfig, LspConfig, OllamaConfig, OpenAiAccountConfig,
-    OpenAiCompatConfig, UpdateConfig,
+    OpenAiCompatConfig, SnapshotsConfig, UpdateConfig,
 };
 
 pub fn load_global_config() -> Result<AppConfig> {

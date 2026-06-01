@@ -33,8 +33,7 @@ fn temp_index(workspace: &Path) -> Result<std::path::PathBuf> {
 pub fn take(workspace: &Path) -> Result<(String, Option<String>)> {
     let index = temp_index(workspace)?;
     let res = (|| -> Result<(String, Option<String>)> {
-        run(workspace, &["add", "-A"], Some(&index))
-            .context("git add -A into temp index")?;
+        run(workspace, &["add", "-A"], Some(&index)).context("git add -A into temp index")?;
         let tree = run(workspace, &["write-tree"], Some(&index))
             .context("git write-tree")?
             .trim()
@@ -57,16 +56,14 @@ pub fn restore(workspace: &Path, tree: &str) -> Result<()> {
         // Stage the *current* working tree into the temp index, then diff it
         // against the snapshot tree to find files added since the snapshot —
         // these must be removed after the checkout below.
-        run(workspace, &["add", "-A"], Some(&index))
-            .context("git add -A into temp index")?;
+        run(workspace, &["add", "-A"], Some(&index)).context("git add -A into temp index")?;
         let diff = run(
             workspace,
             &["diff", "--cached", "--name-only", "--diff-filter=A", tree],
             Some(&index),
         )
         .context("git diff for additions")?;
-        run(workspace, &["read-tree", tree], Some(&index))
-            .context("git read-tree snapshot")?;
+        run(workspace, &["read-tree", tree], Some(&index)).context("git read-tree snapshot")?;
         run(workspace, &["checkout-index", "-a", "-f"], Some(&index))
             .context("git checkout-index")?;
         for rel in diff.lines().map(str::trim).filter(|l| !l.is_empty()) {
@@ -147,7 +144,10 @@ mod tests {
         restore(p, &tree).unwrap();
 
         assert_eq!(fs::read_to_string(p.join("README.md")).unwrap(), "v1\n");
-        assert!(!p.join("scratch.txt").exists(), "untracked file should be removed on restore");
+        assert!(
+            !p.join("scratch.txt").exists(),
+            "untracked file should be removed on restore"
+        );
     }
 
     #[test]

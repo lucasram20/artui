@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::config::schema::SnapshotsConfig;
+use crate::config::SnapshotsConfig;
+use crate::util::time::now_iso;
 
 mod git_backend;
 mod tar_backend;
@@ -273,32 +274,6 @@ fn workspace_hash(canonical: &Path) -> String {
     digest.iter().take(8).map(|b| format!("{b:02x}")).collect()
 }
 
-/// ISO-8601 UTC timestamp (mirrors session::store formatting, second precision).
-fn now_iso() -> String {
-    use std::time::SystemTime;
-    let secs = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let (t, d) = (secs % 86400, secs / 86400);
-    let z = d + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if month <= 2 { y + 1 } else { y };
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
-        t / 3600,
-        (t % 3600) / 60,
-        t % 60
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +357,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let mut c = cfg(20);
         c.enabled = false;
-        assert!(SnapshotManager::for_workspace(dir.path(), &c).unwrap().is_none());
+        assert!(SnapshotManager::for_workspace(dir.path(), &c)
+            .unwrap()
+            .is_none());
     }
 }
