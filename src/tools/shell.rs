@@ -286,15 +286,24 @@ pub fn is_read_only(command: &str) -> bool {
         return matches!(
             tokens.next(),
             Some(
-                "status" | "log" | "diff" | "show" | "blame" | "branch" | "remote"
-                    | "rev-parse" | "ls-files" | "describe" | "config"
+                "status"
+                    | "log"
+                    | "diff"
+                    | "show"
+                    | "blame"
+                    | "branch"
+                    | "remote"
+                    | "rev-parse"
+                    | "ls-files"
+                    | "describe"
+                    | "config"
             )
         );
     }
     const READ_ONLY: &[&str] = &[
-        "ls", "pwd", "cat", "head", "tail", "less", "more", "file", "stat", "wc",
-        "grep", "rg", "egrep", "fgrep", "find", "fd", "echo", "which", "type",
-        "printenv", "env", "date", "whoami", "id", "du", "df", "tree",
+        "ls", "pwd", "cat", "head", "tail", "less", "more", "file", "stat", "wc", "grep", "rg",
+        "egrep", "fgrep", "find", "fd", "echo", "which", "type", "printenv", "env", "date",
+        "whoami", "id", "du", "df", "tree",
     ];
     READ_ONLY.contains(&cmd)
 }
@@ -336,9 +345,19 @@ mod tests {
     #[test]
     fn read_only_commands_recognized() {
         for c in [
-            "ls", "ls -la", "cat foo.rs", "grep -r x .", "rg pattern",
-            "find . -name '*.rs'", "pwd", "git status", "git log --oneline",
-            "git diff HEAD~1", "git show", "wc -l file", "head -n5 f",
+            "ls",
+            "ls -la",
+            "cat foo.rs",
+            "grep -r x .",
+            "rg pattern",
+            "find . -name '*.rs'",
+            "pwd",
+            "git status",
+            "git log --oneline",
+            "git diff HEAD~1",
+            "git show",
+            "wc -l file",
+            "head -n5 f",
         ] {
             assert!(is_read_only(c), "expected read-only: {c}");
         }
@@ -347,9 +366,17 @@ mod tests {
     #[test]
     fn mutating_commands_not_read_only() {
         for c in [
-            "rm foo", "mv a b", "cargo build", "git commit -m x",
-            "git checkout main", "touch new", "echo hi > f",
-            "ls && rm x", "cat f | tee g", "make install", "npm i",
+            "rm foo",
+            "mv a b",
+            "cargo build",
+            "git commit -m x",
+            "git checkout main",
+            "touch new",
+            "echo hi > f",
+            "ls && rm x",
+            "cat f | tee g",
+            "make install",
+            "npm i",
         ] {
             assert!(!is_read_only(c), "expected mutating: {c}");
         }

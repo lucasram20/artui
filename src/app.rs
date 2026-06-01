@@ -483,8 +483,11 @@ pub struct App {
     /// dispatch to it.
     pub lsp_manager: Option<std::sync::Arc<crate::lsp::LspManager>>,
     /// Phase M3 — workspace snapshot manager. `None` when `[snapshots]
-    /// enabled = false` or the data dir can't be resolved.
+    /// enabled = false` or initialization failed.
     pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
+    /// Snapshot initialization error, kept separate from explicit disablement
+    /// so `/snapshot` can tell the user what went wrong.
+    pub snapshot_error: Option<String>,
     /// Cumulative token usage for the active turn — input + output. Reset
     /// when a new turn starts. Surfaces in the spinner header as
     /// `(12m 50s · ↓ 26.3k tokens)`.
@@ -552,16 +555,23 @@ impl App {
         ));
         let auth_store = AuthStore::from_config(&config);
         let model_options = available_model_options(&config, auth_store.as_ref());
+        let snapshot_init = crate::snapshots::SnapshotManager::for_workspace(
+            &std::env::current_dir().unwrap_or_default(),
+            &config.snapshots,
+        );
+        let (snapshots, snapshot_error) = match snapshot_init {
+            Ok(Some(mgr)) => (Some(std::sync::Arc::new(mgr)), None),
+            Ok(None) => (None, None),
+            Err(e) => {
+                tracing::warn!("snapshot initialization failed: {e:#}");
+                (None, Some(e.to_string()))
+            }
+        };
         let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
-            snapshots: crate::snapshots::SnapshotManager::for_workspace(
-                &std::env::current_dir().unwrap_or_default(),
-                &config.snapshots,
-            )
-            .ok()
-            .flatten()
-            .map(std::sync::Arc::new),
+            snapshots,
+            snapshot_error,
             config,
             provider,
             auth_store,
@@ -1857,8 +1867,16 @@ impl App {
             "/snapshot" | "/snapshot list" => {
                 let mut lines = vec!["# Snapshots".to_owned()];
                 match &self.snapshots {
-                    None => lines
-                        .push("(snapshots disabled — set `[snapshots] enabled = true`)".to_owned()),
+                    None => {
+                        if let Some(e) = &self.snapshot_error {
+                            lines.push(format!("(snapshots unavailable: {e})"));
+                        } else {
+                            lines.push(
+                                "(snapshots disabled — set `[snapshots] enabled = true`)"
+                                    .to_owned(),
+                            );
+                        }
+                    }
                     Some(mgr) => {
                         let list = mgr.list();
                         if list.is_empty() {
