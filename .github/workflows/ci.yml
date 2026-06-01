@@ -1,17 +1,17 @@
 name: CI (fallback)
 
-# CI moved to CircleCI in v0.5.x — see `.circleci/config.yml`. The reason
-# for the move was GHA's 2,000 min/month private-repo allowance running out;
-# CircleCI's free plan grants 30,000 credits/month (~3,000 Linux minutes).
+# CI primary lives on CircleCI — see `.circleci/config.yml`.
+# CircleCI's free plan grants 30,000 credits/month (~3,000 Linux minutes),
+# vs GHA's 2,000 private-repo minutes. CI runs on every push so the heavier
+# load belongs there.
 #
 # This workflow is preserved as a manual fallback. Trigger it from the
 # Actions tab when CircleCI is unavailable, or via `gh workflow run ci.yml`.
-# It is NOT triggered by `push` or `pull_request` anymore.
+# It is NOT triggered by `push` or `pull_request`.
 #
-# `.github/workflows/release.yml` is unaffected — release tag pushes still
-# run on GitHub Actions, since release.yml handles cross-compilation,
-# artifact bundling, R2 upload, and GitHub release publish (none of which
-# is mirrored on CircleCI).
+# Releases run here on GHA (`.github/workflows/release.yml`) — fires only on
+# `release: published`, a few times a month, comfortably within the 2,000
+# min budget.
 
 on:
   workflow_dispatch:

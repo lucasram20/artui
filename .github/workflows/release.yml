@@ -1,23 +1,36 @@
-name: Release (fallback)
+name: Release
 
-# Release moved to CircleCI in v0.7.0 — see `.circleci/config.yml`
-# `release` workflow. The reason: this workflow ran out of GHA minutes
-# mid-publish during v0.6.0; CircleCI's free 30,000 credits/month plan
-# absorbs the cross-platform matrix without that constraint.
+# Builds and publishes a cross-platform release when a GitHub Release is
+# published (draft → published, or pre-release → released). Three targets
+# only — matches what CircleCI was doing for the same R2 install script
+# coverage, plus native macOS Apple Silicon. Each release runs ~3 jobs
+# wall-clock 5–10 min each; well under the 2,000 min/month free private-
+# repo budget.
 #
-# This workflow is preserved as a manual fallback. Trigger it from the
-# Actions tab via "Run workflow" → enter the existing tag (e.g. v0.7.1)
-# when CircleCI's release pipeline is unavailable. It is NOT triggered
-# by tag push anymore, so the same `git tag vX.Y.Z && git push origin
-# vX.Y.Z` flow only triggers CircleCI.
+# Release flow:
+#   1. git tag vX.Y.Z && git push origin vX.Y.Z   (tag the commit)
+#   2. gh release create vX.Y.Z --draft           (or click in UI)
+#   3. Edit release notes if you want.
+#   4. gh release edit vX.Y.Z --draft=false       (or click "Publish")
+#                                                  → fires this workflow
+#   5. Workflow builds 3 binaries, uploads to R2, attaches to release.
 #
-# To re-enable on tag push, swap the `on:` block back to the
-# `push: tags: ['v*']` form (kept commented below for reference).
+# Pre-releases are skipped — uncheck the prerelease flag on the release
+# to actually fire the build.
+#
+# workflow_dispatch is preserved so an existing tag can be re-run if a
+# transient failure happened (e.g. R2 hiccup): Actions tab → "Run
+# workflow" → enter v0.7.1 → run.
+#
+# Required repo secrets:
+#   GITHUB_TOKEN          — automatic, no setup needed
+#   R2_ACCOUNT_ID         — Cloudflare R2 account hex id
+#   R2_ACCESS_KEY_ID      — R2 S3-compatible access key (32 chars)
+#   R2_SECRET_ACCESS_KEY  — R2 S3-compatible secret (64 chars)
 
 on:
-  # push:
-  #   tags:
-  #     - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -35,39 +48,28 @@ jobs:
     name: Build ${{ matrix.display_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+
+    # Skip pre-releases. The release: published event fires for both
+    # full releases and the prerelease → released transition, so this
+    # gate only matters for the case where someone published a release
+    # with the prerelease flag still checked. Uncheck it and re-run.
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+
     strategy:
       fail-fast: false
       matrix:
-        # `display_name` is what shows up in the GitHub Actions UI —
-        # human-friendly OS + arch labels so the run list reads cleanly.
-        # `asset_label` is what the published archive carries in its
-        # filename (e.g. `linux-x86_64`, `macos-aarch64`,
-        # `windows-x86_64`) so the release page is readable to anyone
-        # not steeped in Rust's target-triple convention.
-        # `target` is the canonical Rust target triple — required by
-        # `cargo build --target` and by `dtolnay/rust-toolchain` to
-        # install the right cross-compilation toolchain. It never
-        # appears in user-facing asset names.
+        # Three platforms — same coverage as the R2 install scripts:
+        #   - linux-x86_64    → curl install.sh on glibc Linux
+        #   - macos-aarch64   → curl install.sh on Apple Silicon
+        #   - windows-x86_64  → iwr install.ps1 on x64 Windows
+        # Linux ARM, macOS Intel, and Windows ARM users build from
+        # source via `cargo install --git`. The install scripts print
+        # a clear message when they detect an unsupported target.
         include:
           - display_name: Linux x86_64 (glibc)
             asset_label: linux-x86_64
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            archive: tar.gz
-          - display_name: Linux aarch64 (glibc)
-            asset_label: linux-aarch64
-            target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            cross: true
-          # macOS — both targets cross-compile from the ARM runner.
-          # macos-13 (Intel) runners have a tiny pool and queue for
-          # 10+ minutes; macos-14 is plentiful and builds x86_64 just
-          # as well via `cargo build --target`.
-          - display_name: macOS x86_64 (Intel)
-            asset_label: macos-x86_64
-            target: x86_64-apple-darwin
-            os: macos-14
             archive: tar.gz
           - display_name: macOS aarch64 (Apple Silicon)
             asset_label: macos-aarch64
@@ -77,13 +79,9 @@ jobs:
           - display_name: Windows x86_64 (MSVC)
             asset_label: windows-x86_64
             target: x86_64-pc-windows-msvc
-            os: windows-2025-vs2026
+            os: windows-latest
             archive: zip
-          - display_name: Windows aarch64 (MSVC)
-            asset_label: windows-aarch64
-            target: aarch64-pc-windows-msvc
-            os: windows-2025-vs2026
-            archive: zip
+
     steps:
       - uses: actions/checkout@v6
         with:
@@ -108,16 +106,18 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (linux aarch64)
-        if: matrix.cross == true
-        run: cargo install cross --locked
-
-      - name: Build (cross)
-        if: matrix.cross == true
-        run: cross build --release --target ${{ matrix.target }} --bin artui
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ matrix.target }}-
 
       - name: Build
-        if: matrix.cross != true
         run: cargo build --release --target ${{ matrix.target }} --bin artui
 
       - name: Stage artifacts (Unix)
@@ -152,31 +152,18 @@ jobs:
           path: dist/artui-*.${{ matrix.archive }}
 
   release:
-    name: Publish GitHub release
+    name: Publish GitHub release + R2 mirror
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     steps:
       - uses: actions/checkout@v6
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-
-      # Detect whether R2 secrets exist. The mirror upload step is gated
-      # on this so the workflow stays green even if you haven't wired R2
-      # yet (set R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
-      # in repo secrets to enable).
-      - name: Probe R2 secrets
-        id: r2_probe
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-        run: |
-          if [ -n "$R2_ACCOUNT_ID" ]; then
-            echo "HAS_R2=true" >> "$GITHUB_ENV"
-          else
-            echo "HAS_R2=false" >> "$GITHUB_ENV"
-          fi
 
       - name: Resolve tag
         id: tag
@@ -194,11 +181,47 @@ jobs:
           cd dist
           ls
           sha256sum artui-*.tar.gz artui-*.zip > checksums.sha256 || true
+          cat checksums.sha256
 
-      # Mirror to Cloudflare R2 so installers running outside this repo
-      # (e.g. friends with no collaborator access while the source repo
-      # stays private) have a public, zero-auth download URL. R2 is
-      # S3-compatible — the AWS CLI does the upload.
+      # Probe R2 secrets — mirror upload is gated on this so a fork
+      # without R2 wired still gets a green publish to GitHub releases.
+      - name: Probe R2 secrets
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -n "$R2_ACCOUNT_ID" ]; then
+            echo "HAS_R2=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_R2=false" >> "$GITHUB_ENV"
+            echo "R2_ACCOUNT_ID secret not set — skipping R2 mirror."
+          fi
+
+      # Defensive: trim the R2 secrets in case CircleCI-style
+      # whitespace-on-paste contamination ever happens here too.
+      # Length-validate to catch the cfat-... vs S3-compatible-key
+      # mistake before SigV4 returns the unhelpful SignatureDoesNotMatch.
+      - name: Validate R2 credentials
+        if: ${{ env.HAS_R2 == 'true' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -e
+          aid=$(printf '%s' "$R2_ACCOUNT_ID" | tr -d ' \t\r\n')
+          akid=$(printf '%s' "$R2_ACCESS_KEY_ID" | tr -d ' \t\r\n')
+          ask=$(printf '%s' "$R2_SECRET_ACCESS_KEY" | tr -d ' \t\r\n')
+          if [ "${#akid}" -ne 32 ]; then
+            echo "::error::R2_ACCESS_KEY_ID is ${#akid} chars; expected 32 (S3-compatible token)."
+            echo "Cloudflare dashboard → R2 → Manage R2 API Tokens → Create R2 API Token."
+            exit 1
+          fi
+          if [ "${#ask}" -ne 64 ]; then
+            echo "::error::R2_SECRET_ACCESS_KEY is ${#ask} chars; expected 64."
+            exit 1
+          fi
+          echo "R2 credentials look right (akid: ${akid:0:4}…${akid: -4}, ${#akid} chars)"
+
       - name: Upload assets to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
         env:
@@ -222,9 +245,6 @@ jobs:
           done
           echo "Uploaded artui $TAG binaries to R2."
 
-      # Mirror the install scripts themselves so friends can fetch them
-      # via curl/PowerShell without hitting raw.githubusercontent.com
-      # (which 404s while the source repo is private).
       - name: Upload install scripts to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
         env:
@@ -235,21 +255,19 @@ jobs:
           R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
           set -e
-          # Always serve the latest scripts from /install.sh and /install.ps1
-          # so the canonical curl one-liner is stable across releases.
           aws s3 cp scripts/install.sh "s3://artui-releases/install.sh" \
-            --endpoint-url "$R2_ENDPOINT" --content-type "text/x-shellscript" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type "text/x-shellscript" \
             --cache-control "public, max-age=300" --no-progress
           aws s3 cp scripts/install.ps1 "s3://artui-releases/install.ps1" \
-            --endpoint-url "$R2_ENDPOINT" --content-type "text/plain; charset=utf-8" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type "text/plain; charset=utf-8" \
             --cache-control "public, max-age=300" --no-progress
           echo "Uploaded install scripts to R2."
 
-      - name: Publish release with assets
+      - name: Attach assets to GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          # Tag pushed manually from local CLI (push: tags) sets
-          # github.ref to the tag; workflow_dispatch supplies it via input.
           tag_name: ${{ steps.tag.outputs.name }}
           name: artui ${{ steps.tag.outputs.name }}
           generate_release_notes: true

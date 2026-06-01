@@ -128,7 +128,7 @@ Rust 2021 · ratatui + crossterm TUI · Tokio async · reqwest streaming · serd
 
 ## Releases
 
-Releases are **publish-driven** — building a release requires a human to click "Publish release" on GitHub. Tag pushes alone don't trigger anything; the `release-trigger.yml` GHA workflow listens for `release: published` and POSTs to CircleCI's API to start the cross-platform build.
+Releases are **publish-driven** — building a release requires a human to click "Publish release" on GitHub. Tag pushes alone don't trigger anything; `.github/workflows/release.yml` listens for `release: published` and runs the cross-platform build directly.
 
 ```bash
 # 1. Bump versions in lockstep
@@ -147,20 +147,18 @@ git push origin v0.7.0
 gh release create v0.7.0 --draft --notes-from-tag
 
 # 4. When you're ready, publish it (or click "Publish release" in the
-#    GitHub Releases UI). This fires CircleCI's release pipeline:
-#    Linux + Windows builds → R2 upload → artifact attach.
+#    GitHub Releases UI). This fires the release workflow:
+#    Linux + macOS + Windows builds → R2 upload → artifact attach.
 gh release edit v0.7.0 --draft=false
 ```
 
-Pre-releases (`gh release create v0.7.0-rc1 --prerelease`) are explicitly skipped by the trigger workflow — uncheck the pre-release flag to actually fire the build. This lets you draft, edit, and validate notes without burning CI credits.
+Pre-releases (`gh release create v0.7.0-rc1 --prerelease`) are explicitly skipped by the workflow — uncheck the pre-release flag to actually fire the build. This lets you draft, edit, and validate notes without burning CI credits.
 
-CI runs on every branch push but skips docs-only commits (anything that only touches `*.md`, `docs/**`, `npm/**`, `cloudflare/**`, `.gitignore`, etc.). Add `[ci force]` to a commit subject to override the path filter, or `[ci skip]` to skip even build-relevant changes.
+Three release targets: **`linux-x86_64`**, **`macos-aarch64`**, **`windows-x86_64`**. Linux ARM, macOS Intel, and Windows ARM users build from source via `cargo install --git` — the install scripts print clear instructions when they detect an unsupported target.
 
-The GHA `release.yml` is preserved as a `workflow_dispatch`-only fallback — trigger via the Actions tab if CircleCI is unavailable:
+CI (lint + test + build sanity) runs on every push via **CircleCI** but skips docs-only commits (anything that only touches `*.md`, `docs/**`, `npm/**`, `cloudflare/**`, `.gitignore`, etc.). Add `[ci force]` to a commit subject to override the path filter, or `[ci skip]` to skip even build-relevant changes. The split: heavy CI on CircleCI's 30,000 free credits; releases on GHA's 2,000 free minutes (5–10 min per release × 5–10 releases per month fits comfortably).
 
-```bash
-gh workflow run release.yml -f tag=v0.7.0
-```
+Re-run a release with the same tag from the Actions tab if a transient error happened: **Actions → Release → Run workflow → enter v0.7.0**.
 
 artui auto-checks for new versions at startup and surfaces a banner when severity meets `[updates] notify_level` (default: major bumps only). Configure or disable in `~/.config/artui/config.toml`.
 
