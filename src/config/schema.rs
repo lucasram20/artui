@@ -13,6 +13,7 @@ pub struct AppConfig {
     pub updates: UpdateConfig,
     pub permissions: PermissionsConfig,
     pub lsp: LspConfig,
+    pub snapshots: SnapshotsConfig,
 }
 
 impl Default for AppConfig {
@@ -33,6 +34,7 @@ impl Default for AppConfig {
             updates: UpdateConfig::default(),
             permissions: PermissionsConfig::default(),
             lsp: LspConfig::default(),
+            snapshots: SnapshotsConfig::default(),
         }
     }
 }
@@ -417,6 +419,44 @@ impl Default for LspConfig {
             request_timeout_secs: 10,
             writethrough: true,
             diagnostics_timeout_ms: 750,
+        }
+    }
+}
+
+/// `[snapshots]` — workspace snapshot & rollback safety net (Phase M3).
+///
+/// When `enabled = true` (default), artui keeps workspace snapshots under
+/// `~/.local/share/artui/snapshots/<workspace_hash>/` and can auto-snapshot
+/// before risky agent operations. `/snapshot list|restore <id>|clear` manage
+/// them. Set `enabled = false` to disable the subsystem entirely.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SnapshotsConfig {
+    /// Master switch. When false, no manager is constructed and no
+    /// auto-snapshots fire.
+    pub enabled: bool,
+    /// Snapshot before each `apply_patch`.
+    pub auto_pre_patch: bool,
+    /// Snapshot before each non-read-only `shell` command.
+    pub auto_pre_shell: bool,
+    /// Snapshot once at the start of every agent turn.
+    pub auto_per_turn: bool,
+    /// Keep the newest N snapshots; older ones are auto-pruned.
+    pub retain: usize,
+    /// Skip a tar-backend snapshot when the workspace exceeds this many MB
+    /// (uncompressed). Guards against archiving giant build dirs.
+    pub max_tar_mb: u64,
+}
+
+impl Default for SnapshotsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            auto_pre_patch: true,
+            auto_pre_shell: true,
+            auto_per_turn: false,
+            retain: 20,
+            max_tar_mb: 512,
         }
     }
 }
