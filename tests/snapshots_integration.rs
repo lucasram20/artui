@@ -1,6 +1,9 @@
+use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use artui::config::SnapshotsConfig;
 use artui::snapshots::{Backend, Reason, SnapshotManager};
@@ -14,6 +17,40 @@ fn cfg(retain: usize) -> SnapshotsConfig {
         auto_per_turn: false,
         retain,
         max_tar_mb: 512,
+    }
+}
+
+struct IsolatedXdgDataHome {
+    _guard: MutexGuard<'static, ()>,
+    _dir: TempDir,
+    previous: Option<OsString>,
+}
+
+impl Drop for IsolatedXdgDataHome {
+    fn drop(&mut self) {
+        if let Some(previous) = &self.previous {
+            env::set_var("XDG_DATA_HOME", previous);
+        } else {
+            env::remove_var("XDG_DATA_HOME");
+        }
+    }
+}
+
+fn isolate_xdg_data_home() -> IsolatedXdgDataHome {
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    let guard = ENV_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let dir = TempDir::new().unwrap();
+    let previous = env::var_os("XDG_DATA_HOME");
+    env::set_var("XDG_DATA_HOME", dir.path());
+
+    IsolatedXdgDataHome {
+        _guard: guard,
+        _dir: dir,
+        previous,
     }
 }
 
@@ -39,10 +76,14 @@ fn init_repo(workspace: &Path) {
         &["config", "user.email", "snapshots@example.test"],
     );
     git(workspace, &["config", "user.name", "Snapshot Tests"]);
+    git(workspace, &["config", "commit.gpgsign", "false"]);
+    git(workspace, &["config", "tag.gpgsign", "false"]);
+    git(workspace, &["config", "core.hooksPath", "/dev/null"]);
 }
 
 #[test]
 fn git_backend_round_trips_tracked_edits_and_post_snapshot_untracked_files() {
+    let _xdg_data_home = isolate_xdg_data_home();
     let dir = TempDir::new().unwrap();
     let workspace = dir.path();
     init_repo(workspace);
@@ -80,6 +121,7 @@ fn git_backend_round_trips_tracked_edits_and_post_snapshot_untracked_files() {
 
 #[test]
 fn tar_backend_round_trips_non_git_workspace() {
+    let _xdg_data_home = isolate_xdg_data_home();
     let dir = TempDir::new().unwrap();
     let workspace = dir.path();
     fs::create_dir_all(workspace.join("nested")).unwrap();
@@ -120,6 +162,7 @@ fn tar_backend_round_trips_non_git_workspace() {
 
 #[test]
 fn public_api_prunes_to_retention_limit() {
+    let _xdg_data_home = isolate_xdg_data_home();
     let dir = TempDir::new().unwrap();
     let workspace = dir.path();
     fs::write(workspace.join("state.txt"), "v1\n").unwrap();
