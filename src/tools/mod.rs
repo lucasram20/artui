@@ -9,6 +9,7 @@ pub mod search;
 pub mod shell;
 pub mod task;
 pub mod todo_write;
+pub mod web;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,8 +41,12 @@ pub struct ToolContext {
     /// Phase N3 — wall-clock budget for the post-apply_patch diagnostics
     /// poll. Mirrors `[lsp] diagnostics_timeout_ms`.
     pub lsp_diagnostics_timeout_ms: u32,
-    /// OS sandbox for `shell` (bubblewrap / seatbelt). Inactive when backend missing.
+    /// OS sandbox for `shell` (bubblewrap / seatbelt / win job). Inactive when backend missing.
     pub sandbox: crate::sandbox::SandboxSettings,
+    /// Phase M6 — workspace index for `search` symbol/semantic modes.
+    pub workspace_index: Option<std::sync::Arc<crate::index::WorkspaceIndex>>,
+    /// Phase M7 — nested `task` depth (root = 0).
+    pub agent_depth: u8,
     // pub permissions: Arc<PermissionEngine>,  // Phase D
     // pub cancel: CancellationToken,           // Phase C
 }

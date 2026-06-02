@@ -82,6 +82,14 @@ impl Tool for TaskTool {
     }
 
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult {
+        const MAX_DEPTH: u8 = 3;
+        if ctx.agent_depth >= MAX_DEPTH {
+            return ToolResult::error(
+                ctx.call_id,
+                format!("task nesting limit reached (max depth {MAX_DEPTH})"),
+            );
+        }
+
         let Some(prompt) = args.get("prompt").and_then(|v| v.as_str()) else {
             return ToolResult::error(ctx.call_id, "missing required parameter: prompt".to_owned());
         };

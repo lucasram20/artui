@@ -1,6 +1,7 @@
 //! Platform sandboxes for shell tool execution.
 //!
-//! Linux uses bubblewrap (`bwrap`); macOS uses `sandbox-exec` (Seatbelt).
+//! Linux and macOS use bubblewrap (`bwrap`) when available. macOS can opt into
+//! Seatbelt via `mode = "seatbelt"`. Windows uses a Job Object backend (M5).
 //! When the configured backend is unavailable, commands run unsandboxed and
 //! a startup warning is logged.
 
@@ -8,6 +9,9 @@ pub mod bwrap;
 
 #[cfg(target_os = "macos")]
 pub mod seatbelt;
+
+#[cfg(windows)]
+pub mod win_jobobject;
 
 use std::path::Path;
 
@@ -20,6 +24,7 @@ pub enum SandboxMode {
     Auto,
     Bubblewrap,
     Seatbelt,
+    WinJob,
 }
 
 impl SandboxMode {
@@ -28,6 +33,7 @@ impl SandboxMode {
             "off" | "none" | "disabled" => Self::Off,
             "bubblewrap" | "bwrap" => Self::Bubblewrap,
             "seatbelt" | "sandbox-exec" | "sandbox_exec" => Self::Seatbelt,
+            "win_job" | "windows" | "jobobject" => Self::WinJob,
             _ => Self::Auto,
         }
     }
@@ -39,6 +45,8 @@ pub enum SandboxBackend {
     Bubblewrap,
     #[cfg(target_os = "macos")]
     Seatbelt,
+    #[cfg(windows)]
+    WinJob,
 }
 
 /// Resolved sandbox settings threaded through `ToolContext`.
@@ -88,7 +96,15 @@ impl SandboxSettings {
             (SandboxMode::Off, _) => None,
             (_, Some(_)) => None,
             (SandboxMode::Auto, None) => Some(
-                "sandbox: auto mode enabled but no backend found (install bwrap on Linux or use macOS sandbox-exec); shell runs unsandboxed",
+                "sandbox: auto mode enabled but no backend found (install bwrap on Linux/macOS, or use Windows 10+); shell runs unsandboxed",
+            ),
+            #[cfg(windows)]
+            (SandboxMode::WinJob, None) => Some(
+                "sandbox: win_job mode requires Windows 10+; shell runs unsandboxed",
+            ),
+            #[cfg(not(windows))]
+            (SandboxMode::WinJob, None) => Some(
+                "sandbox: win_job mode only applies on Windows; shell runs unsandboxed",
             ),
             (SandboxMode::Bubblewrap, None) => {
                 Some("sandbox: bubblewrap mode enabled but `bwrap` not found; shell runs unsandboxed")
@@ -120,6 +136,10 @@ impl SandboxSettings {
             SandboxBackend::Seatbelt => {
                 seatbelt::wrap_command(command, cwd, workspace, self.network, self.allow_home_read)
             }
+            #[cfg(windows)]
+            SandboxBackend::WinJob => {
+                win_jobobject::wrap_command(command, cwd, workspace, self.network)
+            }
         })
     }
 }
@@ -128,20 +148,33 @@ fn resolve_backend(mode: SandboxMode) -> Option<SandboxBackend> {
     match mode {
         SandboxMode::Off => None,
         SandboxMode::Auto => {
-            if cfg!(target_os = "macos") {
-                #[cfg(target_os = "macos")]
-                {
-                    if seatbelt::is_available() {
-                        return Some(SandboxBackend::Seatbelt);
-                    }
+            #[cfg(windows)]
+            {
+                if win_jobobject::is_available() {
+                    return Some(SandboxBackend::WinJob);
                 }
+                return None;
+            }
+            #[cfg(not(windows))]
+            {
                 if bwrap::is_available() {
-                    return Some(SandboxBackend::Bubblewrap);
+                    Some(SandboxBackend::Bubblewrap)
+                } else {
+                    None
                 }
-                None
-            } else if bwrap::is_available() {
-                Some(SandboxBackend::Bubblewrap)
-            } else {
+            }
+        }
+        SandboxMode::WinJob => {
+            #[cfg(windows)]
+            {
+                if win_jobobject::is_available() {
+                    Some(SandboxBackend::WinJob)
+                } else {
+                    None
+                }
+            }
+            #[cfg(not(windows))]
+            {
                 None
             }
         }

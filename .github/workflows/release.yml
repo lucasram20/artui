@@ -58,23 +58,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Three platforms — same coverage as the R2 install scripts:
-        #   - linux-x86_64    → curl install.sh on glibc Linux
-        #   - macos-aarch64   → curl install.sh on Apple Silicon
-        #   - windows-x86_64  → iwr install.ps1 on x64 Windows
-        # Linux ARM, macOS Intel, and Windows ARM users build from
-        # source via `cargo install --git`. The install scripts print
-        # a clear message when they detect an unsupported target.
+        # Two published targets (no macOS CI/release binaries — build from source):
+        #   - linux-x86_64   → curl install.sh on glibc Linux
+        #   - windows-x86_64 → iwr install.ps1 on x64 Windows
+        # macOS, Linux ARM, Windows ARM: cargo install --git.
         include:
           - display_name: Linux x86_64 (glibc)
             asset_label: linux-x86_64
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            archive: tar.gz
-          - display_name: macOS aarch64 (Apple Silicon)
-            asset_label: macos-aarch64
-            target: aarch64-apple-darwin
-            os: macos-14
             archive: tar.gz
           - display_name: Windows x86_64 (MSVC)
             asset_label: windows-x86_64

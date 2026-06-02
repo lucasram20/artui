@@ -404,6 +404,8 @@ pub struct ProviderRequest {
     pub snapshot_policy: crate::snapshots::SnapshotPolicy,
     /// Shell OS sandbox settings (Phase J / M4).
     pub sandbox: crate::sandbox::SandboxSettings,
+    /// Phase M6 — workspace index for search symbol/semantic modes.
+    pub workspace_index: Option<std::sync::Arc<crate::index::WorkspaceIndex>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -492,6 +494,8 @@ pub struct App {
     pub snapshot_error: Option<String>,
     /// Resolved `[sandbox]` settings for shell tool wrapping.
     pub sandbox: crate::sandbox::SandboxSettings,
+    /// Phase M6 — workspace symbol/text index.
+    pub workspace_index: Option<std::sync::Arc<crate::index::WorkspaceIndex>>,
     /// Cumulative token usage for the active turn — input + output. Reset
     /// when a new turn starts. Surfaces in the spinner header as
     /// `(12m 50s · ↓ 26.3k tokens)`.
@@ -572,12 +576,21 @@ impl App {
             }
         };
         let sandbox = crate::sandbox::SandboxSettings::from_config(&config.sandbox);
+        let workspace = std::env::current_dir().unwrap_or_default();
+        let workspace_index = match crate::index::WorkspaceIndex::open(&workspace, &config.index) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("workspace index failed: {e:#}");
+                None
+            }
+        };
         let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
             snapshots,
             snapshot_error,
             sandbox,
+            workspace_index,
             config,
             provider,
             auth_store,
@@ -887,6 +900,7 @@ impl App {
             snapshots: self.snapshots.clone(),
             snapshot_policy: crate::snapshots::SnapshotPolicy::from_config(&self.config.snapshots),
             sandbox: self.sandbox.clone(),
+            workspace_index: self.workspace_index.clone(),
         }))
     }
 

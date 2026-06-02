@@ -15,6 +15,7 @@ pub struct AppConfig {
     pub lsp: LspConfig,
     pub snapshots: SnapshotsConfig,
     pub sandbox: SandboxConfig,
+    pub index: IndexConfig,
 }
 
 impl Default for AppConfig {
@@ -37,6 +38,24 @@ impl Default for AppConfig {
             lsp: LspConfig::default(),
             snapshots: SnapshotsConfig::default(),
             sandbox: SandboxConfig::default(),
+            index: IndexConfig::default(),
+        }
+    }
+}
+
+/// Workspace symbol + text index (Phase M6).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct IndexConfig {
+    pub enabled: bool,
+    pub max_size_mb: u64,
+}
+
+impl Default for IndexConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_size_mb: 50,
         }
     }
 }

@@ -3,6 +3,7 @@ pub mod app;
 pub mod auth;
 pub mod config;
 pub mod hooks;
+pub mod index;
 pub mod lsp;
 pub mod mcp;
 pub mod permissions;
@@ -718,6 +719,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     snapshots: request.snapshots,
                     snapshot_policy: request.snapshot_policy,
                     sandbox: request.sandbox,
+                    workspace_index: request.workspace_index,
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(
