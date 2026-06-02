@@ -38,7 +38,7 @@ pub async fn run_command(
 ) -> Result<std::process::Output, String> {
     let job = create_job().map_err(|e| format!("job object: {e}"))?;
 
-    let mut child = Command::new("cmd")
+    let child = Command::new("cmd")
         .arg("/C")
         .arg(command)
         .current_dir(cwd)

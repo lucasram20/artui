@@ -37,6 +37,7 @@ Milestone release after Phase M3 snapshots: ships M4–M9 first slices (sandbox,
 ### Fixed
 
 - **session:** `parent_call_id` migration checks `PRAGMA table_info(messages)` before `ALTER` so reopening an existing database does not fail on the second open.
+- **sandbox (Windows):** enable `Win32_Security` on the `windows` crate so `CreateJobObjectW` compiles in release cross-builds (GHA `windows-x86_64` matrix).
 
 ### Notes
 
