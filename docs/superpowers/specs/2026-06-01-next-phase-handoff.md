@@ -1,42 +1,25 @@
-# Next Phase Handoff — after Phase M3
+# Next Phase Handoff — after Phase M9 / v0.7.0
 
-**Date:** 2026-06-01  
+**Date:** 2026-06-02  
 **Repo:** `lucasram20/artui`  
-**Branch pushed:** `main`  
-**Last pushed commit before this handoff:** `88959a1 docs(lsp): mark render examples as text`  
-**Completed phase:** M3 — Workspace Snapshots & Rollback  
-**Closed issue:** [#19 Phase M3 — Workspace Snapshots & Rollback](https://github.com/lucasram20/artui/issues/19)  
-**Project status:** `Done`
+**Branch:** `main`  
+**Release:** [v0.7.0](https://github.com/lucasram20/artui/releases/tag/v0.7.0)  
+**Completed phases:** M3–M9 (first slices)  
+**Closed issues:** [#19](https://github.com/lucasram20/artui/issues/19) M3, [#39](https://github.com/lucasram20/artui/issues/39)–[#44](https://github.com/lucasram20/artui/issues/44) M4–M9, [#38](https://github.com/lucasram20/artui/issues/38) release cut
 
-## Phase M3 shipped
+## Shipped on v0.7.0
 
-Phase M3 is complete and pushed to `main`.
+- **M3:** Workspace snapshots (git + tar), auto-snapshot hooks, `/snapshot` commands.
+- **M4:** Linux bubblewrap + macOS Seatbelt sandbox backends.
+- **M5:** Windows Job Object shell isolation.
+- **M6:** Workspace symbol/text index; `search` modes `symbol` / `semantic`.
+- **M7:** `task` depth guard (max depth 2).
+- **M8:** `messages.parent_call_id` schema + idempotent migration.
+- **M9:** `web` tool (HTTP fetch; not full agent-browser stack).
 
-Delivered:
+See `docs/changelogs/CHANGELOG.md` § [0.7.0] for full notes.
 
-- Workspace-keyed snapshot storage under `~/.local/share/artui/snapshots/<workspace_hash>/`.
-- `[snapshots]` config:
-  - `enabled = true`
-  - `auto_pre_patch = true`
-  - `auto_pre_shell = true`
-  - `auto_per_turn = false`
-  - `retain = 20`
-  - `max_tar_mb = 512`
-- Git snapshot backend using a temporary `GIT_INDEX_FILE` + `git write-tree`, including untracked files without touching the user's real index/stash/branches.
-- Tar fallback backend using compressed `tar.zst` archives for non-git workspaces.
-- Conservative `shell::is_read_only` classifier for snapshot gating.
-- Auto-snapshot integration in the agent loop before `apply_patch` and before non-read-only `shell` commands.
-- `/snapshot`, `/snapshot list`, `/snapshot restore <id>`, and `/snapshot clear` slash commands.
-- TUI status hint when auto-snapshots are saved.
-- Snapshot initialization errors reported distinctly from explicit `[snapshots] enabled = false`.
-- Snapshot integration tests for git restore, tar fallback, retention/pruning, and isolated snapshot storage.
-- README and `docs/changelogs/CHANGELOG.md` updates.
-- `docs/specs/` consolidated into `docs/spec/`.
-- Stale LSP doctest examples fixed by fencing them as `text` blocks.
-
-## Verification completed on `main`
-
-Before pushing `main`, these passed:
+## Verification
 
 ```bash
 cargo fmt --all -- --check
@@ -44,70 +27,12 @@ cargo test --quiet
 cargo clippy --all-targets -- -D warnings
 ```
 
-`cargo test --quiet` included:
+## Follow-up (parking lot / xl-spec)
 
-- 258 lib tests
-- 8 existing integration tests
-- 3 snapshot integration tests
-- doctests clean
-
-## Graphify status
-
-The updated `graphify-out/` output is being committed with this handoff so the next machine can reuse the current indexed graph nodes.
-
-Expected graphify output files include:
-
-- `graphify-out/graph.json`
-- `graphify-out/graph.html`
-- `graphify-out/manifest.json`
-- `graphify-out/GRAPH_REPORT.md`
-- `graphify-out/cache/stat-index.json`
-- `graphify-out/.graphify_labels.json`
-- `graphify-out/.graphify_python`
-- `graphify-out/.graphify_root`
-- `graphify-out/.vocab.txt`
-- `graphify-out/cost.json`
-
-Note: `graphify-out/` is ignored by `.gitignore`, so these files were intentionally force-added for handoff portability.
-
-## Suggested next phase
-
-Next open roadmap phase is:
-
-- [#39 Phase M4 — macOS Seatbelt Sandbox](https://github.com/lucasram20/artui/issues/39)
-  - Labels: `phase:m4`, `workstream:sandbox`, `priority:p2`, `size:s`
-
-Following phases still open after that:
-
-- [#40 Phase M5 — Windows Sandbox (Job Object + Restricted Token)](https://github.com/lucasram20/artui/issues/40)
-- [#41 Phase M6 — Codebase Indexer](https://github.com/lucasram20/artui/issues/41)
-- [#42 Phase M7 — Deep Subagent Trees](https://github.com/lucasram20/artui/issues/42)
-- [#43 Phase M8 — Production Polish (1.0 Release)](https://github.com/lucasram20/artui/issues/43)
-- [#44 Phase M9 — Web Browsing Tool (Vercel agent-browser)](https://github.com/lucasram20/artui/issues/44)
+Open backlog items remain under `parking-lot` labels ([#24](https://github.com/lucasram20/artui/issues/24)–[#34](https://github.com/lucasram20/artui/issues/34)). Full M-phase xl parity (tree-sitter indexer, restricted Windows token, Vercel agent-browser, deep subagent tree UI) is tracked via new issues on the GitHub Project — not `docs/todos/`.
 
 ## Recommended next-session startup
 
-1. Pull latest `main` on the main PC.
-2. Confirm `graphify-out/` is present and current.
-3. Start Phase M4 from issue #39.
-4. Reuse the same workflow that worked for M3:
-   - inspect issue and current code reality,
-   - write/approve design if assumptions differ,
-   - write implementation plan under `docs/superpowers/plans/`,
-   - execute with subagent-driven development,
-   - review gates after each task,
-   - final verification + changelog update,
-   - close issue and mark project item `Done`.
-
-## Important context for M4 planning
-
-M3 deliberately avoided changing the sandbox layer. Snapshot restore is now available as the safety net before mutating tools, but sandbox hardening is still future work.
-
-Current sandbox-related next work should inspect:
-
-- `src/sandbox/mod.rs`
-- permission/tool dispatch paths in `src/agent/loop.rs`
-- shell execution in `src/tools/shell.rs`
-- any platform-specific gates in config and README
-
-M4 should not assume Linux bubblewrap behavior maps directly to macOS. Treat macOS Seatbelt as a platform-specific backend and keep Linux behavior stable.
+1. Pull `main` and confirm `v0.7.0` release assets on R2/install scripts.
+2. Triage parking-lot issues or file follow-ups for xl-spec gaps.
+3. Re-run `graphify update .` after substantial code changes.
