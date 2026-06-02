@@ -88,6 +88,11 @@ default_model = "gemma4:e2b"
 [updates]
 notify_level = "major"   # off | major | minor | all
 
+[sandbox]
+mode = "auto"             # off | auto | bubblewrap | seatbelt
+network = false           # allow network inside sandbox (default false)
+allow_home_read = false   # read-only $HOME for toolchain caches
+
 [snapshots]
 enabled = true            # workspace rollback safety net
 auto_pre_patch = true     # snapshot before apply_patch

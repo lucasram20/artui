@@ -14,6 +14,7 @@ pub struct AppConfig {
     pub permissions: PermissionsConfig,
     pub lsp: LspConfig,
     pub snapshots: SnapshotsConfig,
+    pub sandbox: SandboxConfig,
 }
 
 impl Default for AppConfig {
@@ -35,6 +36,7 @@ impl Default for AppConfig {
             permissions: PermissionsConfig::default(),
             lsp: LspConfig::default(),
             snapshots: SnapshotsConfig::default(),
+            sandbox: SandboxConfig::default(),
         }
     }
 }
@@ -458,5 +460,38 @@ impl Default for SnapshotsConfig {
             retain: 20,
             max_tar_mb: 512,
         }
+    }
+}
+
+/// `[sandbox]` — optional OS-level isolation for the `shell` tool (Phases J + M4).
+///
+/// `mode = "auto"` picks bubblewrap on Linux and Seatbelt (`sandbox-exec`) on macOS
+/// when the binary is present. Missing backends fall back to unsandboxed execution
+/// with a startup warning.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SandboxConfig {
+    /// `off` | `auto` | `bubblewrap` | `seatbelt`
+    pub mode: String,
+    /// Allow outbound network inside the sandbox (default false).
+    pub network: bool,
+    /// Read-only access to `$HOME` (toolchain caches). Default false.
+    pub allow_home_read: bool,
+}
+
+impl Default for SandboxConfig {
+    fn default() -> Self {
+        Self {
+            mode: "auto".to_owned(),
+            network: false,
+            allow_home_read: false,
+        }
+    }
+}
+
+impl SandboxConfig {
+    /// Parsed mode for the sandbox module.
+    pub fn mode(&self) -> crate::sandbox::SandboxMode {
+        crate::sandbox::SandboxMode::parse_mode(&self.mode)
     }
 }

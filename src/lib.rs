@@ -55,6 +55,11 @@ pub async fn run() -> Result<()> {
 
     let mut config = config::load_global_config()?;
     cli.apply_to_config(&mut config);
+    if let Some(msg) =
+        crate::sandbox::SandboxSettings::from_config(&config.sandbox).startup_message()
+    {
+        tracing::warn!("{msg}");
+    }
     let provider = providers::build_provider(&config)?;
     let (event_tx, mut event_rx) = mpsc::channel(64);
     let mut app = App::new(config.clone(), provider);
@@ -712,6 +717,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                     lsp_diagnostics_timeout_ms: request.lsp_diagnostics_timeout_ms,
                     snapshots: request.snapshots,
                     snapshot_policy: request.snapshot_policy,
+                    sandbox: request.sandbox,
                     ..agent::r#loop::AgentLoopConfig::default()
                 };
                 agent::r#loop::run_turn(

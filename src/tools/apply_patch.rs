@@ -812,6 +812,7 @@ mod tests {
             lsp_manager: None,
             lsp_writethrough: false,
             lsp_diagnostics_timeout_ms: 750,
+            sandbox: crate::sandbox::SandboxSettings::default(),
         }
     }
 

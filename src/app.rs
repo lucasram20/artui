@@ -402,6 +402,8 @@ pub struct ProviderRequest {
     pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
     /// Phase M3 — which auto-snapshots are enabled.
     pub snapshot_policy: crate::snapshots::SnapshotPolicy,
+    /// Shell OS sandbox settings (Phase J / M4).
+    pub sandbox: crate::sandbox::SandboxSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -488,6 +490,8 @@ pub struct App {
     /// Snapshot initialization error, kept separate from explicit disablement
     /// so `/snapshot` can tell the user what went wrong.
     pub snapshot_error: Option<String>,
+    /// Resolved `[sandbox]` settings for shell tool wrapping.
+    pub sandbox: crate::sandbox::SandboxSettings,
     /// Cumulative token usage for the active turn — input + output. Reset
     /// when a new turn starts. Surfaces in the spinner header as
     /// `(12m 50s · ↓ 26.3k tokens)`.
@@ -567,11 +571,13 @@ impl App {
                 (None, Some(e.to_string()))
             }
         };
+        let sandbox = crate::sandbox::SandboxSettings::from_config(&config.sandbox);
         let now = Instant::now();
         Self {
             status: format!("Provider: {}", config.default_provider),
             snapshots,
             snapshot_error,
+            sandbox,
             config,
             provider,
             auth_store,
@@ -880,6 +886,7 @@ impl App {
             lsp_diagnostics_timeout_ms: self.config.lsp.diagnostics_timeout_ms,
             snapshots: self.snapshots.clone(),
             snapshot_policy: crate::snapshots::SnapshotPolicy::from_config(&self.config.snapshots),
+            sandbox: self.sandbox.clone(),
         }))
     }
 

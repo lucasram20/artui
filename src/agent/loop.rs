@@ -81,6 +81,8 @@ pub struct AgentLoopConfig {
     pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
     /// Which auto-snapshots are enabled.
     pub snapshot_policy: crate::snapshots::SnapshotPolicy,
+    /// Shell sandbox (bwrap / seatbelt).
+    pub sandbox: crate::sandbox::SandboxSettings,
 }
 
 impl Default for AgentLoopConfig {
@@ -105,6 +107,7 @@ impl Default for AgentLoopConfig {
                 auto_pre_shell: false,
                 auto_per_turn: false,
             },
+            sandbox: crate::sandbox::SandboxSettings::default(),
         }
     }
 }
@@ -425,6 +428,7 @@ pub async fn run_turn(
                                 lsp_manager: config.lsp_manager.clone(),
                                 lsp_writethrough: config.lsp_writethrough,
                                 lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
+                                sandbox: config.sandbox.clone(),
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -441,6 +445,7 @@ pub async fn run_turn(
                                 lsp_manager: config.lsp_manager.clone(),
                                 lsp_writethrough: config.lsp_writethrough,
                                 lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
+                                sandbox: config.sandbox.clone(),
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -456,6 +461,7 @@ pub async fn run_turn(
                         lsp_manager: config.lsp_manager.clone(),
                         lsp_writethrough: config.lsp_writethrough,
                         lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
+                        sandbox: config.sandbox.clone(),
                     };
                     registry.dispatch(call, ctx).await
                 }
