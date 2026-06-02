@@ -216,6 +216,7 @@ jobs:
 
       - name: Upload assets to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
+        continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -239,6 +240,7 @@ jobs:
 
       - name: Upload install scripts to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
+        continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

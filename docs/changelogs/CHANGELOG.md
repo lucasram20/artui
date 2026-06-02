@@ -29,6 +29,7 @@ Milestone release after Phase M3 snapshots: ships M4–M9 first slices (sandbox,
 ### Changed
 
 - **ci:** GitHub Actions release workflow publishes **linux-x86_64** and **windows-x86_64** binaries only — macOS runners dropped from CI/release matrix to save minutes; macOS and ARM users install via `cargo install --git` (see `scripts/install.sh`).
+- **ci:** R2 mirror upload steps use `continue-on-error` so a transient `SignatureDoesNotMatch` does not block attaching binaries to the GitHub Release.
 - **install:** `scripts/install.sh` directs macOS and Linux ARM users to source install when no published tarball exists.
 - **shell:** Read-only shell-command classifier so snapshot gating skips common inspection commands while still protecting mutating commands.
 - **docs:** Consolidated docs/spec layout; phase design references under `docs/superpowers/` and `docs/archive/todos/`.
