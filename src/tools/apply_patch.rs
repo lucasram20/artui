@@ -199,6 +199,17 @@ impl Tool for ApplyPatchTool {
             .collect::<Vec<_>>()
             .join("\n");
 
+        if let Some(index) = ctx.workspace_index.clone() {
+            let root = ctx.workspace_root.clone();
+            if let Err(e) = tokio::task::spawn_blocking(move || index.refresh_after_mutation(&root))
+                .await
+                .map_err(|e| format!("index refresh join: {e}"))
+                .and_then(|r| r.map_err(|e| e.to_string()))
+            {
+                tracing::warn!("workspace index refresh after patch: {e}");
+            }
+        }
+
         // Phase N3 — writethrough. Push edited file contents into the LSP
         // and surface diagnostics back into this tool result so the model
         // sees its own breakage in the same turn it caused it. Skipped

@@ -73,6 +73,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ulid",
+ "url",
  "urlencoding",
  "which",
  "windows",

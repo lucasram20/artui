@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 
 use crate::providers::ToolSpec;
 
+use super::url_safety::validate_public_http_url;
 use super::{Tool, ToolContext, ToolResult};
 
 const MAX_BYTES: usize = 512_000;
@@ -32,8 +33,8 @@ impl Tool for WebTool {
         let Some(url) = args.get("url").and_then(|v| v.as_str()) else {
             return ToolResult::error(ctx.call_id, "missing required parameter: url".to_owned());
         };
-        if !url.starts_with("http://") && !url.starts_with("https://") {
-            return ToolResult::error(ctx.call_id, "url must be http:// or https://".to_owned());
+        if let Err(reason) = validate_public_http_url(url).await {
+            return ToolResult::error(ctx.call_id, reason);
         }
 
         let client = match reqwest::Client::builder()

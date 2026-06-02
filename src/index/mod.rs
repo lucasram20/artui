@@ -1,4 +1,4 @@
-//! Workspace indexer — symbol table + line chunks (Phase M6).
+//! Workspace indexer — symbol table + FTS5 line chunks (Phase M6).
 
 mod symbols;
 mod text;
@@ -16,6 +16,7 @@ use crate::config::IndexConfig;
 
 pub struct WorkspaceIndex {
     conn: Mutex<rusqlite::Connection>,
+    max_size_mb: u64,
 }
 
 impl WorkspaceIndex {
@@ -43,17 +44,14 @@ impl WorkspaceIndex {
                name TEXT NOT NULL,
                line INTEGER NOT NULL
              );
-             CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
-             CREATE TABLE IF NOT EXISTS chunks (
-               path TEXT NOT NULL,
-               line INTEGER NOT NULL,
-               body TEXT NOT NULL
-             );",
+             CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);",
         )
         .context("index schema")?;
+        text::ensure_chunks_fts(&conn)?;
 
         let index = Arc::new(Self {
             conn: Mutex::new(conn),
+            max_size_mb: cfg.max_size_mb,
         });
         index.rebuild(workspace, cfg.max_size_mb)?;
         Ok(Some(index))
@@ -65,6 +63,11 @@ impl WorkspaceIndex {
         symbols::index_symbols(&conn, workspace, cap)?;
         text::index_chunks(&conn, workspace, cap)?;
         Ok(())
+    }
+
+    /// Rebuild index after workspace files change (e.g. `apply_patch`).
+    pub fn refresh_after_mutation(&self, workspace: &Path) -> Result<()> {
+        self.rebuild(workspace, self.max_size_mb)
     }
 
     pub fn search_symbols(&self, query: &str, limit: usize) -> Result<Vec<SymbolHit>> {
@@ -82,4 +85,27 @@ fn workspace_hash(workspace: &Path) -> String {
     let mut h = Sha256::new();
     h.update(workspace.to_string_lossy().as_bytes());
     format!("{:x}", h.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn fts5_semantic_search_finds_token() {
+        let dir = TempDir::new().unwrap();
+        let ws = dir.path();
+        std::fs::write(ws.join("lib.rs"), "fn unique_token_xyz() {}\n").unwrap();
+        let cfg = IndexConfig {
+            enabled: true,
+            max_size_mb: 1,
+        };
+        let index = WorkspaceIndex::open(ws, &cfg).unwrap().unwrap();
+        let hits = index.search_semantic("unique_token_xyz", 5).unwrap();
+        assert!(
+            hits.iter().any(|h| h.snippet.contains("unique_token_xyz")),
+            "expected FTS hit, got {hits:?}"
+        );
+    }
 }

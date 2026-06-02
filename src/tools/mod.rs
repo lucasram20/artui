@@ -9,6 +9,7 @@ pub mod search;
 pub mod shell;
 pub mod task;
 pub mod todo_write;
+pub mod url_safety;
 pub mod web;
 
 use std::path::PathBuf;

@@ -37,6 +37,7 @@ pub async fn run_command(
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
     let job = create_job().map_err(|e| format!("job object: {e}"))?;
+    let mut job_handle = Some(job);
 
     let child = Command::new("cmd")
         .arg("/C")
@@ -49,19 +50,26 @@ pub async fn run_command(
         .map_err(|e| format!("failed to spawn shell: {e}"))?;
 
     if let Some(pid) = child.id() {
+        let job = job_handle
+            .take()
+            .expect("job handle present while assigning child");
         if let Err(e) = assign_pid(job, pid) {
             tracing::warn!("sandbox: AssignProcessToJobObject failed: {e}");
+            close_job(Some(job));
+        } else {
+            job_handle = Some(job);
         }
     } else {
-        unsafe {
-            let _ = CloseHandle(job);
-        }
+        close_job(job_handle.take());
     }
 
     let output = tokio::time::timeout(timeout, child.wait_with_output())
         .await
         .map_err(|_| format!("command timed out after {}ms", timeout.as_millis()))?
         .map_err(|e| format!("command execution failed: {e}"))?;
+
+    // Job must stay open until the child exits; closing it early kills the process.
+    close_job(job_handle.take());
     Ok(output)
 }
 
@@ -82,6 +90,7 @@ fn create_job() -> std::io::Result<HANDLE> {
     Ok(job)
 }
 
+/// Assign `pid` to `job` without closing the job handle (caller owns lifecycle).
 fn assign_pid(job: HANDLE, pid: u32) -> std::io::Result<()> {
     let process = unsafe {
         OpenProcess(PROCESS_QUERY_INFORMATION, false, pid)
@@ -90,7 +99,14 @@ fn assign_pid(job: HANDLE, pid: u32) -> std::io::Result<()> {
     unsafe {
         AssignProcessToJobObject(job, process).map_err(|_| std::io::Error::last_os_error())?;
         let _ = CloseHandle(process);
-        let _ = CloseHandle(job);
     }
     Ok(())
+}
+
+fn close_job(job: Option<HANDLE>) {
+    if let Some(h) = job {
+        unsafe {
+            let _ = CloseHandle(h);
+        }
+    }
 }
