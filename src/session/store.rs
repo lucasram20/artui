@@ -72,10 +72,7 @@ impl SessionStore {
 
         conn.execute_batch(SCHEMA)
             .context("failed to initialize database schema")?;
-        let _ = conn.execute(
-            "ALTER TABLE messages ADD COLUMN parent_call_id TEXT",
-            [],
-        );
+        migrate_messages_parent_call_id(&conn);
 
         Ok(Self {
             conn,
@@ -263,7 +260,8 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TEXT NOT NULL,
     tool_call_id TEXT,
     finished_at TEXT,
-    compacted_at TEXT
+    compacted_at TEXT,
+    parent_call_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
@@ -278,6 +276,30 @@ CREATE TABLE IF NOT EXISTS memory (
 
 CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory(scope);
 ";
+
+/// Add `parent_call_id` on existing DBs (no-op when column already exists).
+fn migrate_messages_parent_call_id(conn: &Connection) {
+    let has_column: bool = conn
+        .prepare("PRAGMA table_info(messages)")
+        .and_then(|mut stmt| {
+            let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            let mut found = false;
+            for name in rows.flatten() {
+                if name == "parent_call_id" {
+                    found = true;
+                    break;
+                }
+            }
+            Ok(found)
+        })
+        .unwrap_or(false);
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE messages ADD COLUMN parent_call_id TEXT",
+            [],
+        );
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -356,6 +378,20 @@ mod tests {
         store.delete_session(&session.id).unwrap();
         let messages = store.load_messages(&session.id).unwrap();
         assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn reopen_db_is_idempotent() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.db");
+        let store = SessionStore::open(&path).unwrap();
+        let session = store.create_session("/tmp", "build").unwrap();
+        store
+            .append_message(&session.id, "user", "hi", None)
+            .unwrap();
+        drop(store);
+        let store2 = SessionStore::open(&path).unwrap();
+        assert_eq!(store2.load_messages(&session.id).unwrap().len(), 1);
     }
 
     #[test]
