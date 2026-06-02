@@ -3,7 +3,11 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
+use reqwest::header::LOCATION;
 use reqwest::Url;
+
+/// Maximum redirect hops when fetching a public URL.
+pub const MAX_REDIRECT_HOPS: usize = 10;
 
 /// Returns `Ok(())` when `url` is safe to fetch (public HTTP(S) only).
 pub async fn validate_public_http_url(url: &str) -> Result<(), String> {
@@ -51,6 +55,51 @@ pub async fn validate_public_http_url(url: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Resolve a redirect `Location` against the request URL that produced it.
+pub fn resolve_redirect_location(base: &str, location: &str) -> Result<String, String> {
+    let loc = location.trim();
+    if loc.is_empty() {
+        return Err("redirect Location is empty".to_owned());
+    }
+    if loc.starts_with("http://") || loc.starts_with("https://") {
+        return Ok(loc.to_owned());
+    }
+    let base_url = Url::parse(base).map_err(|e| format!("invalid redirect base url: {e}"))?;
+    base_url
+        .join(loc)
+        .map(|u| u.to_string())
+        .map_err(|e| format!("invalid redirect Location: {e}"))
+}
+
+/// Fetch `start_url` with redirects disabled at the HTTP client layer; validate every hop.
+pub async fn fetch_public_http(
+    client: &reqwest::Client,
+    start_url: &str,
+) -> Result<reqwest::Response, String> {
+    let mut current = start_url.to_owned();
+    for hop in 0..=MAX_REDIRECT_HOPS {
+        validate_public_http_url(&current).await?;
+        let resp = client
+            .get(&current)
+            .send()
+            .await
+            .map_err(|e| format!("fetch failed: {e}"))?;
+        if !resp.status().is_redirection() {
+            return Ok(resp);
+        }
+        if hop == MAX_REDIRECT_HOPS {
+            return Err("too many redirects".to_owned());
+        }
+        let location = resp
+            .headers()
+            .get(LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| "redirect missing Location header".to_owned())?;
+        current = resolve_redirect_location(&current, location)?;
+    }
+    Err("too many redirects".to_owned())
 }
 
 fn is_blocked_hostname(host: &str) -> bool {
@@ -171,5 +220,21 @@ mod tests {
         validate_public_http_url("https://example.com/")
             .await
             .expect("example.com should resolve to public IPs");
+    }
+
+    #[test]
+    fn resolve_relative_redirect_location() {
+        assert_eq!(
+            resolve_redirect_location("https://example.com/a?q=1", "/b").unwrap(),
+            "https://example.com/b"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_redirect_location_to_loopback() {
+        let next = resolve_redirect_location("https://example.com/page", "http://127.0.0.1/secret")
+            .unwrap();
+        let err = validate_public_http_url(&next).await.unwrap_err();
+        assert!(err.contains("blocked") || err.contains("127.0.0.1"));
     }
 }

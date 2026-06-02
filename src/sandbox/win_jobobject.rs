@@ -31,13 +31,37 @@ pub fn wrap_command(command: &str, cwd: &Path, _workspace: &Path, _network: bool
     ]
 }
 
+/// Closes the job handle on drop so error paths cannot leak Job Objects.
+struct JobHandleGuard(HANDLE);
+
+impl JobHandleGuard {
+    fn new(handle: HANDLE) -> Self {
+        Self(handle)
+    }
+
+    fn raw(&self) -> HANDLE {
+        self.0
+    }
+}
+
+impl Drop for JobHandleGuard {
+    fn drop(&mut self) {
+        if !self.0.is_invalid() {
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+            self.0 = HANDLE::default();
+        }
+    }
+}
+
 pub async fn run_command(
     command: &str,
     cwd: &Path,
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
     let job = create_job().map_err(|e| format!("job object: {e}"))?;
-    let mut job_handle = Some(job);
+    let _job_guard = JobHandleGuard::new(job);
 
     let child = Command::new("cmd")
         .arg("/C")
@@ -50,17 +74,9 @@ pub async fn run_command(
         .map_err(|e| format!("failed to spawn shell: {e}"))?;
 
     if let Some(pid) = child.id() {
-        let job = job_handle
-            .take()
-            .expect("job handle present while assigning child");
-        if let Err(e) = assign_pid(job, pid) {
+        if let Err(e) = assign_pid(_job_guard.raw(), pid) {
             tracing::warn!("sandbox: AssignProcessToJobObject failed: {e}");
-            close_job(Some(job));
-        } else {
-            job_handle = Some(job);
         }
-    } else {
-        close_job(job_handle.take());
     }
 
     let output = tokio::time::timeout(timeout, child.wait_with_output())
@@ -68,8 +84,6 @@ pub async fn run_command(
         .map_err(|_| format!("command timed out after {}ms", timeout.as_millis()))?
         .map_err(|e| format!("command execution failed: {e}"))?;
 
-    // Job must stay open until the child exits; closing it early kills the process.
-    close_job(job_handle.take());
     Ok(output)
 }
 
@@ -101,12 +115,4 @@ fn assign_pid(job: HANDLE, pid: u32) -> std::io::Result<()> {
         let _ = CloseHandle(process);
     }
     Ok(())
-}
-
-fn close_job(job: Option<HANDLE>) {
-    if let Some(h) = job {
-        unsafe {
-            let _ = CloseHandle(h);
-        }
-    }
 }

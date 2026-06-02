@@ -84,14 +84,14 @@ Implemented in `d937b59` on `main`. Changelog mirror: `docs/changelogs/CHANGELOG
 - **Files:** `src/sandbox/win_jobobject.rs`
 - **Change:** `assign_pid()` only closes the process handle, not the job. `run_command()` holds `job_handle: Option<HANDLE>` until `child.wait_with_output()` returns, then `close_job()`.
 - **Regression tests:** None on Linux CI (Windows-only path). Manual re-review on Windows with `sandbox.mode = auto` and a long-running `shell` command recommended.
-- **Codex check:** Confirm no `CloseHandle(job)` between assign and wait; confirm error paths still close the job to avoid handle leaks.
+- **Codex check (round 1):** Confirm no `CloseHandle(job)` between assign and wait. **Round 2:** `JobHandleGuard` — confirm all `run_command()` returns drop the guard.
 
 ### P1 — Web SSRF → **Fixed**
 
 - **Files:** `src/tools/url_safety.rs` (new), `src/tools/web.rs`, `src/tools/mod.rs`, `Cargo.toml` (`url = "2"`)
 - **Change:** `validate_public_http_url()` runs before `client.get(url)`. Blocks schemes other than http/https, blocked hostnames, literal blocked IPs, and post-DNS resolved addresses in private/metadata ranges.
 - **Regression tests:** `url_safety::tests::*` (5 tests, incl. `rejects_loopback_url_before_fetch`, `allows_public_host` with live DNS to example.com).
-- **Residual risk:** DNS rebinding between validation and fetch not mitigated (single-point resolve, no pinned connection). Redirects to private URLs not followed explicitly by validator (reqwest redirect policy should be reviewed). No port allowlist beyond blocked IP checks.
+- **Residual risk (round 1, superseded for redirects):** DNS rebinding / unpinned connect — still open. **Redirects:** fixed in round 2 via `fetch_public_http()`.
 
 ### P2 — Index staleness → **Partial**
 
@@ -121,6 +121,35 @@ cargo test fts5
 ```
 
 All passed on Linux at remediation time (`d937b59`).
+
+---
+
+## Remediation round 2 (Codex re-review)
+
+Codex found two remaining **P1** issues after round 1. Addressed on `main` after `d551a49`.
+
+| ID | Codex finding | Status | Fix |
+|----|---------------|--------|-----|
+| P1 web redirects | `reqwest` follows 302 to `127.0.0.1` after one-time validate | **Fixed** | `Policy::none()` + `fetch_public_http()` re-validates each `Location` (max 10 hops) |
+| P1 Windows job leak | `close_job()` skipped on spawn/timeout/wait `?` paths | **Fixed** | `JobHandleGuard` with `Drop` → `CloseHandle` on every return |
+
+### P1 — Redirect SSRF → **Fixed (round 2)**
+
+- **Files:** `src/tools/url_safety.rs`, `src/tools/web.rs`
+- **API:** `resolve_redirect_location()`, `fetch_public_http()`, `MAX_REDIRECT_HOPS = 10`
+- **Tests:** `resolve_relative_redirect_location`, `rejects_redirect_location_to_loopback`
+- **Residual:** DNS rebinding between validate and connect not pinned (same as round 1); no connection-level IP pinning.
+
+### P1 — Job handle leak → **Fixed (round 2)**
+
+- **Files:** `src/sandbox/win_jobobject.rs`
+- **API:** `JobHandleGuard` holds `HANDLE` from `create_job()` through `run_command()`; `Drop` always closes.
+- **Tests:** None on Linux CI; Codex should re-check Windows error paths (spawn fail, timeout).
+
+```bash
+cargo test url_safety --lib
+cargo clippy --all-targets -- -D warnings
+```
 
 ---
 

@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use crate::providers::ToolSpec;
 
-use super::url_safety::validate_public_http_url;
+use super::url_safety::fetch_public_http;
 use super::{Tool, ToolContext, ToolResult};
 
 const MAX_BYTES: usize = 512_000;
@@ -33,12 +33,10 @@ impl Tool for WebTool {
         let Some(url) = args.get("url").and_then(|v| v.as_str()) else {
             return ToolResult::error(ctx.call_id, "missing required parameter: url".to_owned());
         };
-        if let Err(reason) = validate_public_http_url(url).await {
-            return ToolResult::error(ctx.call_id, reason);
-        }
 
         let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
             .user_agent("artui/0.7")
             .build()
         {
@@ -46,9 +44,9 @@ impl Tool for WebTool {
             Err(e) => return ToolResult::error(ctx.call_id, format!("http client: {e}")),
         };
 
-        let resp = match client.get(url).send().await {
+        let resp = match fetch_public_http(&client, url).await {
             Ok(r) => r,
-            Err(e) => return ToolResult::error(ctx.call_id, format!("fetch failed: {e}")),
+            Err(e) => return ToolResult::error(ctx.call_id, e),
         };
         let status = resp.status();
         let bytes = match resp.bytes().await {
