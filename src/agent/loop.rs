@@ -81,8 +81,12 @@ pub struct AgentLoopConfig {
     pub snapshots: Option<std::sync::Arc<crate::snapshots::SnapshotManager>>,
     /// Which auto-snapshots are enabled.
     pub snapshot_policy: crate::snapshots::SnapshotPolicy,
-    /// Shell sandbox (bwrap / seatbelt).
+    /// Shell sandbox (bwrap / seatbelt / win job).
     pub sandbox: crate::sandbox::SandboxSettings,
+    /// Phase M6 — workspace index for search symbol/semantic modes.
+    pub workspace_index: Option<std::sync::Arc<crate::index::WorkspaceIndex>>,
+    /// Phase M7 — root turn depth for nested `task` calls.
+    pub agent_depth: u8,
 }
 
 impl Default for AgentLoopConfig {
@@ -108,6 +112,8 @@ impl Default for AgentLoopConfig {
                 auto_per_turn: false,
             },
             sandbox: crate::sandbox::SandboxSettings::default(),
+            workspace_index: None,
+            agent_depth: 0,
         }
     }
 }
@@ -429,6 +435,8 @@ pub async fn run_turn(
                                 lsp_writethrough: config.lsp_writethrough,
                                 lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                                 sandbox: config.sandbox.clone(),
+                                workspace_index: config.workspace_index.clone(),
+                                agent_depth: config.agent_depth,
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -446,6 +454,8 @@ pub async fn run_turn(
                                 lsp_writethrough: config.lsp_writethrough,
                                 lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                                 sandbox: config.sandbox.clone(),
+                                workspace_index: config.workspace_index.clone(),
+                                agent_depth: config.agent_depth,
                             };
                             registry.dispatch(call, ctx).await
                         }
@@ -462,6 +472,8 @@ pub async fn run_turn(
                         lsp_writethrough: config.lsp_writethrough,
                         lsp_diagnostics_timeout_ms: config.lsp_diagnostics_timeout_ms,
                         sandbox: config.sandbox.clone(),
+                        workspace_index: config.workspace_index.clone(),
+                        agent_depth: config.agent_depth,
                     };
                     registry.dispatch(call, ctx).await
                 }

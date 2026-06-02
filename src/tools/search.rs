@@ -53,6 +53,12 @@ impl Tool for SearchTool {
                         "minimum": 1,
                         "default": 80,
                         "description": "Maximum number of matches to return"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["content", "symbol", "semantic"],
+                        "default": "content",
+                        "description": "content=ripgrep; symbol/semantic=workspace index when enabled"
                     }
                 },
                 "required": ["pattern"]
@@ -61,12 +67,63 @@ impl Tool for SearchTool {
     }
 
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult {
+        let mode = args
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("content");
         let Some(pattern) = args.get("pattern").and_then(|v| v.as_str()) else {
             return ToolResult::error(
                 ctx.call_id,
                 "missing required parameter: pattern".to_owned(),
             );
         };
+
+        if mode == "symbol" {
+            if let Some(index) = &ctx.workspace_index {
+                return match index.search_symbols(pattern, 50) {
+                    Ok(hits) if hits.is_empty() => ToolResult::ok(
+                        ctx.call_id,
+                        format!("No symbols matching '{pattern}'"),
+                    ),
+                    Ok(hits) => {
+                        let text = hits
+                            .iter()
+                            .map(|h| format!("{}:{} {}", h.path, h.line, h.name))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        ToolResult::ok(ctx.call_id, text)
+                    }
+                    Err(e) => ToolResult::error(ctx.call_id, format!("symbol index: {e}")),
+                };
+            }
+            return ToolResult::error(
+                ctx.call_id,
+                "symbol mode requires [index] enabled".to_owned(),
+            );
+        }
+        if mode == "semantic" {
+            if let Some(index) = &ctx.workspace_index {
+                return match index.search_semantic(pattern, 30) {
+                    Ok(hits) if hits.is_empty() => ToolResult::ok(
+                        ctx.call_id,
+                        format!("No semantic matches for '{pattern}'"),
+                    ),
+                    Ok(hits) => {
+                        let text = hits
+                            .iter()
+                            .map(|h| format!("{}:{} {}", h.path, h.line, h.snippet))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        ToolResult::ok(ctx.call_id, text)
+                    }
+                    Err(e) => ToolResult::error(ctx.call_id, format!("semantic index: {e}")),
+                };
+            }
+            return ToolResult::error(
+                ctx.call_id,
+                "semantic mode requires [index] enabled".to_owned(),
+            );
+        }
 
         let search_path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let case_sensitive = args
@@ -188,6 +245,8 @@ mod tests {
             lsp_writethrough: false,
             lsp_diagnostics_timeout_ms: 750,
             sandbox: crate::sandbox::SandboxSettings::default(),
+            workspace_index: None,
+            agent_depth: 0,
         }
     }
 

@@ -58,8 +58,6 @@ jobs:
         include:
           - os: ubuntu-latest
             label: Linux
-          - os: macos-latest
-            label: macOS
           - os: windows-2025-vs2026
             label: Windows
     steps:

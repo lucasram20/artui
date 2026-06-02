@@ -72,6 +72,10 @@ impl SessionStore {
 
         conn.execute_batch(SCHEMA)
             .context("failed to initialize database schema")?;
+        let _ = conn.execute(
+            "ALTER TABLE messages ADD COLUMN parent_call_id TEXT",
+            [],
+        );
 
         Ok(Self {
             conn,
@@ -146,8 +150,8 @@ impl SessionStore {
         let id = ulid::Ulid::new().to_string();
         let now = now_iso();
         self.conn.execute(
-            "INSERT INTO messages (id, session_id, role, content, created_at, tool_call_id, finished_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![id, session_id, role, content, now, tool_call_id, Some(&now)],
+            "INSERT INTO messages (id, session_id, role, content, created_at, tool_call_id, finished_at, parent_call_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![id, session_id, role, content, now, tool_call_id, Some(&now), None::<&str>],
         ).context("failed to append message")?;
         self.touch_session(session_id)?;
         Ok(id)

@@ -113,9 +113,25 @@ impl Tool for ShellTool {
             );
         }
 
+        let timeout = Duration::from_millis(timeout_ms);
+
+        // Windows sandbox (Job Object) — cmd.exe inside assigned job
+        #[cfg(windows)]
+        if matches!(
+            ctx.sandbox.backend(),
+            Some(crate::sandbox::SandboxBackend::WinJob)
+        ) {
+            match crate::sandbox::win_jobobject::run_command(command, &work_dir, timeout).await {
+                Ok(output) => {
+                    return format_shell_output(ctx.call_id, output);
+                }
+                Err(e) => return ToolResult::error(ctx.call_id, e),
+            }
+        }
+
         // Execute command — platform-aware shell selection
         // Windows priority: pwsh (PS7+) → powershell (legacy) → cmd.exe
-        // Unix: optional bwrap / sandbox-exec wrapper, else sh -c
+        // Unix: optional bwrap wrapper, else sh -c
         let mut cmd = if cfg!(target_os = "windows") {
             let (shell, args) = resolve_windows_shell(command);
             let mut c = Command::new(shell);
@@ -149,8 +165,6 @@ impl Tool for ShellTool {
             }
         };
 
-        // Wait with timeout
-        let timeout = Duration::from_millis(timeout_ms);
         let output = match tokio::time::timeout(timeout, child.wait_with_output()).await {
             Ok(Ok(output)) => output,
             Ok(Err(e)) => {
@@ -164,42 +178,43 @@ impl Tool for ShellTool {
             }
         };
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let exit_code = output.status.code().unwrap_or(-1);
-
-        // Combine output
-        let mut combined = String::new();
-        if !stdout.is_empty() {
-            combined.push_str(&stdout);
-        }
-        if !stderr.is_empty() {
-            if !combined.is_empty() {
-                combined.push('\n');
-            }
-            combined.push_str("[stderr]\n");
-            combined.push_str(&stderr);
-        }
-
-        // Cap output
-        let truncated = combined.len() > MAX_OUTPUT_CHARS;
-        if truncated {
-            combined.truncate(MAX_OUTPUT_CHARS);
-            combined.push_str(&format!(
-                "\n\n... (output truncated at {} chars)",
-                MAX_OUTPUT_CHARS
-            ));
-        }
-
-        // Format result
-        let header = if output.status.success() {
-            format!("exit code: {exit_code}\n")
-        } else {
-            format!("exit code: {exit_code} (non-zero)\n")
-        };
-
-        ToolResult::ok(ctx.call_id, format!("{header}{combined}"))
+        format_shell_output(ctx.call_id, output)
     }
+}
+
+fn format_shell_output(call_id: String, output: std::process::Output) -> ToolResult {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let exit_code = output.status.code().unwrap_or(-1);
+
+    let mut combined = String::new();
+    if !stdout.is_empty() {
+        combined.push_str(&stdout);
+    }
+    if !stderr.is_empty() {
+        if !combined.is_empty() {
+            combined.push('\n');
+        }
+        combined.push_str("[stderr]\n");
+        combined.push_str(&stderr);
+    }
+
+    let truncated = combined.len() > MAX_OUTPUT_CHARS;
+    if truncated {
+        combined.truncate(MAX_OUTPUT_CHARS);
+        combined.push_str(&format!(
+            "\n\n... (output truncated at {} chars)",
+            MAX_OUTPUT_CHARS
+        ));
+    }
+
+    let header = if output.status.success() {
+        format!("exit code: {exit_code}\n")
+    } else {
+        format!("exit code: {exit_code} (non-zero)\n")
+    };
+
+    ToolResult::ok(call_id, format!("{header}{combined}"))
 }
 
 /// Resolve the best available shell on Windows.
@@ -337,6 +352,8 @@ mod tests {
             lsp_writethrough: false,
             lsp_diagnostics_timeout_ms: 750,
             sandbox: crate::sandbox::SandboxSettings::default(),
+            workspace_index: None,
+            agent_depth: 0,
         }
     }
 
