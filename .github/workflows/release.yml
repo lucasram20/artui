@@ -110,6 +110,9 @@ jobs:
             cargo-${{ matrix.target }}-
 
       - name: Build
+        env:
+          # Optional repo secret — bakes relay URL into release binaries when set.
+          ARTUI_FREEMODEL_RELAY_BASE: ${{ secrets.ARTUI_FREEMODEL_RELAY_BASE }}
         run: cargo build --release --target ${{ matrix.target }} --bin artui
 
       - name: Stage artifacts (Unix)

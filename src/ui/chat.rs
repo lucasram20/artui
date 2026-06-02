@@ -1,3 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -7,38 +10,71 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, Role, ThemeId, UiMode},
+    app::{App, Role, StatusLineItem, ThemeId, UiMode},
     ui::layout::theme,
 };
 
-pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
+#[derive(Default)]
+pub struct TranscriptRenderCache {
+    entries: Vec<Option<CachedMessageLines>>,
+}
+
+#[derive(Clone)]
+struct CachedMessageLines {
+    content_hash: u64,
+    lines: Vec<Line<'static>>,
+}
+
+fn hash_content(content: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn draw(
+    frame: &mut Frame<'_>,
+    app: &App,
+    theme_id: ThemeId,
+    area: Rect,
+    cache: &mut TranscriptRenderCache,
+) {
     let palette = theme::palette(theme_id);
     let mut lines = Vec::new();
+    let streaming_last = app.mode == UiMode::Streaming
+        && app
+            .transcript
+            .last()
+            .is_some_and(|message| message.role == Role::Assistant);
 
-    for message in &app.transcript {
+    if cache.entries.len() != app.transcript.len() {
+        cache.entries.resize(app.transcript.len(), None);
+    }
+
+    for (index, message) in app.transcript.iter().enumerate() {
         let (marker, color) = match message.role {
             Role::User => ("›", palette.accent),
             Role::Assistant => ("•", palette.green),
         };
+        let content_hash = hash_content(&message.content);
+        let must_rebuild = streaming_last && index + 1 == app.transcript.len()
+            || cache.entries[index]
+                .as_ref()
+                .is_none_or(|entry| entry.content_hash != content_hash);
 
-        if message.content.is_empty() {
-            lines.push(thinking_line(app, theme_id, marker, color));
-        } else {
-            let segments = parse_markdown(&message.content);
-            for (index, segment) in segments.iter().enumerate() {
-                let prefix = if index == 0 {
-                    Span::styled(
-                        format!("{marker} "),
-                        Style::default().fg(color).add_modifier(Modifier::BOLD),
-                    )
-                } else {
-                    Span::raw("  ")
-                };
+        if must_rebuild {
+            let built = if message.content.is_empty() {
+                vec![thinking_line(app, theme_id, marker, color)]
+            } else {
+                render_message_lines(message, theme_id, marker, color)
+            };
+            cache.entries[index] = Some(CachedMessageLines {
+                content_hash,
+                lines: built,
+            });
+        }
 
-                let mut spans = vec![prefix];
-                spans.extend(render_segment(segment, theme_id));
-                lines.push(Line::from(spans));
-            }
+        if let Some(entry) = &cache.entries[index] {
+            lines.extend(entry.lines.iter().cloned());
         }
         lines.push(Line::from(""));
     }
@@ -57,6 +93,31 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, theme_id: ThemeId, area: Rect) {
         .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
+}
+
+fn render_message_lines(
+    message: &crate::app::Message,
+    theme_id: ThemeId,
+    marker: &str,
+    color: ratatui::style::Color,
+) -> Vec<Line<'static>> {
+    let segments = parse_markdown(&message.content);
+    let mut lines = Vec::new();
+    for (index, segment) in segments.iter().enumerate() {
+        let prefix = if index == 0 {
+            Span::styled(
+                format!("{marker} "),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("  ")
+        };
+
+        let mut spans = vec![prefix];
+        spans.extend(render_segment(segment, theme_id));
+        lines.push(Line::from(spans));
+    }
+    lines
 }
 
 /// Render the active todo list as a checklist with header showing
@@ -159,7 +220,11 @@ fn format_thinking_meta(app: &App, duration: std::time::Duration) -> String {
         meta.push_str(&format_token_count(app.turn_output_tokens));
         meta.push_str(" tokens");
     }
-    meta.push_str(" · esc to interrupt)");
+    if app.statusline_enabled[StatusLineItem::EscHint.index()] {
+        meta.push_str(" · esc to interrupt)");
+    } else {
+        meta.push(')');
+    }
     meta
 }
 

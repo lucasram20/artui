@@ -49,10 +49,18 @@ impl WorkspaceIndex {
         .context("index schema")?;
         text::ensure_chunks_fts(&conn)?;
 
-        let index = Arc::new(Self {
+        Ok(Some(Arc::new(Self {
             conn: Mutex::new(conn),
             max_size_mb: cfg.max_size_mb,
-        });
+        })))
+    }
+
+    /// Open the index DB and run a full workspace rebuild (blocking). Used by
+    /// tests and explicit refresh paths — not on the TUI startup path.
+    pub fn open_and_rebuild(workspace: &Path, cfg: &IndexConfig) -> Result<Option<Arc<Self>>> {
+        let Some(index) = Self::open(workspace, cfg)? else {
+            return Ok(None);
+        };
         index.rebuild(workspace, cfg.max_size_mb)?;
         Ok(Some(index))
     }
@@ -101,7 +109,7 @@ mod tests {
             enabled: true,
             max_size_mb: 1,
         };
-        let index = WorkspaceIndex::open(ws, &cfg).unwrap().unwrap();
+        let index = WorkspaceIndex::open_and_rebuild(ws, &cfg).unwrap().unwrap();
         let hits = index.search_semantic("unique_token_xyz", 5).unwrap();
         assert!(
             hits.iter().any(|h| h.snippet.contains("unique_token_xyz")),

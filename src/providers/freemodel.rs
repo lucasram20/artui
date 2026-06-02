@@ -1,7 +1,7 @@
-//! Freemodel.dev provider integration.
+//! Default hosted provider integration (UI label: artui).
 //!
-//! End-user binaries reach freemodel.dev through the artui Cloudflare
-//! Worker relay (see `cloudflare/`). The relay holds the upstream API key
+//! End-user binaries reach the maintainer’s OpenAI-compatible upstream through
+//! the artui Cloudflare Worker relay (see `cloudflare/`). The relay holds the API key
 //! server-side and proxies the OpenAI-format routes
 //! (`/v1/chat/completions`, `/v1/models`), so the binary itself ships no
 //! credentials. artui reuses [`super::OpenAiCompatProvider`] for the chat
@@ -30,11 +30,11 @@ use crate::config::FreemodelConfig;
 /// provider sends no Authorization header — the relay injects it
 /// upstream. Power users who set `FREEMODEL_API_KEY` (or
 /// `ARTUI_FREEMODEL_API_KEY`) and override `base_url` to
-/// `https://api.freemodel.dev/v1` get the env-var value forwarded straight
-/// to the upstream.
+/// a direct upstream `base_url` get the env-var value forwarded straight
+/// to that host.
 pub fn openai_compat_config(config: &FreemodelConfig) -> crate::config::OpenAiCompatConfig {
     crate::config::OpenAiCompatConfig {
-        base_url: config.base_url.clone(),
+        base_url: config.resolved_base_url(),
         // The compat provider falls back to `std::env::var(api_key_env)` when
         // `resolve_credential` returns nothing. We point it at
         // `FREEMODEL_API_KEY` so a user-supplied env var still wires up
@@ -60,7 +60,8 @@ pub async fn discover_models(config: &FreemodelConfig) -> anyhow::Result<Vec<Str
         .user_agent(format!("artui/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .context("failed to construct freemodel http client")?;
-    let url = format!("{}/models", config.base_url.trim_end_matches('/'));
+    let base_url = config.resolved_base_url();
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
 
     let mut req = client.get(&url);
     if let Some(api_key) =
@@ -139,7 +140,7 @@ mod tests {
         let compat = openai_compat_config(&cfg);
         assert_eq!(compat.credential_provider_id, "freemodel");
         assert_eq!(compat.api_key_env, "FREEMODEL_API_KEY");
-        assert_eq!(compat.base_url, cfg.base_url);
+        assert_eq!(compat.base_url, cfg.resolved_base_url());
         assert_eq!(compat.default_model, cfg.default_model);
     }
 }

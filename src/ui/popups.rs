@@ -9,7 +9,7 @@ use ratatui::{
 use crate::{
     agent::PrimaryAgent,
     app::{App, StatusLineItem, ThemeId},
-    providers::registry::{AuthRequirement, LOGIN_PROVIDERS},
+    providers::registry::{provider_display_name, AuthRequirement, LOGIN_PROVIDERS},
     ui::layout::theme,
 };
 
@@ -247,7 +247,7 @@ fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
             Line::from(vec![
                 Span::styled("Provider ", Style::default().fg(palette.muted)),
                 Span::styled(
-                    &app.config.default_provider,
+                    provider_display_name(&app.config.default_provider),
                     Style::default().fg(palette.accent),
                 ),
                 Span::styled("  Current ", Style::default().fg(palette.muted)),

@@ -46,10 +46,10 @@ pub struct ProviderMetadata {
 pub const PROVIDERS: [ProviderMetadata; 5] = [
     ProviderMetadata {
         id: "freemodel",
-        display_name: "Freemodel",
-        // Embedded build-time key + optional FREEMODEL_API_KEY env override
-        // means the picker treats freemodel like a no-login provider. The
-        // user can still set their own key, but they don't have to.
+        display_name: "artui",
+        // Relay-backed hosted provider; no `/login` required (optional
+        // FREEMODEL_API_KEY when bypassing the relay). Internal id stays
+        // `freemodel`; UI label is `artui`.
         auth_requirement: AuthRequirement::None,
         model_list_strategy: ModelListStrategy::ProviderEndpoint,
         streaming: true,
@@ -107,6 +107,13 @@ pub const LOGIN_PROVIDERS: [ProviderMetadata; 2] = [
 
 pub fn provider_metadata(id: &str) -> Option<&'static ProviderMetadata> {
     PROVIDERS.iter().find(|provider| provider.id == id)
+}
+
+/// User-visible provider label (picker headers, input chrome, status).
+pub fn provider_display_name(id: &str) -> &str {
+    provider_metadata(id)
+        .map(|provider| provider.display_name)
+        .unwrap_or(id)
 }
 
 pub fn configured_model<'a>(config: &'a AppConfig, provider_id: &str) -> &'a str {

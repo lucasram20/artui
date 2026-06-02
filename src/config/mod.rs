@@ -18,6 +18,7 @@ pub fn load_global_config() -> Result<AppConfig> {
 
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read config at {}", path.display()))?;
-    toml::from_str(&content)
-        .with_context(|| format!("failed to parse config at {}", path.display()))
+    let config: AppConfig = toml::from_str(&content)
+        .with_context(|| format!("failed to parse config at {}", path.display()))?;
+    Ok(config)
 }

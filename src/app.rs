@@ -308,6 +308,9 @@ pub const SLASH_COMMANDS: [SlashCommand; 16] = [
 
 const FALLBACK_THINKING_PHRASE: &str = "Working";
 const FALLBACK_SPINNER_FRAME: &str = "•";
+const MAX_PASTED_IMAGES: usize = 8;
+const MAX_PASTE_IMAGE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_PASTED_TEXT_ENTRIES: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusLineItem {
@@ -586,7 +589,10 @@ impl App {
         };
         let now = Instant::now();
         Self {
-            status: format!("Provider: {}", config.default_provider),
+            status: format!(
+                "Provider: {}",
+                registry::provider_display_name(&config.default_provider)
+            ),
             snapshots,
             snapshot_error,
             sandbox,
@@ -974,6 +980,10 @@ impl App {
 
     /// Handle pasted text content — show shortened tag for large pastes.
     pub fn paste_text(&mut self, text: &str) {
+        if self.pasted_contents.len() >= MAX_PASTED_TEXT_ENTRIES {
+            self.status = format!("Paste limit reached ({MAX_PASTED_TEXT_ENTRIES} blocks)");
+            return;
+        }
         let lines = text.lines().count();
         if lines > 5 || text.len() > 200 {
             // Store as attachment, show tag in input
@@ -988,8 +998,19 @@ impl App {
     }
 
     /// Handle pasted image — show tag in input.
-    pub fn paste_image(&mut self, _data: Vec<u8>) {
-        self.pasted_images.push(_data);
+    pub fn paste_image(&mut self, data: Vec<u8>) {
+        if self.pasted_images.len() >= MAX_PASTED_IMAGES {
+            self.status = format!("Image paste limit reached ({MAX_PASTED_IMAGES})");
+            return;
+        }
+        if data.len() > MAX_PASTE_IMAGE_BYTES {
+            self.status = format!(
+                "Image too large (max {} MB)",
+                MAX_PASTE_IMAGE_BYTES / (1024 * 1024)
+            );
+            return;
+        }
+        self.pasted_images.push(data);
         let index = self.pasted_images.len();
         let tag = format!("[Image #{index}]");
         self.input.push_str(&tag);
@@ -1083,13 +1104,13 @@ impl App {
                 }
             },
             AppEvent::Auth(AuthEvent::FreemodelModels(models)) => {
-                // Replace the cached list. Empty result is fine — the
-                // configured default_model is always merged back in by
-                // `provider_model_options`. If the active model isn't in the
-                // discovered list, we leave it alone: users may have pinned
-                // something the gateway doesn't currently advertise.
+                // Merge discovery into the picker. An empty result must not
+                // wipe configured/default seeds — offline or misconfigured
+                // relays still show `FreemodelConfig::default().models`.
                 let count = models.len();
-                self.config.providers.freemodel.models = models;
+                if !models.is_empty() {
+                    self.config.providers.freemodel.models = models;
+                }
                 if self.model_picker_open {
                     self.model_options =
                         available_model_options(&self.config, self.auth_store.as_ref());
@@ -1104,7 +1125,7 @@ impl App {
                     self.ensure_model_cursor_visible();
                 }
                 if count > 0 {
-                    self.status = format!("Freemodel models refreshed: {count}");
+                    self.status = format!("artui models refreshed: {count}");
                 }
             }
             AppEvent::Model(ModelEvent::Error(error)) => {
@@ -1486,7 +1507,13 @@ impl App {
 
         // Eye animation — randomized timing for natural feel
         let interval = match self.mode {
-            UiMode::Streaming => Duration::from_millis(200),
+            UiMode::Streaming => {
+                if crate::terminal_preset::use_legacy_glyphs() {
+                    Duration::from_millis(100)
+                } else {
+                    Duration::from_millis(200)
+                }
+            }
             UiMode::Input if !self.input.is_empty() => Duration::from_millis(180),
             _ => Duration::from_millis(self.next_eye_interval_ms()),
         };
@@ -1515,6 +1542,26 @@ impl App {
 
     pub fn eye_frame(&self) -> &'static str {
         EYE_GLYPHS[self.eye_frame.min(EYE_GLYPHS.len() - 1)]
+    }
+
+    pub fn eye_glyph(&self) -> &'static str {
+        if crate::terminal_preset::use_legacy_glyphs() {
+            const LEGACY_EYE_GLYPHS: &[&str] = &["OO", "--", "<<", ">>", "**", ".."];
+            LEGACY_EYE_GLYPHS[self.eye_frame.min(LEGACY_EYE_GLYPHS.len() - 1)]
+        } else {
+            self.eye_frame()
+        }
+    }
+
+    /// True when the UI should redraw periodically for animations.
+    pub fn needs_animation_tick(&self) -> bool {
+        self.mode == UiMode::Streaming
+            || (self.mode == UiMode::Input && !self.input.is_empty())
+            || self.theme_picker_open
+            || self.model_picker_open
+            || self.login_picker_open
+            || self.agent_picker_open
+            || self.statusline_open
     }
 
     /// Pick next eye state based on mode and pseudo-random variation.
@@ -1745,7 +1792,7 @@ impl App {
             "/model refresh" => {
                 let provider = self.config.default_provider.as_str();
                 if provider == "freemodel" {
-                    self.status = "Refreshing Freemodel models".to_owned();
+                    self.status = "Refreshing artui models".to_owned();
                     SlashCommandResult::Handled(Some(AppRequest::RefreshFreemodelModels {
                         config: Box::new(self.config.providers.freemodel.clone()),
                     }))
@@ -2326,9 +2373,7 @@ impl App {
     }
 
     pub fn provider_usage_label(&self) -> String {
-        registry::provider_metadata(&self.config.default_provider)
-            .map(|provider| provider.display_name.to_owned())
-            .unwrap_or_else(|| self.config.default_provider.clone())
+        registry::provider_display_name(&self.config.default_provider).to_owned()
     }
 
     pub fn provider_status_label(&self, provider_id: &str) -> String {
@@ -2789,15 +2834,11 @@ fn available_model_options(config: &AppConfig, auth_store: Option<&AuthStore>) -
         if models.is_empty() {
             continue;
         }
-        options.push(ModelOption::header(provider.id, provider.display_name));
+        let provider_name = registry::provider_display_name(provider.id);
+        options.push(ModelOption::header(provider.id, provider_name));
         for model in models {
             let hint = model_hint(config, auth_store, provider.id, &model);
-            options.push(ModelOption::model(
-                provider.id,
-                provider.display_name,
-                model,
-                hint,
-            ));
+            options.push(ModelOption::model(provider.id, provider_name, model, hint));
         }
     }
     options

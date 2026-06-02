@@ -1,7 +1,8 @@
-# artui freemodel relay (Cloudflare Worker)
+# artui hosted API relay (Cloudflare Worker)
 
-A tiny stateless proxy that lets the artui binary call freemodel.dev without
-shipping an API key to end users. The Worker holds the freemodel key as a
+A tiny stateless proxy that lets the artui binary call an OpenAI-compatible
+upstream without shipping an API key to end users. The Worker holds the
+maintainer’s upstream API key as a
 [Workers secret](https://developers.cloudflare.com/workers/configuration/secrets/),
 forwards a tight allowlist of OpenAI-format routes
 (`POST /v1/chat/completions`, `GET /v1/models`), enforces per-IP rate
@@ -14,11 +15,11 @@ client-side anonymity — adapted for artui's free-tier needs.
 ## What it gives you
 
 - **Zero credentials in user binaries.** The artui binary downloaded by
-  end users never contains the freemodel key. It's only in Cloudflare.
+  end users never contains the upstream API key. It's only in Cloudflare.
 - **Free to run.** Workers free tier covers 100,000 requests/day, no CPU
   charge for time spent waiting on `fetch()`. KV free tier covers
   rate-limit counters with room to spare.
-- **No code changes for new freemodel models.** The Worker forwards the
+- **No code changes for new upstream models.** The Worker forwards the
   request body verbatim, so any model the upstream supports works.
 - **Soft abuse mitigation.** User-Agent gate + per-IP rate limit. Easily
   bypassed by determined abusers, but keeps casual scraping out and gives
@@ -51,7 +52,7 @@ npx wrangler login
 npx wrangler kv namespace create FREEMODEL_RATE_LIMIT
 # → copy the printed `id = "..."` into wrangler.toml under [[kv_namespaces]]
 
-# 3. Set the freemodel API key as a Worker secret. You'll be prompted to
+# 3. Set the upstream API key as a Worker secret. You'll be prompted to
 #    paste the key (it never appears in shell history or in the repo).
 npx wrangler secret put FREEMODEL_API_KEY
 

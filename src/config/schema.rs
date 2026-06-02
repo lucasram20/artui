@@ -21,11 +21,10 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            // freemodel routes through the artui Cloudflare Worker relay
-            // (see `cloudflare/`), which holds the upstream API key
-            // server-side, so the binary works without a `/login` step.
-            // The user can still override `providers.freemodel.base_url`
-            // and supply their own `FREEMODEL_API_KEY` to bypass the relay,
+            // Default hosted provider (UI: artui) uses the maintainer Cloudflare
+            // relay (`cloudflare/`) — upstream API key is server-side only.
+            // Override `providers.freemodel.base_url` or `ARTUI_FREEMODEL_RELAY_URL`.
+            // `FREEMODEL_API_KEY` bypasses the relay for direct upstream access.
             // and they're free to switch to ollama or any other provider
             // through `/model`.
             default_provider: "freemodel".to_owned(),
@@ -211,20 +210,15 @@ impl Default for OllamaConfig {
     }
 }
 
-/// Configuration for the freemodel.dev OpenAI-format gateway.
+/// Configuration for the default hosted OpenAI-compatible provider (UI label: artui).
 ///
-/// freemodel is registered as a no-login default provider. End-user binaries
-/// route through the artui Cloudflare Worker relay (see `cloudflare/`),
-/// which injects the upstream API key server-side — the binary itself ships
-/// no credentials. The `default_model` is used as the active selection on
-/// first launch and as the seed entry in the `/model` picker. `models` is
-/// populated at runtime by hitting `GET {base_url}/models`; the configured
-/// value is preserved so users can pin a specific list in
-/// `~/.config/artui/config.toml` if they prefer.
+/// Registered as a no-login default. End-user binaries route through the
+/// maintainer’s Cloudflare Worker relay (`cloudflare/`), which injects the
+/// upstream API key server-side. `default_model` is the first-launch selection;
+/// `models` is filled at runtime via `GET {base_url}/models` or user config.
 ///
-/// Power users who want to bypass the relay and call freemodel.dev directly
-/// can override `base_url` to `https://api.freemodel.dev/v1` in their
-/// config and export `FREEMODEL_API_KEY` (or `ARTUI_FREEMODEL_API_KEY`).
+/// Power users can point `base_url` at any OpenAI-compatible endpoint and set
+/// `FREEMODEL_API_KEY` or `ARTUI_FREEMODEL_API_KEY`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct FreemodelConfig {
@@ -240,28 +234,36 @@ pub struct FreemodelConfig {
 impl Default for FreemodelConfig {
     fn default() -> Self {
         Self {
-            // Default points at the artui Cloudflare Worker relay. The relay
-            // injects the upstream API key, so the binary sends no
-            // Authorization header (see `OpenAiCompatProvider::stream_chat`,
-            // which conditionally adds the header only when
-            // `resolve_credential` returns a value).
-            //
-            // ⚠ FORK MAINTAINERS: the `WORKERS_DEV_SUBDOMAIN_PLACEHOLDER`
-            // segment below MUST be replaced with your actual workers.dev
-            // subdomain after running `wrangler deploy` for the first time.
-            // Wrangler prints the deployed URL on success, e.g.:
-            //   Published artui-freemodel-relay (1.23 sec)
-            //     https://artui-freemodel-relay.<your-subdomain>.workers.dev
-            // Until you replace the placeholder, the binary will fail to
-            // resolve the relay and chat will error out with a DNS failure.
-            //
-            // End users can also override `providers.freemodel.base_url` in
-            // `~/.config/artui/config.toml` to point at any compatible
-            // OpenAI-format gateway.
-            base_url: "https://artui-freemodel-relay.<your-subdomain>.workers.dev/v1".to_owned(),
+            // Relay URL: `ARTUI_FREEMODEL_RELAY_URL`, release build
+            // `ARTUI_FREEMODEL_RELAY_BASE`, or `providers.freemodel.base_url`.
+            base_url: String::new(),
             default_model: "gpt-5.4-mini".to_owned(),
             models: Vec::new(),
             request_timeout_secs: 30,
+        }
+    }
+}
+
+impl FreemodelConfig {
+    /// Effective OpenAI-compat base URL (includes `/v1`).
+    pub fn resolved_base_url(&self) -> String {
+        if let Ok(url) = std::env::var("ARTUI_FREEMODEL_RELAY_URL") {
+            let url = url.trim();
+            if !url.is_empty() {
+                return url.to_owned();
+            }
+        }
+        if let Some(url) = option_env!("ARTUI_FREEMODEL_RELAY_BASE") {
+            let url = url.trim();
+            if !url.is_empty() {
+                return url.to_owned();
+            }
+        }
+        let base = self.base_url.trim();
+        if base.is_empty() || base.contains("<your-subdomain>") {
+            String::new()
+        } else {
+            base.to_owned()
         }
     }
 }

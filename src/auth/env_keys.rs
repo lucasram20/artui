@@ -25,11 +25,9 @@ pub fn known_env_keys(provider_id: &str) -> &'static [&'static str] {
         // Ollama is local-only by default; we still allow OLLAMA_API_KEY for
         // gateway proxies.
         "ollama" => &["OLLAMA_API_KEY"],
-        // Freemodel: the default config talks to the artui Cloudflare relay
-        // which injects the upstream key server-side, so the binary normally
-        // sends no Authorization header at all. These env vars exist for
-        // power users who want to bypass the relay and call api.freemodel.dev
-        // directly with their own key (see cloudflare/README.md).
+        // Hosted default provider: relay injects the maintainer key server-side,
+        // so the binary normally sends no Authorization header. These env vars
+        // are for power users who bypass the relay (see cloudflare/README.md).
         "freemodel" => &["FREEMODEL_API_KEY", "ARTUI_FREEMODEL_API_KEY"],
         _ => &[],
     }

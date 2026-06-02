@@ -12,6 +12,7 @@ pub mod sandbox;
 pub mod session;
 pub mod skills;
 pub mod snapshots;
+pub mod terminal_preset;
 pub mod tools;
 pub mod ui;
 pub mod update;
@@ -92,20 +93,6 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    // Spawn MCP servers and merge their tools into the registry before any
-    // turn runs. MCP failures are non-fatal: registered as ServerStatus::Failed.
-    let mcp_cfg = mcp::load_mcp_config(&workspace);
-    if !mcp_cfg.servers.is_empty() {
-        // Re-seed the registry, preserving the lsp tool when LSP is on.
-        let mut registry = tools::registry::ToolRegistry::new();
-        if config.lsp.enabled && app.lsp_manager.is_some() {
-            registry = registry.with_lsp_tool();
-        }
-        let statuses = mcp::register_servers(&mcp_cfg, &mut registry).await;
-        app.tool_registry = Arc::new(registry);
-        app.mcp_servers = statuses;
-    }
-
     // Background self-update check. Mirrors opencode's `autoupdate: notify`
     // and Codex's silent-on-launch poll. We only emit a banner when the
     // bump severity meets `[updates] notify_level` (default: major).
@@ -163,48 +150,90 @@ pub async fn run() -> Result<()> {
     let mut effects: EffectManager<&'static str> = EffectManager::default();
     let mut last_frame = Instant::now();
     let mut was_streaming = false;
+    let mut transcript_cache = ui::TranscriptRenderCache::default();
     // Tracks the live terminal state so we issue Enable/Disable only on
     // transitions. Must match the actual mode set in `setup_terminal`,
     // which leaves mouse capture OFF for native drag-select + copy.
     let mut mouse_capture_active = false;
 
+    // Paint immediately so the alternate screen is never blank while slow
+    // startup work (index rebuild, MCP handshakes) runs.
+    terminal.draw(|frame| {
+        ui::draw(frame, &mut app, &mut transcript_cache);
+    })?;
+    let mut dirty = false;
+
+    if let Some(index) = app.workspace_index.clone() {
+        let workspace_for_index = workspace.clone();
+        let max_size_mb = app.config.index.max_size_mb;
+        tokio::spawn(async move {
+            let _ = tokio::task::spawn_blocking(move || {
+                index.rebuild(&workspace_for_index, max_size_mb)
+            })
+            .await;
+        });
+    }
+
+    // MCP registration after first paint — failures are non-fatal.
+    let mcp_cfg = mcp::load_mcp_config(&workspace);
+    if !mcp_cfg.servers.is_empty() {
+        let mut registry = tools::registry::ToolRegistry::new();
+        if config.lsp.enabled && app.lsp_manager.is_some() {
+            registry = registry.with_lsp_tool();
+        }
+        let statuses = mcp::register_servers(&mcp_cfg, &mut registry).await;
+        app.tool_registry = Arc::new(registry);
+        app.mcp_servers = statuses;
+        dirty = true;
+    }
+
     let result = async {
         loop {
-            let elapsed = last_frame.elapsed();
-            last_frame = Instant::now();
-
-            app.advance_thinking_animation();
-            terminal.draw(|frame| {
-                ui::draw(frame, &app);
-                let screen = frame.area();
-                effects.process_effects(
-                    tachyonfx::Duration::from_millis(elapsed.as_millis() as u32),
-                    frame.buffer_mut(),
-                    screen,
-                );
-            })?;
-
-            // Trigger shimmer effect when streaming starts
-            if app.mode == UiMode::Streaming && !was_streaming {
-                let shimmer = tachyonfx::fx::hsl_shift_fg(
-                    [30.0, 0.0, 8.0],
-                    (1200, tachyonfx::Interpolation::SineInOut),
-                );
-                effects.add_unique_effect("thinking", tachyonfx::fx::repeating(shimmer));
-            }
-            // Stop shimmer when streaming ends
-            if app.mode != UiMode::Streaming && was_streaming {
-                effects.add_unique_effect("thinking", tachyonfx::fx::sleep(0));
-            }
-            was_streaming = app.mode == UiMode::Streaming;
-
             while let Ok(event) = event_rx.try_recv() {
                 app.handle_event(event);
+                dirty = true;
             }
 
             if app.should_quit {
                 break;
             }
+
+            let elapsed = last_frame.elapsed();
+            let animation_due = app.needs_animation_tick();
+
+            if dirty || animation_due {
+                last_frame = Instant::now();
+                app.advance_thinking_animation();
+                let effects_enabled = terminal_preset::ui_effects_enabled();
+                terminal.draw(|frame| {
+                    ui::draw(frame, &mut app, &mut transcript_cache);
+                    if effects_enabled {
+                        let screen = frame.area();
+                        effects.process_effects(
+                            tachyonfx::Duration::from_millis(elapsed.as_millis() as u32),
+                            frame.buffer_mut(),
+                            screen,
+                        );
+                    }
+                })?;
+                dirty = false;
+            }
+
+            if terminal_preset::ui_effects_enabled() {
+                // Trigger shimmer effect when streaming starts
+                if app.mode == UiMode::Streaming && !was_streaming {
+                    let shimmer = tachyonfx::fx::hsl_shift_fg(
+                        [30.0, 0.0, 8.0],
+                        (1200, tachyonfx::Interpolation::SineInOut),
+                    );
+                    effects.add_unique_effect("thinking", tachyonfx::fx::repeating(shimmer));
+                }
+                // Stop shimmer when streaming ends
+                if app.mode != UiMode::Streaming && was_streaming {
+                    effects.add_unique_effect("thinking", tachyonfx::fx::sleep(0));
+                }
+            }
+            was_streaming = app.mode == UiMode::Streaming;
 
             // Reconcile mouse-capture mode with the user's `/mouse` toggle.
             if app.mouse_capture != mouse_capture_active {
@@ -219,10 +248,22 @@ pub async fn run() -> Result<()> {
                 mouse_capture_active = app.mouse_capture;
             }
 
-            if event::poll(Duration::from_millis(25))? {
+            let poll_ms = if app.needs_animation_tick() {
+                terminal_preset::animation_poll_ms()
+            } else {
+                terminal_preset::idle_poll_ms()
+            };
+
+            if event::poll(Duration::from_millis(poll_ms))? {
                 match event::read()? {
-                    Event::Key(key) => handle_key(key, &mut app, event_tx.clone()),
-                    Event::Mouse(mouse) => handle_mouse(mouse, &mut app),
+                    Event::Key(key) => {
+                        handle_key(key, &mut app, event_tx.clone());
+                        dirty = true;
+                    }
+                    Event::Mouse(mouse) => {
+                        handle_mouse(mouse, &mut app);
+                        dirty = true;
+                    }
                     Event::Paste(text) => {
                         // If pasted text is an image file path, read as image
                         let trimmed = text.trim();
@@ -235,7 +276,9 @@ pub async fn run() -> Result<()> {
                         } else {
                             app.paste_text(&text);
                         }
+                        dirty = true;
                     }
+                    Event::Resize(_, _) => dirty = true,
                     _ => {}
                 }
             }

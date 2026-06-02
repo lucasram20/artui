@@ -21,7 +21,8 @@ checked by `cargo test`'s `saved_auth_file_is_owner_only` integration test.
 
 | Provider | Auth shape | Statusline label | Notes |
 |---|---|---|---|
-| `ollama` | none (local) or `OLLAMA_API_KEY` | `local` / `gateway` | Default for offline work. |
+| **artui** (default hosted) | none — relay injects maintainer API key | `artui` | OpenAI-compatible gateway via Cloudflare Worker; no `/login`. Internal config id `freemodel`. |
+| `ollama` | none (local) or `OLLAMA_API_KEY` | `local` / `gateway` | Local or remote Ollama. |
 | `openai_compat` | `OPENAI_OAUTH_TOKEN` ▸ `OPENAI_API_KEY` | `api-key` | Bring-your-own key. |
 | `anthropic` | `ANTHROPIC_OAUTH_TOKEN` ▸ `ANTHROPIC_API_KEY` | `api-key` | Same precedence as Pi. |
 | `copilot` | GitHub OAuth device flow → Copilot session token | `subscription` | Linked to a Copilot Pro/Business plan. |

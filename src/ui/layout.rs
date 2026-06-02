@@ -1,4 +1,8 @@
-use crate::app::{App, ReasoningEffort, SlashCommand, ThemeId, UiMode};
+use crate::{
+    app::{App, ReasoningEffort, SlashCommand, StatusLineItem, ThemeId, UiMode},
+    terminal_preset,
+    ui::{cells, chat::TranscriptRenderCache},
+};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
@@ -7,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-pub fn draw(frame: &mut Frame<'_>, app: &App) {
+pub fn draw(frame: &mut Frame<'_>, app: &App, transcript_cache: &mut TranscriptRenderCache) {
     let theme = if app.theme_picker_open {
         ThemeId::ALL[app.theme_cursor]
     } else {
@@ -35,7 +39,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         .split(content);
 
     draw_header(frame, app, theme, root[0]);
-    draw_body(frame, app, theme, root[1]);
+    draw_body(frame, app, theme, root[1], transcript_cache);
 }
 
 fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
@@ -147,7 +151,13 @@ fn render_logo_lines(color: ratatui::style::Color) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
+fn draw_body(
+    frame: &mut Frame<'_>,
+    app: &App,
+    theme: ThemeId,
+    area: Rect,
+    transcript_cache: &mut TranscriptRenderCache,
+) {
     let composer_height = input_height(app, area.width).saturating_add(2);
     let suggestions = visible_slash_commands(app);
     let suggestions_height = slash_commands_height(&suggestions);
@@ -169,7 +179,7 @@ fn draw_body(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         ])
         .split(area);
 
-    super::chat::draw(frame, app, theme, rows[0]);
+    super::chat::draw(frame, app, theme, rows[0], transcript_cache);
     draw_input(frame, app, theme, rows[1]);
     if !suggestions.is_empty() {
         draw_slash_commands(frame, app, theme, rows[2], &suggestions);
@@ -539,53 +549,86 @@ fn draw_file_mentions(
 }
 
 fn trim_to_width(value: &str, width: usize) -> String {
-    if value.chars().count() <= width {
-        return value.to_owned();
-    }
-    if width <= 1 {
-        return "…".to_owned();
-    }
+    cells::trim_to_width(value, width)
+}
 
-    let mut output = value.chars().take(width - 1).collect::<String>();
-    output.push('…');
-    output
+fn statusline_enabled(app: &App, item: StatusLineItem) -> bool {
+    app.statusline_enabled[item.index()]
 }
 
 fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     let palette = theme::palette(theme);
-    let mut spans = vec![Span::styled(
-        compact_cwd(),
-        Style::default().fg(palette.muted),
-    )];
+    let budget = area.width as usize;
+    let mut spans = Vec::new();
 
-    if app.git_branch_label != "no-git" {
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled("(", Style::default().fg(palette.muted)));
+    if statusline_enabled(app, StatusLineItem::CurrentDir) {
         spans.push(Span::styled(
-            &app.git_branch_label,
+            compact_cwd(),
             Style::default().fg(palette.muted),
         ));
+    }
 
-        if app.git_status_label != "clean" && app.git_status_label != "unknown" {
+    if statusline_enabled(app, StatusLineItem::ProjectName) {
+        if let Some(name) = project_dir_name() {
+            push_separator(&mut spans, palette);
+            spans.push(Span::styled(name, Style::default().fg(palette.muted)));
+        }
+    }
+
+    if statusline_enabled(app, StatusLineItem::GitBranch) && app.git_branch_label != "no-git" {
+        push_separator(&mut spans, palette);
+        spans.push(Span::styled("(", Style::default().fg(palette.muted)));
+        spans.push(Span::styled(
+            app.git_branch_label.clone(),
+            Style::default().fg(palette.muted),
+        ));
+        if statusline_enabled(app, StatusLineItem::GitStatus)
+            && app.git_status_label != "clean"
+            && app.git_status_label != "unknown"
+        {
             spans.push(Span::styled(" ±", Style::default().fg(palette.muted)));
             spans.push(Span::styled(
                 app.git_status_label.clone(),
                 Style::default().fg(palette.pink),
             ));
         }
-
         spans.push(Span::styled(")", Style::default().fg(palette.muted)));
+    } else if statusline_enabled(app, StatusLineItem::GitStatus)
+        && app.git_status_label != "clean"
+        && app.git_status_label != "unknown"
+    {
+        push_separator(&mut spans, palette);
+        spans.push(Span::styled(
+            app.git_status_label.clone(),
+            Style::default().fg(palette.pink),
+        ));
     }
 
-    spans.push(Span::styled(" | ", Style::default().fg(palette.subtle)));
-    spans.extend(context_bar_spans(app, palette));
+    if statusline_enabled(app, StatusLineItem::Context) {
+        push_separator(&mut spans, palette);
+        spans.extend(context_bar_spans(app, palette));
+    }
+
+    let fitted = cells::fit_spans_to_width(spans, budget);
 
     frame.render_widget(
-        Paragraph::new(Line::from(spans))
+        Paragraph::new(Line::from(fitted))
             .alignment(Alignment::Left)
             .style(Style::default().fg(palette.text).bg(palette.bg)),
         area,
     );
+}
+
+fn push_separator(spans: &mut Vec<Span<'static>>, palette: theme::Palette) {
+    if spans.is_empty() {
+        return;
+    }
+    let sep = if terminal_preset::use_legacy_glyphs() {
+        " | "
+    } else {
+        " │ "
+    };
+    spans.push(Span::styled(sep, Style::default().fg(palette.subtle)));
 }
 
 /// Render a compact colored context usage bar (10 cells wide).
@@ -603,8 +646,8 @@ fn context_bar_spans(app: &App, palette: theme::Palette) -> Vec<Span<'static>> {
         _ => palette.pink,
     };
 
-    let filled_str: String = "█".repeat(filled);
-    let empty_str: String = "░".repeat(BAR_WIDTH - filled);
+    let filled_str = terminal_preset::context_bar_fill(filled);
+    let empty_str = terminal_preset::context_bar_empty(BAR_WIDTH - filled);
 
     vec![
         Span::styled("ctx ", Style::default().fg(palette.muted)),
@@ -618,59 +661,111 @@ fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rec
         return;
     }
     let palette = theme::palette(theme);
+    let dot = " · ";
 
-    // Left side: Eye animation + agent name
-    let agent_name = app.active_agent_name();
-    let left_width = (4 + agent_name.chars().count() + 3) as u16; // eye(4) + " · " + name
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-            Span::styled(
-                app.eye_frame(),
-                Style::default().fg(palette.accent).bg(palette.bg),
-            ),
-            Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
-            Span::styled(
-                agent_name,
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.bg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-        ])),
-        Rect {
-            x: area.x.saturating_add(2),
-            y: area.y,
-            width: left_width.min(area.width / 2),
-            height: 1,
-        },
-    );
+    if statusline_enabled(app, StatusLineItem::Agent) {
+        let agent_name = app.active_agent_name();
+        let eye = app.eye_glyph();
+        let left_text = format!("{eye}{dot}{agent_name}");
+        let left_width = cells::display_width(&left_text).saturating_add(2) as u16;
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
+                Span::styled(eye, Style::default().fg(palette.accent).bg(palette.bg)),
+                Span::styled(dot, Style::default().fg(palette.subtle).bg(palette.bg)),
+                Span::styled(
+                    agent_name,
+                    Style::default()
+                        .fg(palette.accent)
+                        .bg(palette.bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
+            ])),
+            Rect {
+                x: area.x.saturating_add(2),
+                y: area.y,
+                width: left_width.min(area.width / 2),
+                height: 1,
+            },
+        );
+    }
 
-    let provider = app.provider_usage_label().to_lowercase();
-    let model = active_model(app);
-    let reasoning = app.reasoning_effort.label();
+    let mut spans = vec![Span::styled(
+        " ",
+        Style::default().fg(palette.border).bg(palette.bg),
+    )];
+    let mut width_used = 2usize;
+    let budget = area.width.saturating_sub(10) as usize;
+    let mut first = true;
 
-    let full_text = format!("{} · {} · {}", provider, model, reasoning);
-    let trimmed = trim_to_width(&full_text, area.width.saturating_sub(10) as usize);
-    let right_area_width = (trimmed.chars().count() + 2) as u16;
-
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-            Span::styled(provider, Style::default().fg(palette.muted).bg(palette.bg)),
-            Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
-            Span::styled(
-                model.to_owned(),
+    if statusline_enabled(app, StatusLineItem::ProviderUsage) {
+        let provider = app.provider_usage_label().to_lowercase();
+        width_used +=
+            cells::display_width(&provider) + if first { 0 } else { cells::display_width(dot) };
+        if width_used <= budget {
+            if !first {
+                spans.push(Span::styled(
+                    dot,
+                    Style::default().fg(palette.subtle).bg(palette.bg),
+                ));
+            }
+            spans.push(Span::styled(
+                provider,
+                Style::default().fg(palette.muted).bg(palette.bg),
+            ));
+            first = false;
+        }
+    }
+    if statusline_enabled(app, StatusLineItem::Model) && width_used < budget {
+        let model = active_model(app).to_owned();
+        let extra =
+            cells::display_width(&model) + if first { 0 } else { cells::display_width(dot) };
+        if width_used + extra <= budget {
+            if !first {
+                spans.push(Span::styled(
+                    dot,
+                    Style::default().fg(palette.subtle).bg(palette.bg),
+                ));
+            }
+            spans.push(Span::styled(
+                model,
                 Style::default().fg(palette.text).bg(palette.bg),
-            ),
-            Span::styled(" · ", Style::default().fg(palette.subtle).bg(palette.bg)),
-            Span::styled(
-                reasoning.to_owned(),
+            ));
+            width_used += extra;
+            first = false;
+        }
+    }
+    if statusline_enabled(app, StatusLineItem::Reasoning) && width_used < budget {
+        let reasoning = app.reasoning_effort.label().to_owned();
+        let extra =
+            cells::display_width(&reasoning) + if first { 0 } else { cells::display_width(dot) };
+        if width_used + extra <= budget {
+            if !first {
+                spans.push(Span::styled(
+                    dot,
+                    Style::default().fg(palette.subtle).bg(palette.bg),
+                ));
+            }
+            spans.push(Span::styled(
+                reasoning,
                 reasoning_effort_style(palette, app.reasoning_effort),
-            ),
-            Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-        ])),
+            ));
+        }
+    }
+
+    if spans.len() <= 1 {
+        return;
+    }
+
+    spans.push(Span::styled(
+        " ",
+        Style::default().fg(palette.border).bg(palette.bg),
+    ));
+    let right_area_width = cells::spans_display_width(&spans).saturating_add(1) as u16;
+
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)),
         Rect {
             x: area
                 .right()
@@ -714,6 +809,13 @@ fn compact_cwd() -> String {
             path.replace(&std::env::var("HOME").unwrap_or_default(), "~")
         })
         .unwrap_or_else(|| "~".to_owned())
+}
+
+fn project_dir_name() -> Option<String> {
+    std::env::current_dir().ok().and_then(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    })
 }
 
 fn active_model(app: &App) -> &str {
