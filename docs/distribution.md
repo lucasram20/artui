@@ -29,6 +29,16 @@ artui ships binaries through a public **Cloudflare R2** bucket so friends, CI, a
 
 That's it. Next tag push runs the `Upload assets to Cloudflare R2` step in `.github/workflows/release.yml`.
 
+### Fix a stale `latest/` mirror
+
+If GitHub has a release but R2 still serves an older version (e.g. `SignatureDoesNotMatch` during upload):
+
+1. **Rotate R2 secrets** if needed — Cloudflare → R2 → Manage R2 API Tokens → create S3-compatible token (32-char access key, 64-char secret). Update repo secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (trim whitespace).
+2. **Re-sync without rebuilding:** Actions → **Sync R2 mirror** → Run workflow → `tag: v0.7.0`.
+3. Or locally: `./scripts/sync-r2-mirror.sh v0.7.0` with the same env vars.
+
+The release workflow now **fails** after publish if R2 upload steps fail (GitHub assets still attach), so you get a clear signal to run **Sync R2 mirror**.
+
 ## What gets uploaded
 
 Each tagged release uploads **two copies** of every artifact:

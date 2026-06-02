@@ -216,6 +216,7 @@ jobs:
 
       - name: Upload assets to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
+        id: r2_assets
         continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -245,6 +246,7 @@ jobs:
 
       - name: Upload install scripts to Cloudflare R2
         if: ${{ env.HAS_R2 == 'true' }}
+        id: r2_install
         continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -263,6 +265,23 @@ jobs:
             --content-type "text/plain; charset=utf-8" \
             --cache-control "public, max-age=300" --no-progress
           echo "Uploaded install scripts to R2."
+
+      - name: Verify R2 mirror (fail if upload steps failed)
+        if: ${{ env.HAS_R2 == 'true' }}
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+          PUBLIC_BASE: https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev
+        run: |
+          if [ "${{ steps.r2_assets.outcome }}" != "success" ] || [ "${{ steps.r2_install.outcome }}" != "success" ]; then
+            echo "::error::R2 upload failed. Fix R2_* secrets (32-char access key, 64-char secret), then run workflow 'Sync R2 mirror' for ${TAG}."
+            exit 1
+          fi
+          ver="${TAG#v}"
+          checksums="$(curl -fsSL "${PUBLIC_BASE}/latest/checksums.sha256")"
+          echo "$checksums"
+          echo "$checksums" | grep -q "artui-${ver}-" || { echo "::error::latest/checksums.sha256 missing artui-${ver}"; exit 1; }
+          remote="$(curl -fsSL "${PUBLIC_BASE}/latest/VERSION" | tr -d '\r\n')"
+          [ "$remote" = "$ver" ] || { echo "::error::latest/VERSION is '${remote}', expected '${ver}'"; exit 1; }
 
       - name: Attach assets to GitHub release
         uses: softprops/action-gh-release@v3
