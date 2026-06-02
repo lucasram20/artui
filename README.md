@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/lucasram20/artui/releases/latest"><img src="https://img.shields.io/github/v/release/lucasram20/artui?label=version" alt="latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -224,4 +225,6 @@ See [`cloudflare/README.md`](cloudflare/README.md) for the deploy walkthrough.
 
 ## License
 
-MIT.
+[MIT](LICENSE) — free to use, modify, and distribute with attribution.
+
+Third-party data: LSP server defaults in `src/lsp/defaults.toml` are derived from [Helix](https://github.com/helix-editor/helix) (MPL-2.0). See [`src/lsp/NOTICE`](src/lsp/NOTICE) for attribution; that data is not covered by the MIT license above.
