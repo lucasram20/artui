@@ -11,6 +11,7 @@ This folder contains product and implementation specifications for artui.
 - [session persistence](session-persistence.md) — SQLite schema + `SessionStore` API for resumable sessions and per-workspace memory.
 - [copilot OAuth](copilot-oauth.md) — zero-config Copilot device flow; replaces the current PAT-paste friction.
 - [LSP support](lsp.md) — four-phase (N1–N4) Language Server Protocol roadmap: async-lsp client, vendored server registry, and the `lsp` tool. Shipped.
+- [R2 mirror & GitHub secrets](r2-mirror-and-secrets.md) — Cloudflare R2 install CDN, `R2_*` Actions secrets, rotation guide, sync workflows, troubleshooting.
 
 ## Reading order for new contributors
 

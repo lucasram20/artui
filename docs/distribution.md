@@ -30,19 +30,9 @@ artui ships binaries through a public **Cloudflare R2** bucket so friends, CI, a
    - `R2_SECRET_ACCESS_KEY` — 64-char S3 secret from step 4
    - *(optional)* `R2_PUBLIC_BASE` — only if you set a custom domain; otherwise install scripts use `https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev`
 
-If uploads fail with **`SignatureDoesNotMatch`** but lengths look right, the secret pair is wrong or stale — delete the three GitHub secrets, create a **new** R2 API token, paste fresh values (no trailing newline), re-run **Sync R2 mirror**.
+If uploads fail with **`SignatureDoesNotMatch`**, rotate secrets and re-sync — full step-by-step: **[docs/spec/r2-mirror-and-secrets.md](spec/r2-mirror-and-secrets.md)**.
 
-That's it. Next tag push runs the `Upload assets to Cloudflare R2` step in `.github/workflows/release.yml`.
-
-### Fix a stale `latest/` mirror
-
-If GitHub has a release but R2 still serves an older version (e.g. `SignatureDoesNotMatch` during upload):
-
-1. **Rotate R2 secrets** if needed — Cloudflare → R2 → Manage R2 API Tokens → create S3-compatible token (32-char access key, 64-char secret). Update repo secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (trim whitespace).
-2. **Re-sync without rebuilding:** Actions → **Sync R2 mirror** → Run workflow → `tag: v0.7.0`.
-3. Or locally: `./scripts/sync-r2-mirror.sh v0.7.0` with the same env vars.
-
-The release workflow now **fails** after publish if R2 upload steps fail (GitHub assets still attach), so you get a clear signal to run **Sync R2 mirror**.
+That's it. Next tag push runs the `Upload assets to Cloudflare R2` step in `.github/workflows/release.yml`. Stale `latest/` or secret rotation: same spec doc.
 
 ## What gets uploaded
 
