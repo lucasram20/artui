@@ -40,6 +40,8 @@ pub struct ToolContext {
     /// Phase N3 — wall-clock budget for the post-apply_patch diagnostics
     /// poll. Mirrors `[lsp] diagnostics_timeout_ms`.
     pub lsp_diagnostics_timeout_ms: u32,
+    /// OS sandbox for `shell` (bubblewrap / seatbelt). Inactive when backend missing.
+    pub sandbox: crate::sandbox::SandboxSettings,
     // pub permissions: Arc<PermissionEngine>,  // Phase D
     // pub cancel: CancellationToken,           // Phase C
 }

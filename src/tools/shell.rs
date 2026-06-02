@@ -115,11 +115,20 @@ impl Tool for ShellTool {
 
         // Execute command — platform-aware shell selection
         // Windows priority: pwsh (PS7+) → powershell (legacy) → cmd.exe
-        // Unix: sh -c
+        // Unix: optional bwrap / sandbox-exec wrapper, else sh -c
         let mut cmd = if cfg!(target_os = "windows") {
             let (shell, args) = resolve_windows_shell(command);
             let mut c = Command::new(shell);
             for arg in args {
+                c.arg(arg);
+            }
+            c
+        } else if let Some(argv) =
+            ctx.sandbox
+                .wrap_shell_command(command, &work_dir, &ctx.workspace_root)
+        {
+            let mut c = Command::new(&argv[0]);
+            for arg in &argv[1..] {
                 c.arg(arg);
             }
             c
@@ -327,6 +336,7 @@ mod tests {
             lsp_manager: None,
             lsp_writethrough: false,
             lsp_diagnostics_timeout_ms: 750,
+            sandbox: crate::sandbox::SandboxSettings::default(),
         }
     }
 

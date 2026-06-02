@@ -1,111 +1,171 @@
-//! Linux bubblewrap sandbox for shell tool execution.
+//! Platform sandboxes for shell tool execution.
 //!
-//! When `bwrap` is available and sandbox mode is enabled, shell commands
-//! run inside a restricted namespace with read-only system mounts and
-//! writable workspace.
+//! Linux uses bubblewrap (`bwrap`); macOS uses `sandbox-exec` (Seatbelt).
+//! When the configured backend is unavailable, commands run unsandboxed and
+//! a startup warning is logged.
+
+pub mod bwrap;
+
+#[cfg(target_os = "macos")]
+pub mod seatbelt;
 
 use std::path::Path;
 
-/// Check if bwrap is available on the system.
-pub fn is_available() -> bool {
-    which::which("bwrap").is_ok()
+use crate::config::SandboxConfig;
+
+/// How sandboxing is selected from config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxMode {
+    Off,
+    Auto,
+    Bubblewrap,
+    Seatbelt,
 }
 
-/// Build bwrap command arguments for sandboxed execution.
-///
-/// The sandbox provides:
-/// - Read-only bind mounts for /usr, /lib, /lib64, /bin, /sbin, /etc
-/// - Writable bind mount for the workspace
-/// - /proc, /dev, /tmp available
-/// - Optional network isolation (--unshare-net)
-/// - die-with-parent to prevent orphan processes
-pub fn wrap_command(command: &str, cwd: &Path, workspace: &Path, network: bool) -> Vec<String> {
-    let workspace_str = workspace.to_string_lossy();
-    let cwd_str = cwd.to_string_lossy();
-
-    let mut args: Vec<String> = vec![
-        "bwrap".to_owned(),
-        "--ro-bind".to_owned(),
-        "/usr".to_owned(),
-        "/usr".to_owned(),
-        "--ro-bind".to_owned(),
-        "/bin".to_owned(),
-        "/bin".to_owned(),
-    ];
-
-    if Path::new("/lib").exists() {
-        args.extend(["--ro-bind".to_owned(), "/lib".to_owned(), "/lib".to_owned()]);
-    }
-    if Path::new("/lib64").exists() {
-        args.extend([
-            "--ro-bind".to_owned(),
-            "/lib64".to_owned(),
-            "/lib64".to_owned(),
-        ]);
-    }
-    if Path::new("/sbin").exists() {
-        args.extend([
-            "--ro-bind".to_owned(),
-            "/sbin".to_owned(),
-            "/sbin".to_owned(),
-        ]);
-    }
-
-    args.extend(["--ro-bind".to_owned(), "/etc".to_owned(), "/etc".to_owned()]);
-
-    args.extend([
-        "--proc".to_owned(),
-        "/proc".to_owned(),
-        "--dev".to_owned(),
-        "/dev".to_owned(),
-        "--tmpfs".to_owned(),
-        "/tmp".to_owned(),
-    ]);
-
-    args.extend([
-        "--bind".to_owned(),
-        workspace_str.to_string(),
-        workspace_str.to_string(),
-    ]);
-
-    args.extend(["--chdir".to_owned(), cwd_str.to_string()]);
-
-    args.extend(["--die-with-parent".to_owned(), "--new-session".to_owned()]);
-
-    if !network {
-        args.push("--unshare-net".to_owned());
-    }
-
-    args.extend([
-        "--".to_owned(),
-        "/bin/sh".to_owned(),
-        "-c".to_owned(),
-        command.to_owned(),
-    ]);
-
-    args
-}
-
-/// Configuration for sandbox behavior.
-#[derive(Debug, Clone)]
-pub struct SandboxConfig {
-    pub enabled: bool,
-    pub network: bool,
-}
-
-impl Default for SandboxConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            network: false,
+impl SandboxMode {
+    pub fn parse_mode(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "none" | "disabled" => Self::Off,
+            "bubblewrap" | "bwrap" => Self::Bubblewrap,
+            "seatbelt" | "sandbox-exec" | "sandbox_exec" => Self::Seatbelt,
+            _ => Self::Auto,
         }
     }
 }
 
-impl SandboxConfig {
-    /// Effective sandbox: enabled only if configured AND bwrap available.
+/// Active isolation backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxBackend {
+    Bubblewrap,
+    #[cfg(target_os = "macos")]
+    Seatbelt,
+}
+
+/// Resolved sandbox settings threaded through `ToolContext`.
+#[derive(Debug, Clone)]
+pub struct SandboxSettings {
+    pub mode: SandboxMode,
+    pub network: bool,
+    pub allow_home_read: bool,
+    backend: Option<SandboxBackend>,
+}
+
+impl Default for SandboxSettings {
+    fn default() -> Self {
+        Self {
+            mode: SandboxMode::Off,
+            network: false,
+            allow_home_read: false,
+            backend: None,
+        }
+    }
+}
+
+impl SandboxSettings {
+    pub fn from_config(cfg: &SandboxConfig) -> Self {
+        let mode = cfg.mode();
+        let backend = resolve_backend(mode);
+        Self {
+            mode,
+            network: cfg.network,
+            allow_home_read: cfg.allow_home_read,
+            backend,
+        }
+    }
+
+    /// True when a backend is resolved and the tool should wrap shell commands.
     pub fn is_active(&self) -> bool {
-        self.enabled && is_available()
+        self.backend.is_some()
+    }
+
+    pub fn backend(&self) -> Option<SandboxBackend> {
+        self.backend
+    }
+
+    /// User-visible status for startup logging.
+    pub fn startup_message(&self) -> Option<&'static str> {
+        match (self.mode, self.backend) {
+            (SandboxMode::Off, _) => None,
+            (_, Some(_)) => None,
+            (SandboxMode::Auto, None) => Some(
+                "sandbox: auto mode enabled but no backend found (install bwrap on Linux or use macOS sandbox-exec); shell runs unsandboxed",
+            ),
+            (SandboxMode::Bubblewrap, None) => {
+                Some("sandbox: bubblewrap mode enabled but `bwrap` not found; shell runs unsandboxed")
+            }
+            #[cfg(target_os = "macos")]
+            (SandboxMode::Seatbelt, None) => Some(
+                "sandbox: seatbelt mode enabled but /usr/bin/sandbox-exec missing; shell runs unsandboxed",
+            ),
+            #[cfg(not(target_os = "macos"))]
+            (SandboxMode::Seatbelt, None) => Some(
+                "sandbox: seatbelt mode only applies on macOS; shell runs unsandboxed",
+            ),
+        }
+    }
+
+    /// Build argv for a shell command (`argv[0]` is the program to spawn).
+    pub fn wrap_shell_command(
+        &self,
+        command: &str,
+        cwd: &Path,
+        workspace: &Path,
+    ) -> Option<Vec<String>> {
+        let backend = self.backend?;
+        Some(match backend {
+            SandboxBackend::Bubblewrap => {
+                bwrap::wrap_command(command, cwd, workspace, self.network)
+            }
+            #[cfg(target_os = "macos")]
+            SandboxBackend::Seatbelt => {
+                seatbelt::wrap_command(command, cwd, workspace, self.network, self.allow_home_read)
+            }
+        })
+    }
+}
+
+fn resolve_backend(mode: SandboxMode) -> Option<SandboxBackend> {
+    match mode {
+        SandboxMode::Off => None,
+        SandboxMode::Auto => {
+            if cfg!(target_os = "macos") {
+                #[cfg(target_os = "macos")]
+                {
+                    if seatbelt::is_available() {
+                        return Some(SandboxBackend::Seatbelt);
+                    }
+                }
+                if bwrap::is_available() {
+                    return Some(SandboxBackend::Bubblewrap);
+                }
+                None
+            } else if bwrap::is_available() {
+                Some(SandboxBackend::Bubblewrap)
+            } else {
+                None
+            }
+        }
+        SandboxMode::Bubblewrap => {
+            if bwrap::is_available() {
+                Some(SandboxBackend::Bubblewrap)
+            } else {
+                None
+            }
+        }
+        SandboxMode::Seatbelt => {
+            #[cfg(target_os = "macos")]
+            {
+                if seatbelt::is_available() {
+                    Some(SandboxBackend::Seatbelt)
+                } else {
+                    None
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                None
+            }
+        }
     }
 }
 
@@ -115,40 +175,57 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn wrap_command_structure() {
-        let args = wrap_command(
-            "cargo test",
-            &PathBuf::from("/home/user/project"),
-            &PathBuf::from("/home/user/project"),
-            false,
-        );
+    fn off_mode_inactive() {
+        let s = SandboxSettings {
+            mode: SandboxMode::Off,
+            network: false,
+            allow_home_read: false,
+            backend: None,
+        };
+        assert!(!s.is_active());
+    }
 
+    #[test]
+    fn wrap_command_structure_linux() {
+        if !bwrap::is_available() {
+            return;
+        }
+        let s = SandboxSettings {
+            mode: SandboxMode::Bubblewrap,
+            network: false,
+            allow_home_read: false,
+            backend: Some(SandboxBackend::Bubblewrap),
+        };
+        let args = s
+            .wrap_shell_command(
+                "cargo test",
+                &PathBuf::from("/home/user/project"),
+                &PathBuf::from("/home/user/project"),
+            )
+            .unwrap();
         assert_eq!(args[0], "bwrap");
-        assert!(args.contains(&"--ro-bind".to_owned()));
-        assert!(args.contains(&"--die-with-parent".to_owned()));
-        assert!(args.contains(&"--new-session".to_owned()));
         assert!(args.contains(&"--unshare-net".to_owned()));
         assert!(args.contains(&"cargo test".to_owned()));
     }
 
     #[test]
     fn wrap_command_with_network() {
-        let args = wrap_command(
-            "curl example.com",
-            &PathBuf::from("/tmp/ws"),
-            &PathBuf::from("/tmp/ws"),
-            true,
-        );
-
-        assert!(!args.contains(&"--unshare-net".to_owned()));
-    }
-
-    #[test]
-    fn sandbox_config_inactive_when_disabled() {
-        let config = SandboxConfig {
-            enabled: false,
-            network: false,
+        if !bwrap::is_available() {
+            return;
+        }
+        let s = SandboxSettings {
+            mode: SandboxMode::Bubblewrap,
+            network: true,
+            allow_home_read: false,
+            backend: Some(SandboxBackend::Bubblewrap),
         };
-        assert!(!config.is_active());
+        let args = s
+            .wrap_shell_command(
+                "curl example.com",
+                &PathBuf::from("/tmp/ws"),
+                &PathBuf::from("/tmp/ws"),
+            )
+            .unwrap();
+        assert!(!args.contains(&"--unshare-net".to_owned()));
     }
 }

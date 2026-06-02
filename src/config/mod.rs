@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 
 pub use schema::{
     AppConfig, CopilotConfig, FreemodelConfig, LspConfig, OllamaConfig, OpenAiAccountConfig,
-    OpenAiCompatConfig, SnapshotsConfig, UpdateConfig,
+    OpenAiCompatConfig, SandboxConfig, SnapshotsConfig, UpdateConfig,
 };
 
 pub fn load_global_config() -> Result<AppConfig> {
