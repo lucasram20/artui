@@ -21,9 +21,10 @@ status going forward.
 
 - Phases A..L: #5–#16 (shipped in v0.4.0)
 - Phases M1, M2: #17, #18 (shipped in v0.4.0)
-- Phases M3..M9: #19, #39–#44 (open)
+- Phase M3: #19 (shipped in v0.7.0)
+- Phases M4..M9: #39–#44 (shipped in v0.7.0, first slices)
 - Phases N1..N4: #20–#23 (shipped in v0.5.0/v0.6.0)
 - Copilot OAuth zero-config: #45 (shipped in v0.3.0)
 - OAuth provider support backlog: #24
 - Parking-lot items: #25–#34
-- Infra threads: #35–#38
+- Infra threads: #35–#37 (open); #38 v0.7.0 release cut (shipped in v0.7.0)

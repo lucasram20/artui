@@ -45,7 +45,7 @@ s3://artui-releases/
       └─ checksums.sha256
 ```
 
-The `latest/` prefix is what `install.sh` and `install.ps1` hit when the user requests the default version. The versioned prefix is immutable so `--version v0.4.0` keeps working forever.
+The `latest/` prefix is what `install.sh` and `install.ps1` hit when the user requests the default version. The versioned prefix is immutable so `--version v0.7.0` (or any prior tag) keeps working forever.
 
 ## Install script flow
 

@@ -3,8 +3,9 @@
 Roadmap to close the gap between artui's harness shape and the daily-driver
 quality of Claude Code / Codex / OpenCode / pi.
 
-Current state (v0.3.x): architecture parity, alpha quality. Goal of this
-phase set: feature parity + production polish.
+Current state (v0.7.0): M1–M9 first slices shipped; xl-spec gaps remain in
+parking-lot / follow-up issues. Goal of the original phase set: feature parity
++ production polish.
 
 ## Reading order
 
@@ -25,10 +26,9 @@ M4–M7 are larger structural work. M8 is documentation and release polish.
 
 ## Conventions
 
-- Phases M1–M3 ship under v0.4.x (visible UX bumps).
-- Phases M4–M5 ship under v0.5.x (sandbox completeness).
-- Phases M6–M7 ship under v0.6.x (deeper agent capabilities).
-- Phase M8 ships under v0.9.x → v1.0.0 release.
+- Phases M1–M2 shipped in v0.4.x (visible UX bumps).
+- Phase M3 + M4–M9 first slices shipped in **v0.7.0** (snapshots, sandbox, indexer, depth guard, session schema, web fetch).
+- Full xl-spec parity for M6–M9 (tree-sitter index, agent-browser, deep subagent UI) is follow-up work, not v0.7.0.
 - Every phase ticket follows the same shape as Phases A–L: scope,
   acceptance criteria, files touched, test plan, risks.
 - Out-of-scope items end up in [parking-lot.md](parking-lot.md).

@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/lucasram20/artui/releases/latest"><img src="https://img.shields.io/github/v/release/lucasram20/artui?label=version" alt="latest release"></a>
+</p>
+
+<p align="center">
   <a href="#install">Install</a> · <a href="#configure">Configure</a> · <a href="#run">Run</a> · <a href="#documentation">Docs</a>
 </p>
 
@@ -44,7 +48,7 @@ npm install -g artui-cli
 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
 
 # Pin a specific version
-curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.3.4 --yes
+curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --version v0.7.0 --yes
 
 # Build from source
 ARTUI_FROM_SOURCE=1 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
@@ -157,7 +161,8 @@ Releases are **publish-driven** — building a release requires a human to click
 ```bash
 # 1. Bump versions in lockstep
 sed -i 's/^version = ".*"/version = "0.7.0"/' Cargo.toml
-(cd npm && npm version --no-git-tag-version 0.7.0)
+(cd npm/src && npm version --no-git-tag-version 0.7.0)
+cp npm/src/package-lock.json npm/package-lock.json
 cargo update -p artui --offline
 
 git commit -am "chore(release): 0.7.0"
@@ -172,13 +177,13 @@ gh release create v0.7.0 --draft --notes-from-tag
 
 # 4. When you're ready, publish it (or click "Publish release" in the
 #    GitHub Releases UI). This fires the release workflow:
-#    Linux + macOS + Windows builds → R2 upload → artifact attach.
+#    linux-x86_64 + windows-x86_64 builds → R2 upload (best-effort) → GitHub assets.
 gh release edit v0.7.0 --draft=false
 ```
 
 Pre-releases (`gh release create v0.7.0-rc1 --prerelease`) are explicitly skipped by the workflow — uncheck the pre-release flag to actually fire the build. This lets you draft, edit, and validate notes without burning CI credits.
 
-Three release targets: **`linux-x86_64`**, **`macos-aarch64`**, **`windows-x86_64`**. Linux ARM, macOS Intel, and Windows ARM users build from source via `cargo install --git` — the install scripts print clear instructions when they detect an unsupported target.
+Published release targets (v0.7.0+): **`linux-x86_64`** and **`windows-x86_64`**. macOS (Intel + Apple Silicon), Linux ARM, and Windows ARM users build from source via `cargo install --git` — the install scripts print clear instructions when they detect an unsupported target.
 
 CI (lint + test + build sanity) runs on every push via **CircleCI** but skips docs-only commits (anything that only touches `*.md`, `docs/**`, `npm/**`, `cloudflare/**`, `.gitignore`, etc.). Add `[ci force]` to a commit subject to override the path filter, or `[ci skip]` to skip even build-relevant changes. The split: heavy CI on CircleCI's 30,000 free credits; releases on GHA's 2,000 free minutes (5–10 min per release × 5–10 releases per month fits comfortably).
 
