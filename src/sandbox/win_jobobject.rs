@@ -12,8 +12,8 @@ use tokio::process::Command;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-    JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION};
@@ -88,8 +88,7 @@ fn assign_pid(job: HANDLE, pid: u32) -> std::io::Result<()> {
             .map_err(|_| std::io::Error::last_os_error())?
     };
     unsafe {
-        AssignProcessToJobObject(job, process)
-            .map_err(|_| std::io::Error::last_os_error())?;
+        AssignProcessToJobObject(job, process).map_err(|_| std::io::Error::last_os_error())?;
         let _ = CloseHandle(process);
         let _ = CloseHandle(job);
     }

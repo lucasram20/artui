@@ -294,10 +294,7 @@ fn migrate_messages_parent_call_id(conn: &Connection) {
         })
         .unwrap_or(false);
     if !has_column {
-        let _ = conn.execute(
-            "ALTER TABLE messages ADD COLUMN parent_call_id TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE messages ADD COLUMN parent_call_id TEXT", []);
     }
 }
 
