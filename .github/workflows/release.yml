@@ -227,6 +227,11 @@ jobs:
         run: |
           set -e
           cd dist
+          ver="${TAG#v}"
+          echo "$ver" > VERSION
+          aws s3 cp VERSION "s3://artui-releases/latest/VERSION" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type "text/plain" --no-progress
           for asset in artui-*.tar.gz artui-*.zip checksums.sha256; do
             [ -f "$asset" ] || continue
             # Versioned path (immutable)

@@ -3,7 +3,6 @@ name = "artui"
 version = "0.7.0"
 edition = "2021"
 license = "MIT"
-license-file = "LICENSE"
 default-run = "artui"
 
 [[bin]]

@@ -45,7 +45,7 @@ s3://artui-releases/
       └─ checksums.sha256
 ```
 
-The `latest/` prefix is what `install.sh` and `install.ps1` hit when the user requests the default version. The versioned prefix is immutable so `--version v0.7.0` (or any prior tag) keeps working forever.
+The `latest/` prefix mirrors release assets for fast CDN downloads. **Tag resolution** uses GitHub Releases first (`releases/latest`), then R2 `latest/` only if GitHub is unreachable — so a stale R2 mirror cannot pin installs to an older version. The versioned prefix is immutable so `--version v0.7.0` (or any prior tag) keeps working forever.
 
 ## Install script flow
 

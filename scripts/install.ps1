@@ -99,38 +99,42 @@ Step "Target $target"
 
 if ($Version -eq 'latest') {
     Step 'Resolving latest release'
-    $resolved = $null
+    $ghTag = $null
+    $r2Tag = $null
 
-    # Prefer the public R2 mirror — works for everyone, including users
-    # without GitHub access while the source repo is private. The
-    # `latest/checksums.sha256` file embeds the version in each archive
-    # filename: `artui-0.7.0-windows-x86_64.zip`. Anchor the regex to a
-    # known OS token so a permissive pre-release-suffix branch can't
-    # greedily eat into the OS portion of the filename.
+    # GitHub is authoritative for the release tag (R2 `latest/` can lag if mirror upload failed).
+    try {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $AuthHeaders -UseBasicParsing -ErrorAction Stop
+        $ghTag = $release.tag_name
+    } catch {
+        # Non-fatal; try R2 below.
+    }
+
     try {
         $checksums = Invoke-RestMethod -Uri "$R2Base/latest/checksums.sha256" -UseBasicParsing -ErrorAction Stop
         $match = [regex]::Match($checksums, 'artui-([0-9]+\.[0-9]+\.[0-9]+)-(?:linux|macos|windows)')
         if ($match.Success) {
-            $resolved = "v$($match.Groups[1].Value)"
+            $r2Tag = "v$($match.Groups[1].Value)"
         }
     } catch {
-        # R2 miss is non-fatal; we'll try GitHub next.
+        # R2 miss is non-fatal when GitHub succeeded.
     }
 
-    # GitHub fallback. Public installs hit the unauthenticated endpoint;
-    # private-repo installs need a fine-grained PAT in $env:GITHUB_TOKEN.
-    if (-not $resolved) {
-        try {
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $AuthHeaders -UseBasicParsing -ErrorAction Stop
-            $resolved = $release.tag_name
-        } catch {
-            Fail "Could not resolve latest release for $Repo from R2 mirror or GitHub."
-            if (-not $Token) {
-                Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).'
-            }
-            Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.7.0"
-            exit 1
+    if ($ghTag) {
+        $resolved = $ghTag
+        if ($r2Tag -and $r2Tag -ne $ghTag) {
+            Warn "R2 mirror latest ($r2Tag) differs from GitHub ($ghTag); using GitHub."
         }
+    } elseif ($r2Tag) {
+        $resolved = $r2Tag
+        Warn "GitHub latest unavailable; using R2 mirror tag $r2Tag."
+    } else {
+        Fail "Could not resolve latest release for $Repo from GitHub or R2 mirror."
+        if (-not $Token) {
+            Warn 'Repo may be private. Set $env:GITHUB_TOKEN to a fine-grained PAT (Contents:read, Metadata:read).'
+        }
+        Warn "Or pin a specific version: irm $R2Base/install.ps1 | iex -ArgumentList -Version v0.7.0"
+        exit 1
     }
 
     $Version = $resolved

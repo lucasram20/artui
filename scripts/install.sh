@@ -213,24 +213,38 @@ fi
 if [ "$VERSION" = "latest" ]; then
   step "Resolving latest release"
   TAG=""
-  # Prefer R2: a `latest/VERSION` text file the upload step keeps current.
+  R2_TAG=""
+  GH_TAG=""
+
+  # GitHub is authoritative for the release tag (R2 `latest/` can lag if mirror upload failed).
+  if [ -n "$AUTH_HEADER" ]; then
+    GH_TAG="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${REPO}/releases/latest" \
+      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  else
+    GH_TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+      | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
+  fi
+
   if curl -fIsS "${R2_BASE}/latest/checksums.sha256" >/dev/null 2>&1; then
-    # checksums.sha256 names the binaries with their version embedded.
-    # e.g. "artui-0.7.0-linux-x86_64.tar.gz"
-    TAG="v$(curl -fsSL "${R2_BASE}/latest/checksums.sha256" \
+    R2_TAG="v$(curl -fsSL "${R2_BASE}/latest/checksums.sha256" \
       | sed -n 's/.*artui-\([0-9.][0-9.]*\)-.*/\1/p' | head -1 || true)"
   fi
-  if [ -z "$TAG" ] || [ "$TAG" = "v" ]; then
-    if [ -n "$AUTH_HEADER" ]; then
-      TAG="$(curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/${REPO}/releases/latest" \
-        | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
-    else
-      TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-        | sed -n 's/.*"tag_name": "\(.*\)".*/\1/p' | head -1 || true)"
-    fi
+  if [ "$R2_TAG" = "v" ]; then
+    R2_TAG=""
   fi
-  if [ -z "$TAG" ] || [ "$TAG" = "v" ]; then
+
+  if [ -n "$GH_TAG" ]; then
+    TAG="$GH_TAG"
+    if [ -n "$R2_TAG" ] && [ "$R2_TAG" != "$GH_TAG" ]; then
+      warn "R2 mirror latest (${R2_TAG}) differs from GitHub (${GH_TAG}); using GitHub."
+    fi
+  elif [ -n "$R2_TAG" ]; then
+    TAG="$R2_TAG"
+    warn "GitHub latest unavailable; using R2 mirror tag ${R2_TAG}."
+  fi
+
+  if [ -z "$TAG" ]; then
     err "Could not resolve latest release for ${REPO}."
     if [ -z "$AUTH_HEADER" ]; then
       warn "Repo may be private. Set GITHUB_TOKEN to a fine-grained PAT with Contents:read and Metadata:read."
