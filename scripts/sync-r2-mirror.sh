@@ -52,6 +52,17 @@ export AWS_DEFAULT_REGION="auto"
 export AWS_EC2_METADATA_DISABLED="true"
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
+echo "Preflight: list s3://${BUCKET}/ …"
+if ! aws s3 ls "s3://${BUCKET}/" --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+  echo "R2 credentials rejected (SignatureDoesNotMatch or forbidden)." >&2
+  echo "Fix: Cloudflare dashboard → R2 → Manage R2 API Tokens → Create API Token" >&2
+  echo "  • Permission: Object Read & Write on bucket '${BUCKET}'" >&2
+  echo "  • Use the S3-compatible Access Key ID (32 chars) + Secret Access Key (64 chars)" >&2
+  echo "  • R2_ACCOUNT_ID = 32-char account id from the dashboard URL (not email/password)" >&2
+  echo "  • Update GitHub repo secrets R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (no trailing spaces)" >&2
+  exit 1
+fi
+
 VER="${TAG#v}"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT

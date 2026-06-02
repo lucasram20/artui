@@ -20,12 +20,17 @@ artui ships binaries through a public **Cloudflare R2** bucket so friends, CI, a
 1. **Create the bucket** at <https://dash.cloudflare.com/?to=/:account/r2>. Name: `artui-releases`.
 2. **Enable public access** on the bucket → Settings → "Public access". Cloudflare prints a public URL like `https://pub-<hash>.r2.dev`. Copy it.
 3. **Optional: custom domain** (e.g. `releases.artui.dev`) — add a CNAME to the same bucket. Skip for now if you don't have a domain.
-4. **Mint an API token** at R2 → Manage API tokens → Create API Token. Permission: **Object Read & Write**. Scope: this bucket only. Save the access key id + secret.
-5. **Add four secrets to the GitHub repo** (`Settings → Secrets and variables → Actions`):
-   - `R2_ACCOUNT_ID` — the 32-char hash in your Cloudflare dashboard URL
-   - `R2_ACCESS_KEY_ID`
-   - `R2_SECRET_ACCESS_KEY`
-   - *(optional)* `R2_PUBLIC_BASE` — only if you set a custom domain; otherwise the install scripts default to the `pub-…r2.dev` form
+4. **Mint an S3-compatible R2 token** (not a global Cloudflare API key):
+   - R2 → **Manage R2 API Tokens** → **Create API Token**
+   - Permission: **Object Read & Write**, scope: bucket `artui-releases` only
+   - Copy **Access Key ID** (exactly **32** characters) and **Secret Access Key** (exactly **64** characters) — shown once
+5. **Add three secrets to the GitHub repo** (`Settings → Secrets and variables → Actions`):
+   - `R2_ACCOUNT_ID` — 32-char account id from the Cloudflare dashboard URL (`dash.cloudflare.com/<this-id>/r2`)
+   - `R2_ACCESS_KEY_ID` — 32-char S3 access key from step 4
+   - `R2_SECRET_ACCESS_KEY` — 64-char S3 secret from step 4
+   - *(optional)* `R2_PUBLIC_BASE` — only if you set a custom domain; otherwise install scripts use `https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev`
+
+If uploads fail with **`SignatureDoesNotMatch`** but lengths look right, the secret pair is wrong or stale — delete the three GitHub secrets, create a **new** R2 API token, paste fresh values (no trailing newline), re-run **Sync R2 mirror**.
 
 That's it. Next tag push runs the `Upload assets to Cloudflare R2` step in `.github/workflows/release.yml`.
 

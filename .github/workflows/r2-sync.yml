@@ -38,24 +38,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validate R2 credentials
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          set -e
-          akid=$(printf '%s' "$R2_ACCESS_KEY_ID" | tr -d ' \t\r\n')
-          ask=$(printf '%s' "$R2_SECRET_ACCESS_KEY" | tr -d ' \t\r\n')
-          if [ "${#akid}" -ne 32 ]; then
-            echo "::error::R2_ACCESS_KEY_ID is ${#akid} chars; expected 32."
-            exit 1
-          fi
-          if [ "${#ask}" -ne 64 ]; then
-            echo "::error::R2_SECRET_ACCESS_KEY is ${#ask} chars; expected 64."
-            exit 1
-          fi
-
       - name: Sync release assets to R2
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
