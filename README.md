@@ -225,6 +225,6 @@ See [`cloudflare/README.md`](cloudflare/README.md) for the deploy walkthrough.
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and distribute with attribution.
+[MIT](LICENSE) — Copyright (c) 2026 [lucasram20](https://github.com/lucasram20). Free to use, modify, and distribute with attribution.
 
 Third-party data: LSP server defaults in `src/lsp/defaults.toml` are derived from [Helix](https://github.com/helix-editor/helix) (MPL-2.0). See [`src/lsp/NOTICE`](src/lsp/NOTICE) for attribution; that data is not covered by the MIT license above.
