@@ -49,9 +49,8 @@ pub fn index_chunks(conn: &Connection, workspace: &std::path::Path, cap_bytes: u
 }
 
 pub fn search_fts(conn: &Connection, query: &str, limit: usize) -> Result<Vec<TextHit>> {
-    let mut stmt = conn.prepare(
-        "SELECT path, line, body FROM chunks WHERE body MATCH ?1 LIMIT ?2",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT path, line, body FROM chunks WHERE body MATCH ?1 LIMIT ?2")?;
     let rows = stmt.query_map(rusqlite::params![query, limit as i64], |row| {
         Ok(TextHit {
             path: row.get(0)?,
@@ -64,9 +63,8 @@ pub fn search_fts(conn: &Connection, query: &str, limit: usize) -> Result<Vec<Te
         Err(_) => {
             // Fallback: LIKE when MATCH syntax fails (e.g. short tokens)
             let pattern = format!("%{query}%");
-            let mut stmt = conn.prepare(
-                "SELECT path, line, body FROM chunks WHERE body LIKE ?1 LIMIT ?2",
-            )?;
+            let mut stmt =
+                conn.prepare("SELECT path, line, body FROM chunks WHERE body LIKE ?1 LIMIT ?2")?;
             let rows = stmt.query_map(rusqlite::params![pattern, limit as i64], |row| {
                 Ok(TextHit {
                     path: row.get(0)?,

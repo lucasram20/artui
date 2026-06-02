@@ -16,7 +16,8 @@ impl Tool for WebTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "web".to_owned(),
-            description: "Fetch a public HTTP(S) URL and return text content (truncated).".to_owned(),
+            description: "Fetch a public HTTP(S) URL and return text content (truncated)."
+                .to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {

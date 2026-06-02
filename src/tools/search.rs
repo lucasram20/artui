@@ -81,10 +81,9 @@ impl Tool for SearchTool {
         if mode == "symbol" {
             if let Some(index) = &ctx.workspace_index {
                 return match index.search_symbols(pattern, 50) {
-                    Ok(hits) if hits.is_empty() => ToolResult::ok(
-                        ctx.call_id,
-                        format!("No symbols matching '{pattern}'"),
-                    ),
+                    Ok(hits) if hits.is_empty() => {
+                        ToolResult::ok(ctx.call_id, format!("No symbols matching '{pattern}'"))
+                    }
                     Ok(hits) => {
                         let text = hits
                             .iter()
@@ -104,10 +103,9 @@ impl Tool for SearchTool {
         if mode == "semantic" {
             if let Some(index) = &ctx.workspace_index {
                 return match index.search_semantic(pattern, 30) {
-                    Ok(hits) if hits.is_empty() => ToolResult::ok(
-                        ctx.call_id,
-                        format!("No semantic matches for '{pattern}'"),
-                    ),
+                    Ok(hits) if hits.is_empty() => {
+                        ToolResult::ok(ctx.call_id, format!("No semantic matches for '{pattern}'"))
+                    }
                     Ok(hits) => {
                         let text = hits
                             .iter()
