@@ -1,632 +1,530 @@
 {
-  "/home/vergil/Projects/artui/docs/system-prompts/tools.json": {
-    "mtime": 1779720589.7406642,
-    "ast_hash": "90ab5c06680a53919c412dad49e4a968",
-    "semantic_hash": "90ab5c06680a53919c412dad49e4a968"
-  },
-  "/home/vergil/Projects/artui/npm/tsconfig.json": {
-    "mtime": 1779720589.7419696,
-    "ast_hash": "3cd116d7ba1c1dc80e6136fee83b2cc6",
-    "semantic_hash": "3cd116d7ba1c1dc80e6136fee83b2cc6"
-  },
-  "/home/vergil/Projects/artui/npm/src/cli.ts": {
-    "mtime": 1779720589.7418954,
-    "ast_hash": "ab98eb8dfdfc24b8e2be714e0023effa",
-    "semantic_hash": "ab98eb8dfdfc24b8e2be714e0023effa"
-  },
-  "/home/vergil/Projects/artui/npm/src/install.ts": {
-    "mtime": 1780215180.9191697,
-    "ast_hash": "06abbe271f383047bf36634086125243",
-    "semantic_hash": "06abbe271f383047bf36634086125243"
-  },
-  "/home/vergil/Projects/artui/npm/src/postinstall.ts": {
-    "mtime": 1779720589.7419696,
-    "ast_hash": "4957c072c1a8d3fc2d48b4f9b569e8b3",
-    "semantic_hash": "4957c072c1a8d3fc2d48b4f9b569e8b3"
-  },
-  "/home/vergil/Projects/artui/npm/src/ui.tsx": {
-    "mtime": 1779720589.7419696,
-    "ast_hash": "7bd02db4cf0d1fad4e22716b1eac4e46",
-    "semantic_hash": "7bd02db4cf0d1fad4e22716b1eac4e46"
-  },
-  "/home/vergil/Projects/artui/scripts/install.ps1": {
-    "mtime": 1780236280.0868242,
-    "ast_hash": "ba04aaaab56b45597fa1364e8b09901f",
-    "semantic_hash": "ba04aaaab56b45597fa1364e8b09901f"
-  },
-  "/home/vergil/Projects/artui/scripts/install.sh": {
-    "mtime": 1780237969.9531667,
-    "ast_hash": "db2f5fd56ecd58da9ba468ede7dfcf8b",
-    "semantic_hash": "db2f5fd56ecd58da9ba468ede7dfcf8b"
-  },
-  "/home/vergil/Projects/artui/src/app.rs": {
-    "mtime": 1780228054.8114898,
-    "ast_hash": "ecc679f609dc255c2171f6673aea10df",
-    "semantic_hash": "ecc679f609dc255c2171f6673aea10df"
-  },
-  "/home/vergil/Projects/artui/src/lib.rs": {
-    "mtime": 1780227807.599966,
-    "ast_hash": "07f304c19667c185e41605cca5090882",
-    "semantic_hash": "07f304c19667c185e41605cca5090882"
-  },
-  "/home/vergil/Projects/artui/src/main.rs": {
-    "mtime": 1779720589.7433665,
-    "ast_hash": "47096b53b53081804046b273ca17b5dc",
-    "semantic_hash": "47096b53b53081804046b273ca17b5dc"
-  },
-  "/home/vergil/Projects/artui/src/agent/compaction.rs": {
-    "mtime": 1779720589.7423337,
-    "ast_hash": "9c69634f252e700d207d0d2ce8102a48",
-    "semantic_hash": "9c69634f252e700d207d0d2ce8102a48"
-  },
-  "/home/vergil/Projects/artui/src/agent/loop.rs": {
-    "mtime": 1780234911.0167322,
-    "ast_hash": "7ca8269d783bd9055f8f4209e7f633a4",
-    "semantic_hash": "7ca8269d783bd9055f8f4209e7f633a4"
-  },
-  "/home/vergil/Projects/artui/src/agent/mod.rs": {
-    "mtime": 1779720589.7424457,
-    "ast_hash": "dd1e1f5b2a72ce155eb7471e52e27411",
-    "semantic_hash": "dd1e1f5b2a72ce155eb7471e52e27411"
-  },
-  "/home/vergil/Projects/artui/src/agent/prompts.rs": {
-    "mtime": 1779720589.7424457,
-    "ast_hash": "badbbc8e13464bb949df4315f1ddf7ea",
-    "semantic_hash": "badbbc8e13464bb949df4315f1ddf7ea"
-  },
-  "/home/vergil/Projects/artui/src/auth/copilot_vim.rs": {
-    "mtime": 1779720589.742945,
-    "ast_hash": "d1565d4d3a8a9210b71cef2a69bff361",
-    "semantic_hash": "d1565d4d3a8a9210b71cef2a69bff361"
-  },
-  "/home/vergil/Projects/artui/src/auth/env_keys.rs": {
-    "mtime": 1780165095.02261,
-    "ast_hash": "15f44ddb248f897d6873daf6903eb126",
-    "semantic_hash": "15f44ddb248f897d6873daf6903eb126"
-  },
-  "/home/vergil/Projects/artui/src/auth/github.rs": {
-    "mtime": 1779720589.74303,
-    "ast_hash": "cbf3035e8ec41543f6878c241b6325a2",
-    "semantic_hash": "cbf3035e8ec41543f6878c241b6325a2"
-  },
-  "/home/vergil/Projects/artui/src/auth/mod.rs": {
-    "mtime": 1780165072.6416183,
-    "ast_hash": "638dfc4f00f0341132e546b1cb2aa52d",
-    "semantic_hash": "638dfc4f00f0341132e546b1cb2aa52d"
-  },
-  "/home/vergil/Projects/artui/src/auth/openai_oauth.rs": {
-    "mtime": 1780168126.6937528,
-    "ast_hash": "afd802852e588f228341fe2ba3f7aa3e",
-    "semantic_hash": "afd802852e588f228341fe2ba3f7aa3e"
-  },
-  "/home/vergil/Projects/artui/src/auth/store.rs": {
-    "mtime": 1779720589.74303,
-    "ast_hash": "72cfc12ce134904aa617a7b3e064ded7",
-    "semantic_hash": "72cfc12ce134904aa617a7b3e064ded7"
-  },
-  "/home/vergil/Projects/artui/src/bin/art.rs": {
-    "mtime": 1779720589.74303,
-    "ast_hash": "47096b53b53081804046b273ca17b5dc",
-    "semantic_hash": "47096b53b53081804046b273ca17b5dc"
-  },
-  "/home/vergil/Projects/artui/src/config/mod.rs": {
-    "mtime": 1780220709.263632,
-    "ast_hash": "b9a83a58bf1989e8ac2c4dbf4a5e51bd",
-    "semantic_hash": "b9a83a58bf1989e8ac2c4dbf4a5e51bd"
-  },
-  "/home/vergil/Projects/artui/src/config/schema.rs": {
-    "mtime": 1780226773.3151226,
-    "ast_hash": "488af9c29438ef482a037d83c293f805",
-    "semantic_hash": "488af9c29438ef482a037d83c293f805"
-  },
-  "/home/vergil/Projects/artui/src/hooks/mod.rs": {
-    "mtime": 1779720589.7433665,
-    "ast_hash": "0d59de3afe6c02313d31a279c2e6c744",
-    "semantic_hash": "0d59de3afe6c02313d31a279c2e6c744"
-  },
-  "/home/vergil/Projects/artui/src/mcp/mod.rs": {
-    "mtime": 1779720589.7433665,
-    "ast_hash": "3858e266804b0ff9ed5ebdf53e108ee0",
-    "semantic_hash": "3858e266804b0ff9ed5ebdf53e108ee0"
-  },
-  "/home/vergil/Projects/artui/src/permissions/mod.rs": {
-    "mtime": 1780227595.2850385,
-    "ast_hash": "5c2bccd18c1cda03a7f27a9dc7b06d93",
-    "semantic_hash": "5c2bccd18c1cda03a7f27a9dc7b06d93"
-  },
-  "/home/vergil/Projects/artui/src/providers/account.rs": {
-    "mtime": 1780168126.710753,
-    "ast_hash": "d8e3ab0940e0fcf797019a579b02db48",
-    "semantic_hash": "d8e3ab0940e0fcf797019a579b02db48"
-  },
-  "/home/vergil/Projects/artui/src/providers/copilot.rs": {
-    "mtime": 1779720589.743874,
-    "ast_hash": "c0145e15eb5b4d99412670f99340cd46",
-    "semantic_hash": "c0145e15eb5b4d99412670f99340cd46"
-  },
-  "/home/vergil/Projects/artui/src/providers/mod.rs": {
-    "mtime": 1780162143.6321218,
-    "ast_hash": "4a736b76d1ad631830892a1c981f8b8e",
-    "semantic_hash": "4a736b76d1ad631830892a1c981f8b8e"
-  },
-  "/home/vergil/Projects/artui/src/providers/ollama.rs": {
-    "mtime": 1779720589.743874,
-    "ast_hash": "2370a354b08289f94f8b3e404fbae9da",
-    "semantic_hash": "2370a354b08289f94f8b3e404fbae9da"
-  },
-  "/home/vergil/Projects/artui/src/providers/openai_compat.rs": {
-    "mtime": 1780167736.7829056,
-    "ast_hash": "ae0977c387df01e6d341e3b49d0822eb",
-    "semantic_hash": "ae0977c387df01e6d341e3b49d0822eb"
-  },
-  "/home/vergil/Projects/artui/src/providers/registry.rs": {
-    "mtime": 1780162079.407534,
-    "ast_hash": "0b0f82440556deb3c9440af174fff88b",
-    "semantic_hash": "0b0f82440556deb3c9440af174fff88b"
-  },
-  "/home/vergil/Projects/artui/src/providers/tool_serialization.rs": {
-    "mtime": 1779720589.743874,
-    "ast_hash": "6162d3e9a7e5aac40805ff7dbb703274",
-    "semantic_hash": "6162d3e9a7e5aac40805ff7dbb703274"
-  },
-  "/home/vergil/Projects/artui/src/sandbox/mod.rs": {
-    "mtime": 1779720589.743874,
-    "ast_hash": "df00dbf2dc6daaba96728df6b025e81a",
-    "semantic_hash": "df00dbf2dc6daaba96728df6b025e81a"
-  },
-  "/home/vergil/Projects/artui/src/session/mod.rs": {
-    "mtime": 1779720589.743874,
-    "ast_hash": "e75adeeeceb76cc4fe1077d139f01aca",
-    "semantic_hash": "e75adeeeceb76cc4fe1077d139f01aca"
-  },
-  "/home/vergil/Projects/artui/src/session/store.rs": {
-    "mtime": 1779720589.7443736,
-    "ast_hash": "6f70d2ceaf4eafff3800518d5dd85969",
-    "semantic_hash": "6f70d2ceaf4eafff3800518d5dd85969"
-  },
-  "/home/vergil/Projects/artui/src/skills/mod.rs": {
-    "mtime": 1779720589.7443736,
-    "ast_hash": "055df89c899cc8cfcc7e2acb2e495563",
-    "semantic_hash": "055df89c899cc8cfcc7e2acb2e495563"
-  },
-  "/home/vergil/Projects/artui/src/tools/apply_patch.rs": {
-    "mtime": 1780227619.773122,
-    "ast_hash": "6ef47f77d2c84a96ce33a9d7df6df718",
-    "semantic_hash": "6ef47f77d2c84a96ce33a9d7df6df718"
-  },
-  "/home/vergil/Projects/artui/src/tools/glob.rs": {
-    "mtime": 1780227164.111134,
-    "ast_hash": "cb843296d7e82b64fbe8afc41823365a",
-    "semantic_hash": "cb843296d7e82b64fbe8afc41823365a"
-  },
-  "/home/vergil/Projects/artui/src/tools/mod.rs": {
-    "mtime": 1780228028.1783292,
-    "ast_hash": "96692cb453e277e59244f27ae59cee7b",
-    "semantic_hash": "96692cb453e277e59244f27ae59cee7b"
-  },
-  "/home/vergil/Projects/artui/src/tools/read_file.rs": {
-    "mtime": 1780227164.7961414,
-    "ast_hash": "a7c3585a5c14d8adbe3aecc9df0e2fe7",
-    "semantic_hash": "a7c3585a5c14d8adbe3aecc9df0e2fe7"
-  },
-  "/home/vergil/Projects/artui/src/tools/registry.rs": {
-    "mtime": 1780228052.6329226,
-    "ast_hash": "440dbe47ce3a66e8e323fa9118dc4cbe",
-    "semantic_hash": "440dbe47ce3a66e8e323fa9118dc4cbe"
-  },
-  "/home/vergil/Projects/artui/src/tools/search.rs": {
-    "mtime": 1780227041.7102993,
-    "ast_hash": "73c05d3074f8c1a94edb44c0f59f9eba",
-    "semantic_hash": "73c05d3074f8c1a94edb44c0f59f9eba"
-  },
-  "/home/vergil/Projects/artui/src/tools/shell.rs": {
-    "mtime": 1780227163.9391322,
-    "ast_hash": "57395498bd679cbe6eefb36538f7b8b9",
-    "semantic_hash": "57395498bd679cbe6eefb36538f7b8b9"
-  },
-  "/home/vergil/Projects/artui/src/tools/task.rs": {
-    "mtime": 1779720589.7446287,
-    "ast_hash": "cefaabff41c641b1d493f1f7af0bf83e",
-    "semantic_hash": "cefaabff41c641b1d493f1f7af0bf83e"
-  },
-  "/home/vergil/Projects/artui/src/ui/chat.rs": {
-    "mtime": 1780228085.630704,
-    "ast_hash": "861f629323b53eb1d54b97998d627d62",
-    "semantic_hash": "861f629323b53eb1d54b97998d627d62"
-  },
-  "/home/vergil/Projects/artui/src/ui/layout.rs": {
-    "mtime": 1779720589.7450469,
-    "ast_hash": "fa45e34ab4dd83cba81863d6599421bc",
-    "semantic_hash": "fa45e34ab4dd83cba81863d6599421bc"
-  },
-  "/home/vergil/Projects/artui/src/ui/mod.rs": {
-    "mtime": 1779720589.7450469,
-    "ast_hash": "31f7c8a39c09c4602eba81b36a36fdc7",
-    "semantic_hash": "31f7c8a39c09c4602eba81b36a36fdc7"
-  },
-  "/home/vergil/Projects/artui/src/ui/popups.rs": {
-    "mtime": 1780168126.7727532,
-    "ast_hash": "7535ad7412d72f45895ff8141d35dd51",
-    "semantic_hash": "7535ad7412d72f45895ff8141d35dd51"
-  },
-  "/home/vergil/Projects/artui/src/ui/tools.rs": {
-    "mtime": 1779720589.7450469,
-    "ast_hash": "238fa1d29d5d60d737dfb9551ecb735e",
-    "semantic_hash": "238fa1d29d5d60d737dfb9551ecb735e"
-  },
-  "/home/vergil/Projects/artui/src/update/mod.rs": {
-    "mtime": 1779720589.7450469,
-    "ast_hash": "03815599dcc193590407cec3a987c94f",
-    "semantic_hash": "03815599dcc193590407cec3a987c94f"
-  },
-  "/home/vergil/Projects/artui/src/util/mod.rs": {
-    "mtime": 1779720589.7450469,
-    "ast_hash": "b09ca123957fd66f1838e70022203515",
-    "semantic_hash": "b09ca123957fd66f1838e70022203515"
-  },
-  "/home/vergil/Projects/artui/src/util/paths.rs": {
-    "mtime": 1779720589.7454262,
-    "ast_hash": "c06c9b52b646795fe66c99eb4b9d4321",
-    "semantic_hash": "c06c9b52b646795fe66c99eb4b9d4321"
-  },
-  "/home/vergil/Projects/artui/tests/copilot_integration.rs": {
-    "mtime": 1780168126.7787533,
-    "ast_hash": "350545fa22817d75c3f781ca5d54ee54",
-    "semantic_hash": "350545fa22817d75c3f781ca5d54ee54"
-  },
-  "/home/vergil/Projects/artui/AGENTS.md": {
-    "mtime": 1780285153.9264238,
-    "ast_hash": "7c0db211c7a223365e9c991559602594",
-    "semantic_hash": "7c0db211c7a223365e9c991559602594"
-  },
-  "/home/vergil/Projects/artui/README.md": {
-    "mtime": 1780286430.4384665,
-    "ast_hash": "a412bf48cb8f249e6be6cca39cd41dfd",
-    "semantic_hash": "a412bf48cb8f249e6be6cca39cd41dfd"
-  },
-  "/home/vergil/Projects/artui/context.md": {
-    "mtime": 1779720589.738821,
-    "ast_hash": "2ebada21dd1c6aee2c0463a84ce73bcc",
-    "semantic_hash": "2ebada21dd1c6aee2c0463a84ce73bcc"
-  },
-  "/home/vergil/Projects/artui/.github/dependabot.yml": {
-    "mtime": 1779720589.7381632,
-    "ast_hash": "ab6ff4f7f8b416a82dff19551ad2d0ca",
-    "semantic_hash": "ab6ff4f7f8b416a82dff19551ad2d0ca"
-  },
-  "/home/vergil/Projects/artui/.github/workflows/ci.yml": {
-    "mtime": 1780286537.502979,
-    "ast_hash": "cb54b1b2f5d15529d2a1a8a286a82a18",
-    "semantic_hash": "cb54b1b2f5d15529d2a1a8a286a82a18"
-  },
-  "/home/vergil/Projects/artui/.github/workflows/release.yml": {
-    "mtime": 1780286289.6239579,
-    "ast_hash": "e4d09937085f397bbbfe1d189f1abfbc",
-    "semantic_hash": "e4d09937085f397bbbfe1d189f1abfbc"
-  },
-  "/home/vergil/Projects/artui/.pi/README.md": {
-    "mtime": 1779720589.738821,
-    "ast_hash": "45547cc5e2ae851078a18564d9408d4c",
-    "semantic_hash": "45547cc5e2ae851078a18564d9408d4c"
-  },
-  "/home/vergil/Projects/artui/docs/auth.md": {
-    "mtime": 1779720589.738821,
-    "ast_hash": "f501d7398695db11af2659b8bb13e28a",
-    "semantic_hash": "f501d7398695db11af2659b8bb13e28a"
-  },
-  "/home/vergil/Projects/artui/docs/distribution.md": {
-    "mtime": 1780215245.006627,
-    "ast_hash": "50436da9310ce86cc52b18645524e733",
-    "semantic_hash": "50436da9310ce86cc52b18645524e733"
-  },
-  "/home/vergil/Projects/artui/docs/changelogs/CHANGELOG.md": {
-    "mtime": 1780233379.651061,
-    "ast_hash": "77b61eb411b16a6eacc0bd9d94a06f25",
-    "semantic_hash": "77b61eb411b16a6eacc0bd9d94a06f25"
-  },
-  "/home/vergil/Projects/artui/docs/spec/README.md": {
-    "mtime": 1779720589.7394986,
-    "ast_hash": "1a7bf8fae1f25f8b152d37d44a396c4e",
-    "semantic_hash": "1a7bf8fae1f25f8b152d37d44a396c4e"
-  },
-  "/home/vergil/Projects/artui/docs/spec/artui_v1_agentic_spec.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "4f878b2243e9a10dc8252e46aa40113e",
-    "semantic_hash": "4f878b2243e9a10dc8252e46aa40113e"
-  },
-  "/home/vergil/Projects/artui/docs/spec/codex-architecture.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "6765a4f307ae88ed3b5e892032fa11aa",
-    "semantic_hash": "6765a4f307ae88ed3b5e892032fa11aa"
-  },
-  "/home/vergil/Projects/artui/docs/spec/copilot-oauth.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "a69d803a4a5d7a035e82a3d0fbf9c2e9",
-    "semantic_hash": "a69d803a4a5d7a035e82a3d0fbf9c2e9"
-  },
-  "/home/vergil/Projects/artui/docs/spec/harness-architecture.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "5b18a7586e52c7c4188735b32f5452c8",
-    "semantic_hash": "5b18a7586e52c7c4188735b32f5452c8"
-  },
-  "/home/vergil/Projects/artui/docs/spec/opencode-architecture.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "594bc5b47b0a2700f0046e931eb994f6",
-    "semantic_hash": "594bc5b47b0a2700f0046e931eb994f6"
-  },
-  "/home/vergil/Projects/artui/docs/spec/session-persistence.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "4cd3f9d55ac421e39a36e9894f0c1342",
-    "semantic_hash": "4cd3f9d55ac421e39a36e9894f0c1342"
-  },
-  "/home/vergil/Projects/artui/docs/system-prompts/cli-prompt.md": {
-    "mtime": 1779720589.7397032,
-    "ast_hash": "c47d6f3dcae97698cdb344bb044ea1bb",
-    "semantic_hash": "c47d6f3dcae97698cdb344bb044ea1bb"
-  },
-  "/home/vergil/Projects/artui/src/assets/artui.png": {
-    "mtime": 1779720589.7424457,
-    "ast_hash": "c83bb8862158b90b99714d5e29feaf70",
-    "semantic_hash": "c83bb8862158b90b99714d5e29feaf70"
-  },
-  "/home/vergil/Projects/artui/src/assets/artui.svg": {
-    "mtime": 1779720589.742945,
-    "ast_hash": "0d194340c7d17ad84d9587b5dfaa9d00",
-    "semantic_hash": "0d194340c7d17ad84d9587b5dfaa9d00"
-  },
-  "/home/vergil/Projects/artui/npm/src/package.json": {
-    "mtime": 1780233320.7278044,
-    "ast_hash": "c548717062ff92bfd52d0f97f71f34fb",
-    "semantic_hash": "c548717062ff92bfd52d0f97f71f34fb"
-  },
-  "/home/vergil/Projects/artui/scripts/sync-helix-lsp.py": {
-    "mtime": 1780220587.3837647,
-    "ast_hash": "a99490bdbc11f904a8805c7b0e3873fb",
-    "semantic_hash": "a99490bdbc11f904a8805c7b0e3873fb"
-  },
-  "/home/vergil/Projects/artui/src/providers/freemodel.rs": {
-    "mtime": 1780168126.723753,
-    "ast_hash": "9941f0abf5518de28e0c93b7942c0dca",
-    "semantic_hash": "9941f0abf5518de28e0c93b7942c0dca"
-  },
-  "/home/vergil/Projects/artui/src/tools/lsp.rs": {
-    "mtime": 1780227337.482012,
-    "ast_hash": "a2e88ebbbb1effe4184419b194092f3b",
-    "semantic_hash": "a2e88ebbbb1effe4184419b194092f3b"
-  },
-  "/home/vergil/Projects/artui/src/tools/todo_write.rs": {
-    "mtime": 1780228118.1919348,
-    "ast_hash": "45a4eb6adce5c6e7aab03818eda3add9",
-    "semantic_hash": "45a4eb6adce5c6e7aab03818eda3add9"
-  },
-  "/home/vergil/Projects/artui/src/lsp/registry.rs": {
-    "mtime": 1780221111.9195063,
-    "ast_hash": "3ba718d8ecb5ee97b81f889578b2f6e6",
-    "semantic_hash": "3ba718d8ecb5ee97b81f889578b2f6e6"
-  },
-  "/home/vergil/Projects/artui/src/lsp/types.rs": {
-    "mtime": 1780226156.433549,
-    "ast_hash": "aa06f56c19337a796f391f2c66532d77",
-    "semantic_hash": "aa06f56c19337a796f391f2c66532d77"
-  },
-  "/home/vergil/Projects/artui/src/lsp/manager.rs": {
-    "mtime": 1780226518.3082724,
-    "ast_hash": "8a67b4da74cb8c310fb5607dbd398904",
-    "semantic_hash": "8a67b4da74cb8c310fb5607dbd398904"
-  },
-  "/home/vergil/Projects/artui/src/lsp/client.rs": {
-    "mtime": 1780227273.9093137,
-    "ast_hash": "8ba0c0c1f9bae2d7c4afbbe560d928bb",
-    "semantic_hash": "8ba0c0c1f9bae2d7c4afbbe560d928bb"
-  },
-  "/home/vergil/Projects/artui/src/lsp/writethrough.rs": {
-    "mtime": 1780227273.9233139,
-    "ast_hash": "37d845ab2c4cfa525bb99a6d10908fa9",
-    "semantic_hash": "37d845ab2c4cfa525bb99a6d10908fa9"
-  },
-  "/home/vergil/Projects/artui/src/lsp/mod.rs": {
-    "mtime": 1780227273.9163136,
-    "ast_hash": "38eea0e63b14682d9285be91e05ed6c3",
-    "semantic_hash": "38eea0e63b14682d9285be91e05ed6c3"
-  },
-  "/home/vergil/Projects/artui/src/lsp/render.rs": {
-    "mtime": 1780227273.9213138,
-    "ast_hash": "0e4b23a5c379b14fb09ac3f8f0ea83e7",
-    "semantic_hash": "0e4b23a5c379b14fb09ac3f8f0ea83e7"
-  },
-  "/home/vergil/Projects/artui/src/lsp/edits.rs": {
-    "mtime": 1780227273.9143138,
-    "ast_hash": "bca630b9177e44943594a22a8bb6bf35",
-    "semantic_hash": "bca630b9177e44943594a22a8bb6bf35"
-  },
-  "/home/vergil/Projects/artui/tests/lsp_integration.rs": {
-    "mtime": 1780224559.504769,
-    "ast_hash": "41d2144941bc27d85e25edd5471829c5",
-    "semantic_hash": "41d2144941bc27d85e25edd5471829c5"
-  },
-  "/home/vergil/Projects/artui/cloudflare/worker.ts": {
-    "mtime": 1780165019.2400715,
-    "ast_hash": "f0dcb0b1bbb45a53fb70f0e5971807c0",
-    "semantic_hash": "f0dcb0b1bbb45a53fb70f0e5971807c0"
-  },
-  "/home/vergil/Projects/artui/cloudflare/tsconfig.json": {
-    "mtime": 1780165023.2678216,
-    "ast_hash": "fa5bb62b2c907994e86e300e4d785c35",
-    "semantic_hash": "fa5bb62b2c907994e86e300e4d785c35"
-  },
-  "/home/vergil/Projects/artui/cloudflare/package.json": {
-    "mtime": 1780167111.649715,
-    "ast_hash": "b645782bb04992e0ff57866def940f79",
-    "semantic_hash": "b645782bb04992e0ff57866def940f79"
-  },
-  "/home/vergil/Projects/artui/.circleci/should-skip-ci.sh": {
-    "mtime": 1780238509.9078686,
-    "ast_hash": "c1e79aa635afd1756c4b953e91281b63",
-    "semantic_hash": "c1e79aa635afd1756c4b953e91281b63"
-  },
-  "/home/vergil/Projects/artui/docs/specs/lsp.md": {
-    "mtime": 1780219446.0246148,
-    "ast_hash": "db892fc7ce196602f4e7fd75a7bbe89e",
-    "semantic_hash": "db892fc7ce196602f4e7fd75a7bbe89e"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/copilot-oauth-zero-config.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "b7a4c5b99c68335a7fbcce8093428a12",
-    "semantic_hash": "b7a4c5b99c68335a7fbcce8093428a12"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/oauth-provider-support.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "447068366637ab5a42722ae2fc386aaa",
-    "semantic_hash": "447068366637ab5a42722ae2fc386aaa"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/parking-lot.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "61478bbc08a02fc6233ee0e2e215f574",
-    "semantic_hash": "61478bbc08a02fc6233ee0e2e215f574"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-a-tool-events.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "c2f561415e8b81f2e633ee6c2b03c3b5",
-    "semantic_hash": "c2f561415e8b81f2e633ee6c2b03c3b5"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-b-tool-registry.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "0badae76579a3a753e7ca7d7fc058b4a",
-    "semantic_hash": "0badae76579a3a753e7ca7d7fc058b4a"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-c-session-and-loop.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "c71d9d84fcf23f86d82db54da563ba24",
-    "semantic_hash": "c71d9d84fcf23f86d82db54da563ba24"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-d-glob-search.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "6c837fe93761685b194f8d738c701982",
-    "semantic_hash": "6c837fe93761685b194f8d738c701982"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-e-apply-patch.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "c68f9944637536b1fb4b843760e4bce3",
-    "semantic_hash": "c68f9944637536b1fb4b843760e4bce3"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-f-shell-tool.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "935d38e049686ba0e83daf5e26174547",
-    "semantic_hash": "935d38e049686ba0e83daf5e26174547"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-g-sqlite-persistence.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "b448199c345bd3743b8159870d83d293",
-    "semantic_hash": "b448199c345bd3743b8159870d83d293"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-h-compaction.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "c2ea6038db128976323a254745ad97bf",
-    "semantic_hash": "c2ea6038db128976323a254745ad97bf"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-i-build-plan-modes.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "f88a8aac3cfaefe09d2da2b7a20d1cc3",
-    "semantic_hash": "f88a8aac3cfaefe09d2da2b7a20d1cc3"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-j-bwrap-sandbox.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "cb405e15b2e125e526713d9f799fb5c0",
-    "semantic_hash": "cb405e15b2e125e526713d9f799fb5c0"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-k-task-subagent.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "1d7e549b95367b349b8d40c0b0f16f9f",
-    "semantic_hash": "1d7e549b95367b349b8d40c0b0f16f9f"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-l-skills-mcp-polish.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "eab901bedebb0fe8d8e72aa8b70b314f",
-    "semantic_hash": "eab901bedebb0fe8d8e72aa8b70b314f"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m-README.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "93823ab36cc55604e68ffce48c9751cf",
-    "semantic_hash": "93823ab36cc55604e68ffce48c9751cf"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m1-diff-preview-popup.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "f9934ed063a05fb88bdf26cd3175a23e",
-    "semantic_hash": "f9934ed063a05fb88bdf26cd3175a23e"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m2-permission-ask-ui.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "55e96e632a8ce4ce5730d8cf7b3b039b",
-    "semantic_hash": "55e96e632a8ce4ce5730d8cf7b3b039b"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m3-snapshots-rollback.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "80cc4378a1b7b738381f7c526efe88a4",
-    "semantic_hash": "80cc4378a1b7b738381f7c526efe88a4"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m4-macos-seatbelt-sandbox.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "715260e92318fc167a45f8de2b02e337",
-    "semantic_hash": "715260e92318fc167a45f8de2b02e337"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m6-codebase-indexer.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "5e74fbc2d30433e9718ab5146e79d544",
-    "semantic_hash": "5e74fbc2d30433e9718ab5146e79d544"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m7-deep-subagents.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "97755d9ecf62484318847c6969d5ffdd",
-    "semantic_hash": "97755d9ecf62484318847c6969d5ffdd"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m8-production-polish.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "2657757a7ed568249ed6bb7ccd00fa05",
-    "semantic_hash": "2657757a7ed568249ed6bb7ccd00fa05"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-m9-agent-browser-web-tool.md": {
-    "mtime": 1779720589.74084,
-    "ast_hash": "99e45a1b94aa59ab49ecaa865e6e19ea",
-    "semantic_hash": "99e45a1b94aa59ab49ecaa865e6e19ea"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-n2-lsp-readonly-ops.md": {
-    "mtime": 1780219293.4445257,
-    "ast_hash": "c6bbaac28073122f4fa142bc40d1002c",
-    "semantic_hash": "c6bbaac28073122f4fa142bc40d1002c"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-n3-lsp-writethrough.md": {
-    "mtime": 1780219325.560981,
-    "ast_hash": "7358459319e7459da88f50f9c2a366e8",
-    "semantic_hash": "7358459319e7459da88f50f9c2a366e8"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-n4-lsp-mutating-ops.md": {
-    "mtime": 1780219354.9559648,
-    "ast_hash": "66bb874739b2e398efe004208e5b76f0",
-    "semantic_hash": "66bb874739b2e398efe004208e5b76f0"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-n1-lsp-skeleton.md": {
-    "mtime": 1780219477.4548392,
-    "ast_hash": "5662556fb628a953a3310fc89758b331",
-    "semantic_hash": "5662556fb628a953a3310fc89758b331"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/phase-n-README.md": {
-    "mtime": 1780219479.5191371,
-    "ast_hash": "70b9b01b1655afab24a22f00cb4fa6e3",
-    "semantic_hash": "70b9b01b1655afab24a22f00cb4fa6e3"
-  },
-  "/home/vergil/Projects/artui/docs/archive/todos/README.md": {
-    "mtime": 1780285115.077861,
-    "ast_hash": "4146741b8605b7544dc46b8532fdffaa",
-    "semantic_hash": "4146741b8605b7544dc46b8532fdffaa"
-  },
-  "/home/vergil/Projects/artui/cloudflare/README.md": {
-    "mtime": 1780167111.3281024,
-    "ast_hash": "f29011d4af4c788d99a288b069a64b4e",
-    "semantic_hash": "f29011d4af4c788d99a288b069a64b4e"
-  },
-  "/home/vergil/Projects/artui/.circleci/config.yml": {
-    "mtime": 1780286390.5838928,
-    "ast_hash": "fad1365ccde1a8bfb433cfee071f698a",
-    "semantic_hash": "fad1365ccde1a8bfb433cfee071f698a"
+  "/home/icarus/Desktop/Projects/artui/npm/src/install.ts": {
+    "mtime": 1780398109.6235802,
+    "hash": "06abbe271f383047bf36634086125243"
+  },
+  "/home/icarus/Desktop/Projects/artui/npm/src/ui.tsx": {
+    "mtime": 1779454570.2562277,
+    "hash": "7bd02db4cf0d1fad4e22716b1eac4e46"
+  },
+  "/home/icarus/Desktop/Projects/artui/npm/src/postinstall.ts": {
+    "mtime": 1779454686.7331176,
+    "hash": "4957c072c1a8d3fc2d48b4f9b569e8b3"
+  },
+  "/home/icarus/Desktop/Projects/artui/npm/src/cli.ts": {
+    "mtime": 1779454403.2013855,
+    "hash": "ab98eb8dfdfc24b8e2be714e0023effa"
+  },
+  "/home/icarus/Desktop/Projects/artui/scripts/sync-helix-lsp.py": {
+    "mtime": 1780398109.6235802,
+    "hash": "a99490bdbc11f904a8805c7b0e3873fb"
+  },
+  "/home/icarus/Desktop/Projects/artui/scripts/install.ps1": {
+    "mtime": 1780398109.6235802,
+    "hash": "ba04aaaab56b45597fa1364e8b09901f"
+  },
+  "/home/icarus/Desktop/Projects/artui/tests/copilot_integration.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "350545fa22817d75c3f781ca5d54ee54"
+  },
+  "/home/icarus/Desktop/Projects/artui/tests/lsp_integration.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "41d2144941bc27d85e25edd5471829c5"
+  },
+  "/home/icarus/Desktop/Projects/artui/tests/sandbox_integration.rs": {
+    "mtime": 1780403715.9321687,
+    "hash": "f0dad3d3ed20f7fe332ec507477c6fd8"
+  },
+  "/home/icarus/Desktop/Projects/artui/tests/snapshots_integration.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "a1ab85cebed804db77bec7e2fd6c3e51"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/main.rs": {
+    "mtime": 1778774249.451392,
+    "hash": "47096b53b53081804046b273ca17b5dc"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/app.rs": {
+    "mtime": 1780404109.6782749,
+    "hash": "6b88af821d6914eef5aca797939fbf16"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lib.rs": {
+    "mtime": 1780404109.6717143,
+    "hash": "760623cba0857fc34794ac8c4efad347"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/skills/mod.rs": {
+    "mtime": 1779455638.0691104,
+    "hash": "055df89c899cc8cfcc7e2acb2e495563"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/ui/layout.rs": {
+    "mtime": 1779388252.2909036,
+    "hash": "fa45e34ab4dd83cba81863d6599421bc"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/ui/mod.rs": {
+    "mtime": 1778827888.2851365,
+    "hash": "31f7c8a39c09c4602eba81b36a36fdc7"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/ui/popups.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "7535ad7412d72f45895ff8141d35dd51"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/ui/tools.rs": {
+    "mtime": 1779467198.882847,
+    "hash": "238fa1d29d5d60d737dfb9551ecb735e"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/ui/chat.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "861f629323b53eb1d54b97998d627d62"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/apply_patch.rs": {
+    "mtime": 1780404089.5822866,
+    "hash": "05867178def22250bd0441b8cca4a8db"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/glob.rs": {
+    "mtime": 1780404089.5822866,
+    "hash": "c1b3dbd765cb1e82f73da1534fc7ab4f"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/web.rs": {
+    "mtime": 1780404070.6112978,
+    "hash": "35d34e862ff5aafc0a29d7a28abc46f4"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/search.rs": {
+    "mtime": 1780404076.5482943,
+    "hash": "e85b39a977d08cd3c81591a11ac16d0c"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/task.rs": {
+    "mtime": 1780404076.5457006,
+    "hash": "3191b6c9219c49321703c2f8de61c812"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/mod.rs": {
+    "mtime": 1780404076.5457006,
+    "hash": "2b4c91997fc480936bd4c35dc8b092a5"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/lsp.rs": {
+    "mtime": 1780404089.5822866,
+    "hash": "d56dc08c0a534366988a7ced3c119a6c"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/shell.rs": {
+    "mtime": 1780404089.58142,
+    "hash": "ff76bf6c46bddad7b5109730941d6b43"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/registry.rs": {
+    "mtime": 1780404089.58142,
+    "hash": "80620af3072ae1f5607aafa82a6ba850"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/read_file.rs": {
+    "mtime": 1780404089.5822866,
+    "hash": "752a8e75e129e17f4691d6acf4f0f445"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/tools/todo_write.rs": {
+    "mtime": 1780404094.5482838,
+    "hash": "6d16187304bddd61cc77307e355615eb"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/config/schema.rs": {
+    "mtime": 1780404063.390302,
+    "hash": "bafc0c5f0861faddff20c6a7fa1bce1b"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/config/mod.rs": {
+    "mtime": 1780404127.9662642,
+    "hash": "ee23f75bf4d4574821d713e6138f7ce5"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/mcp/mod.rs": {
+    "mtime": 1779453219.9355142,
+    "hash": "3858e266804b0ff9ed5ebdf53e108ee0"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/env_keys.rs": {
+    "mtime": 1780398109.6245801,
+    "hash": "15f44ddb248f897d6873daf6903eb126"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/mod.rs": {
+    "mtime": 1779470737.0952315,
+    "hash": "638dfc4f00f0341132e546b1cb2aa52d"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/store.rs": {
+    "mtime": 1778778667.1913207,
+    "hash": "72cfc12ce134904aa617a7b3e064ded7"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/github.rs": {
+    "mtime": 1778778651.7183347,
+    "hash": "cbf3035e8ec41543f6878c241b6325a2"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/openai_oauth.rs": {
+    "mtime": 1780398109.6245801,
+    "hash": "afd802852e588f228341fe2ba3f7aa3e"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/auth/copilot_vim.rs": {
+    "mtime": 1779450263.868563,
+    "hash": "d1565d4d3a8a9210b71cef2a69bff361"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/session/mod.rs": {
+    "mtime": 1779369469.4649622,
+    "hash": "e75adeeeceb76cc4fe1077d139f01aca"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/session/store.rs": {
+    "mtime": 1780404574.606003,
+    "hash": "c6346bad4f652e67fa60564f75e00bc9"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/permissions/mod.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "5c2bccd18c1cda03a7f27a9dc7b06d93"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/util/paths.rs": {
+    "mtime": 1778775445.5014298,
+    "hash": "c06c9b52b646795fe66c99eb4b9d4321"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/util/mod.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "f6039040483eb519bd0f45648b942b86"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/util/time.rs": {
+    "mtime": 1780398109.6275802,
+    "hash": "56b71f7a0cf02eff5ebf345c37e0da79"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/bin/art.rs": {
+    "mtime": 1778774249.451484,
+    "hash": "47096b53b53081804046b273ca17b5dc"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/hooks/mod.rs": {
+    "mtime": 1779453219.9265141,
+    "hash": "0d59de3afe6c02313d31a279c2e6c744"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/sandbox/bwrap.rs": {
+    "mtime": 1780403715.8741686,
+    "hash": "d20de2e0c42928cfcbed495de5b8fec3"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/sandbox/seatbelt.rs": {
+    "mtime": 1780403715.8751688,
+    "hash": "4a4e09a03d3bcbb6fd602a5a0221fd58"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/sandbox/mod.rs": {
+    "mtime": 1780403967.0153584,
+    "hash": "242469222ee99a12a7149d282fe19d78"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/sandbox/win_jobobject.rs": {
+    "mtime": 1780403996.6073346,
+    "hash": "d3d96939ac7ea4f7fb6bef7d936828fc"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/snapshots/git_backend.rs": {
+    "mtime": 1780398109.6265802,
+    "hash": "9519deaff98ff09551ebbff6dcd74009"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/snapshots/mod.rs": {
+    "mtime": 1780398109.6273384,
+    "hash": "a34b0e04cd16eca4af2fdfeab6328464"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/snapshots/tar_backend.rs": {
+    "mtime": 1780398109.6273384,
+    "hash": "8220ae6c6e62f91fe4d7fa993b5c4c9b"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/agent/loop.rs": {
+    "mtime": 1780404089.5902867,
+    "hash": "4143a55eb195e3cd267a83b2f3e32a42"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/agent/mod.rs": {
+    "mtime": 1779451409.1876044,
+    "hash": "dd1e1f5b2a72ce155eb7471e52e27411"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/agent/prompts.rs": {
+    "mtime": 1779453219.8935144,
+    "hash": "badbbc8e13464bb949df4315f1ddf7ea"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/agent/compaction.rs": {
+    "mtime": 1779449664.6525342,
+    "hash": "9c69634f252e700d207d0d2ce8102a48"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/types.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "aa06f56c19337a796f391f2c66532d77"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/edits.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "bca630b9177e44943594a22a8bb6bf35"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/manager.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "8a67b4da74cb8c310fb5607dbd398904"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/mod.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "38eea0e63b14682d9285be91e05ed6c3"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/writethrough.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "37d845ab2c4cfa525bb99a6d10908fa9"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/client.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "8ba0c0c1f9bae2d7c4afbbe560d928bb"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/render.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "69e5094d5f74bc4567c951ff646419d2"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/lsp/registry.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "3ba718d8ecb5ee97b81f889578b2f6e6"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/update/mod.rs": {
+    "mtime": 1779455638.0691602,
+    "hash": "03815599dcc193590407cec3a987c94f"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/index/symbols.rs": {
+    "mtime": 1780404022.684718,
+    "hash": "593598e6dee3d69b459b4f9aefbc7db2"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/index/mod.rs": {
+    "mtime": 1780404127.9662642,
+    "hash": "42ea45a021ad0c013959b904899fea54"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/index/text.rs": {
+    "mtime": 1780404022.6857116,
+    "hash": "5dae5cfd3e5ec5ed7bae0f7dbe3e5a76"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/copilot.rs": {
+    "mtime": 1779469730.8745954,
+    "hash": "c0145e15eb5b4d99412670f99340cd46"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/tool_serialization.rs": {
+    "mtime": 1779366667.5026724,
+    "hash": "6162d3e9a7e5aac40805ff7dbb703274"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/openai_compat.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "ae0977c387df01e6d341e3b49d0822eb"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/mod.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "4a736b76d1ad631830892a1c981f8b8e"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/ollama.rs": {
+    "mtime": 1779382284.9229093,
+    "hash": "2370a354b08289f94f8b3e404fbae9da"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/registry.rs": {
+    "mtime": 1780398109.6265802,
+    "hash": "0b0f82440556deb3c9440af174fff88b"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/freemodel.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "9941f0abf5518de28e0c93b7942c0dca"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/providers/account.rs": {
+    "mtime": 1780398109.6261451,
+    "hash": "d8e3ab0940e0fcf797019a579b02db48"
+  },
+  "/home/icarus/Desktop/Projects/artui/cloudflare/worker.ts": {
+    "mtime": 1780398109.6116583,
+    "hash": "f0dcb0b1bbb45a53fb70f0e5971807c0"
+  },
+  "/home/icarus/Desktop/Projects/artui/README.md": {
+    "mtime": 1780403760.8112197,
+    "hash": "fe5f2a0a7d698b6d1e37ff5e916d285d"
+  },
+  "/home/icarus/Desktop/Projects/artui/context.md": {
+    "mtime": 1778832317.6385634,
+    "hash": "2ebada21dd1c6aee2c0463a84ce73bcc"
+  },
+  "/home/icarus/Desktop/Projects/artui/AGENTS.md": {
+    "mtime": 1780398109.6107922,
+    "hash": "7c0db211c7a223365e9c991559602594"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/auth.md": {
+    "mtime": 1779452762.502989,
+    "hash": "f501d7398695db11af2659b8bb13e28a"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/distribution.md": {
+    "mtime": 1780398109.61258,
+    "hash": "50436da9310ce86cc52b18645524e733"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/README.md": {
+    "mtime": 1780398109.61258,
+    "hash": "6cbfbaa4e5fab8c0f4607682155c28d0"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/copilot-oauth.md": {
+    "mtime": 1779364866.5224926,
+    "hash": "a69d803a4a5d7a035e82a3d0fbf9c2e9"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/artui_v1_agentic_spec.md": {
+    "mtime": 1778688085.0328295,
+    "hash": "4f878b2243e9a10dc8252e46aa40113e"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/harness-architecture.md": {
+    "mtime": 1779363995.2122889,
+    "hash": "5b18a7586e52c7c4188735b32f5452c8"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/codex-architecture.md": {
+    "mtime": 1779364302.6040127,
+    "hash": "6765a4f307ae88ed3b5e892032fa11aa"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/lsp.md": {
+    "mtime": 1780398109.61258,
+    "hash": "cc91d9cbf828e38589955e7ec3d738d6"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/session-persistence.md": {
+    "mtime": 1779364641.5127082,
+    "hash": "4cd3f9d55ac421e39a36e9894f0c1342"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/spec/opencode-architecture.md": {
+    "mtime": 1779364488.5318458,
+    "hash": "594bc5b47b0a2700f0046e931eb994f6"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/superpowers/plans/2026-06-01-m3-snapshots-rollback.md": {
+    "mtime": 1780398109.613491,
+    "hash": "f9b0aff76675378b0f7d5ac10d529ab3"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/superpowers/plans/2026-06-02-m4-macos-seatbelt.md": {
+    "mtime": 1780403788.6162512,
+    "hash": "9f89dc9c3ccf240e0e5288f73f31d981"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/superpowers/specs/2026-06-02-m4-macos-seatbelt-design.md": {
+    "mtime": 1780403656.297515,
+    "hash": "fcbf9d9621a51ed0a5d5709f9410acc5"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/superpowers/specs/2026-06-01-next-phase-handoff.md": {
+    "mtime": 1780398109.6137817,
+    "hash": "dfa5474e558fa1eec736296ac9e3bd35"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/superpowers/specs/2026-06-01-m3-snapshots-rollback-design.md": {
+    "mtime": 1780398109.613491,
+    "hash": "29f977f434c0b64239c7d1690a0c4c2f"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-n2-lsp-readonly-ops.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "38390b4f1f08cca80b8e0f914592d3c9"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/README.md": {
+    "mtime": 1780398109.6119294,
+    "hash": "4146741b8605b7544dc46b8532fdffaa"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-h-compaction.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "c2ea6038db128976323a254745ad97bf"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-e-apply-patch.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "c68f9944637536b1fb4b843760e4bce3"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-n3-lsp-writethrough.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "934585cf76f988d15f2f9a522f86d374"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-j-bwrap-sandbox.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "cb405e15b2e125e526713d9f799fb5c0"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-k-task-subagent.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "1d7e549b95367b349b8d40c0b0f16f9f"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-f-shell-tool.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "935d38e049686ba0e83daf5e26174547"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m7-deep-subagents.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "97755d9ecf62484318847c6969d5ffdd"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m8-production-polish.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "2657757a7ed568249ed6bb7ccd00fa05"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/parking-lot.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "61478bbc08a02fc6233ee0e2e215f574"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-i-build-plan-modes.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "f88a8aac3cfaefe09d2da2b7a20d1cc3"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-g-sqlite-persistence.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "b448199c345bd3743b8159870d83d293"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-b-tool-registry.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "0badae76579a3a753e7ca7d7fc058b4a"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m1-diff-preview-popup.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "f9934ed063a05fb88bdf26cd3175a23e"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m6-codebase-indexer.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "5e74fbc2d30433e9718ab5146e79d544"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-l-skills-mcp-polish.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "eab901bedebb0fe8d8e72aa8b70b314f"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-n1-lsp-skeleton.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "744a94dc2b00ff0628d8b3d47ba5e05a"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-d-glob-search.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "6c837fe93761685b194f8d738c701982"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-n4-lsp-mutating-ops.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "bfc0646831370fd92ae03bf2f941d647"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m4-macos-seatbelt-sandbox.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "715260e92318fc167a45f8de2b02e337"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-n-README.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "7f04a996042fd0c8e7d49e534be11682"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/copilot-oauth-zero-config.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "b7a4c5b99c68335a7fbcce8093428a12"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m3-snapshots-rollback.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "80cc4378a1b7b738381f7c526efe88a4"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m9-agent-browser-web-tool.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "99e45a1b94aa59ab49ecaa865e6e19ea"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m-README.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "93823ab36cc55604e68ffce48c9751cf"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/oauth-provider-support.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "447068366637ab5a42722ae2fc386aaa"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-c-session-and-loop.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "c71d9d84fcf23f86d82db54da563ba24"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-a-tool-events.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "c2f561415e8b81f2e633ee6c2b03c3b5"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/archive/todos/phase-m2-permission-ask-ui.md": {
+    "mtime": 1780398109.6119657,
+    "hash": "55e96e632a8ce4ce5730d8cf7b3b039b"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/changelogs/CHANGELOG.md": {
+    "mtime": 1780403788.6152513,
+    "hash": "8b52b02032452486f63481706411f351"
+  },
+  "/home/icarus/Desktop/Projects/artui/docs/system-prompts/cli-prompt.md": {
+    "mtime": 1778748353.7169678,
+    "hash": "c47d6f3dcae97698cdb344bb044ea1bb"
+  },
+  "/home/icarus/Desktop/Projects/artui/cloudflare/README.md": {
+    "mtime": 1780398109.6116583,
+    "hash": "f29011d4af4c788d99a288b069a64b4e"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/assets/artui.png": {
+    "mtime": 1779383737.9466662,
+    "hash": "c83bb8862158b90b99714d5e29feaf70"
+  },
+  "/home/icarus/Desktop/Projects/artui/src/assets/artui.svg": {
+    "mtime": 1779383236.7771032,
+    "hash": "0d194340c7d17ad84d9587b5dfaa9d00"
   }
 }

@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-06-01)
+# Graph Report - artui  (2026-06-02)
 
 ## Corpus Check
-- 82 files · ~135,013 words
+- 130 files · ~140,196 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1570 nodes · 2835 edges · 117 communities (86 shown, 31 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 95 edges (avg confidence: 0.8)
-- Token cost: 429,741 input · 0 output
+- 2660 nodes · 4692 edges · 193 communities (154 shown, 39 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 257 edges (avg confidence: 0.8)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `86a0fbd8`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_LSP Tool & Diagnostics Rendering|LSP Tool & Diagnostics Rendering]]
@@ -73,6 +78,7 @@
 - [[_COMMUNITY_Community 60|Community 60]]
 - [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 64|Community 64]]
 - [[_COMMUNITY_Community 65|Community 65]]
 - [[_COMMUNITY_Community 66|Community 66]]
@@ -99,10 +105,14 @@
 - [[_COMMUNITY_Community 87|Community 87]]
 - [[_COMMUNITY_Community 88|Community 88]]
 - [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 92|Community 92]]
 - [[_COMMUNITY_Community 93|Community 93]]
 - [[_COMMUNITY_Community 94|Community 94]]
 - [[_COMMUNITY_Community 95|Community 95]]
 - [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
 - [[_COMMUNITY_Community 98|Community 98]]
 - [[_COMMUNITY_Community 99|Community 99]]
 - [[_COMMUNITY_Community 100|Community 100]]
@@ -122,30 +132,96 @@
 - [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 115|Community 115]]
 - [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 117|Community 117]]
+- [[_COMMUNITY_Community 118|Community 118]]
+- [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 120|Community 120]]
+- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
+- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 127|Community 127]]
+- [[_COMMUNITY_Community 128|Community 128]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 130|Community 130]]
+- [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 132|Community 132]]
+- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 134|Community 134]]
+- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
+- [[_COMMUNITY_Community 138|Community 138]]
+- [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 140|Community 140]]
+- [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 144|Community 144]]
+- [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 147|Community 147]]
+- [[_COMMUNITY_Community 148|Community 148]]
+- [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
+- [[_COMMUNITY_Community 151|Community 151]]
+- [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 156|Community 156]]
+- [[_COMMUNITY_Community 157|Community 157]]
+- [[_COMMUNITY_Community 158|Community 158]]
+- [[_COMMUNITY_Community 159|Community 159]]
+- [[_COMMUNITY_Community 160|Community 160]]
+- [[_COMMUNITY_Community 161|Community 161]]
+- [[_COMMUNITY_Community 162|Community 162]]
+- [[_COMMUNITY_Community 163|Community 163]]
+- [[_COMMUNITY_Community 164|Community 164]]
+- [[_COMMUNITY_Community 171|Community 171]]
+- [[_COMMUNITY_Community 172|Community 172]]
+- [[_COMMUNITY_Community 173|Community 173]]
+- [[_COMMUNITY_Community 174|Community 174]]
+- [[_COMMUNITY_Community 176|Community 176]]
+- [[_COMMUNITY_Community 177|Community 177]]
+- [[_COMMUNITY_Community 178|Community 178]]
+- [[_COMMUNITY_Community 179|Community 179]]
+- [[_COMMUNITY_Community 180|Community 180]]
+- [[_COMMUNITY_Community 181|Community 181]]
+- [[_COMMUNITY_Community 182|Community 182]]
+- [[_COMMUNITY_Community 183|Community 183]]
+- [[_COMMUNITY_Community 184|Community 184]]
+- [[_COMMUNITY_Community 185|Community 185]]
+- [[_COMMUNITY_Community 186|Community 186]]
+- [[_COMMUNITY_Community 187|Community 187]]
+- [[_COMMUNITY_Community 188|Community 188]]
+- [[_COMMUNITY_Community 189|Community 189]]
+- [[_COMMUNITY_Community 190|Community 190]]
+- [[_COMMUNITY_Community 191|Community 191]]
+- [[_COMMUNITY_Community 192|Community 192]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `App` - 105 edges
-2. `run_turn()` - 25 edges
-3. `LspClient` - 25 edges
-4. `LspTool` - 21 edges
-5. `copilot provider` - 18 edges
-6. `AuthStore` - 17 edges
-7. `compilerOptions` - 16 edges
-8. `build_provider()` - 16 edges
-9. `ToolRegistry` - 16 edges
-10. `fetch_copilot_models()` - 15 edges
+1. `App` - 106 edges
+2. `run_turn()` - 31 edges
+3. `LspClient` - 26 edges
+4. `artui — Coding Agent TUI Spec` - 22 edges
+5. `run()` - 21 edges
+6. `LspTool` - 21 edges
+7. `AuthStore` - 20 edges
+8. `Changelog` - 20 edges
+9. `fetch_copilot_models()` - 18 edges
+10. `build_provider()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `detectPlatform()` --semantically_similar_to--> `install.sh (Linux/macOS installer)`  [INFERRED] [semantically similar]
   npm/src/install.ts → scripts/install.sh
-- `apply_text_edits()` --semantically_similar_to--> `apply_patch tool`  [INFERRED] [semantically similar]
-  src/lsp/edits.rs → /home/vergil/Projects/artui/src/tools/apply_patch.rs
-- `ollama provider` --implements--> `Provider trait abstraction (LlmProvider)`  [INFERRED]
-  /home/vergil/Projects/artui/docs/auth.md → src/providers/mod.rs
+- `GlobTool` --semantically_similar_to--> `scan_workspace()`  [INFERRED] [semantically similar]
+  src/tools/glob.rs → /home/vergil/Projects/artui/src/lsp/manager.rs
+- `system-prompts tools.json` --conceptually_related_to--> `build_system_prompt()`  [INFERRED]
+  docs/system-prompts/tools.json → /home/vergil/Projects/artui/src/agent/prompts.rs
 - `R2-first / GitHub-fallback install source order` --rationale_for--> `resolveAssetUrl()`  [EXTRACTED]
   docs/distribution.md → npm/src/install.ts
-- `MCP client/server bridge` --semantically_similar_to--> `ToolSpec`  [INFERRED] [semantically similar]
-  /home/vergil/Projects/artui/src/mcp/mod.rs → src/providers/mod.rs
+- `read_copilot_vim_tokens()` --semantically_similar_to--> `resolve_credential`  [INFERRED] [semantically similar]
+  /home/vergil/Projects/artui/src/auth/copilot_vim.rs → src/auth/env_keys.rs
 
 ## Hyperedges (group relationships)
 - **Freemodel relay request flow** — cloudflare_worker_handle, cloudflare_worker_ua_gate, cloudflare_worker_check_rate_limit, cloudflare_worker_freemodel_secret [EXTRACTED 1.00]
@@ -164,329 +240,581 @@
 - **Agent turn loop: stream -> tool dispatch -> permission gate -> compaction** — agent_loop_run_turn, providers_mod_llmprovider, permissions_mod_classify, registry_toolregistry_dispatch, compaction_needs_compaction_with, hooks_fire_hooks [EXTRACTED 1.00]
 - **Config schema feeding agent loop and providers** — schema_appconfig, schema_agentconfig, agent_loop_agentloopconfig, providers_mod_build_provider, permissions_mod_permissionengine [INFERRED 0.85]
 
-## Communities (117 total, 31 thin omitted)
+## Communities (193 total, 39 thin omitted)
 
 ### Community 0 - "LSP Tool & Diagnostics Rendering"
 Cohesion: 0.05
-Nodes (57): LspClient::cached_diagnostics, LspClient::code_actions, LspClient::definition, LspClient::hover, LspClient::rename, LspClient::track, LspManager::for_path, LspManager::get_or_spawn (+49 more)
+Nodes (92): LspClient::cached_diagnostics, LspClient::code_actions, LspClient::definition, LspClient::hover, LspClient::rename, LspClient::spawn, LspClient::track, LspManager::for_path (+84 more)
 
 ### Community 1 - "TUI Chat Rendering & Layout"
-Cohesion: 0.05
-Nodes (49): App, chunk_text(), DisplaySegment, draw(), format_elapsed(), format_thinking_meta(), format_token_count(), InlineChunk (+41 more)
+Cohesion: 0.06
+Nodes (70): AuthStore, copilot provider, build_anthropic_content(), build_openai_content(), build_responses_content(), cached_copilot_session(), configured_header(), copilot_api_headers() (+62 more)
 
 ### Community 2 - "Cloudflare Worker & Release Tooling"
-Cohesion: 0.06
-Nodes (52): artui CHANGELOG, lsp tool (LSP integration), LSP writethrough on apply_patch, GHA CI (fallback) workflow, Server-side credentials / client anonymity model, artui freemodel relay Worker, Freemodel relay deploy guide, ALLOWED_ROUTES (+44 more)
+Cohesion: 0.05
+Nodes (60): compact_messages(), compact_messages_with(), context_window_for_model(), estimate_tokens(), estimate_tokens_basic(), needs_compaction(), needs_compaction_above_threshold(), needs_compaction_below_threshold() (+52 more)
 
 ### Community 3 - "apply_patch & Copilot Integration Tests"
-Cohesion: 0.11
-Nodes (47): AuthStore, CopilotConfig, fetch_copilot_models(), ProviderRequest, copilot_integration tests, claude_models_route_to_messages_endpoint(), collect_events(), expired_cached_session_forces_token_re_exchange() (+39 more)
+Cohesion: 0.07
+Nodes (31): client_capabilities(), ClientState, language_id_for_extension(), language_id_known_extensions(), leak_str(), lsp_position(), LspClient, one_based_position_to_zero_based() (+23 more)
 
 ### Community 4 - "App State & Slash/Mention Matching"
-Cohesion: 0.06
-Nodes (5): App, extract_at_mention_partial(), file_mention_matches(), next_wrapped_index(), slash_command_matches()
+Cohesion: 0.08
+Nodes (60): App, chunk_text(), DisplaySegment, draw(), elapsed_hours_and_minutes(), elapsed_minutes_and_seconds(), elapsed_under_minute(), format_elapsed() (+52 more)
 
 ### Community 5 - "LSP Client"
-Cohesion: 0.11
-Nodes (14): client_capabilities(), ClientState, language_id_for_extension(), leak_str(), lsp_position(), LspClient, one_based_position_to_zero_based(), OpenFile (+6 more)
+Cohesion: 0.06
+Nodes (57): artui CHANGELOG, lsp tool (LSP integration), LSP writethrough on apply_patch, GHA CI (fallback) workflow, Server-side credentials / client anonymity model, artui freemodel relay Worker, Freemodel relay deploy guide, ALLOWED_ROUTES (+49 more)
 
 ### Community 6 - "System Prompt Construction"
-Cohesion: 0.08
-Nodes (25): PrimaryAgent, behavior_section(), build_prompt_contains_identity_and_agent(), build_system_prompt(), detect_framework(), detect_primary_language(), detects_react_framework(), git_short_status() (+17 more)
+Cohesion: 0.11
+Nodes (48): CopilotConfig, ProviderRequest, claude_models_route_to_messages_endpoint(), collect_events(), copilot_config_for(), expired_cached_session_forces_token_re_exchange(), fetch_models_filters_picker_disabled_and_policy_disabled(), fetch_models_persists_endpoint_metadata_to_store() (+40 more)
 
 ### Community 7 - "Config Schema & Providers Config"
 Cohesion: 0.09
-Nodes (29): main(), load_global_config(), default_credential_provider_id(), default_reasoning_phrases(), default_spinner_frames(), default_thinking_phrases(), OllamaConfig, UiConfig (+21 more)
+Nodes (37): anthropic provider, Authentication & credentials, ollama provider, openai_account provider, openai_compat provider, artui auth store, artui Cloudflare Worker relay (freemodel gateway), Provider trait abstraction (LlmProvider) (+29 more)
 
 ### Community 8 - "OpenAI OAuth Login"
-Cohesion: 0.10
-Nodes (32): authorize_url_contains_pkce_and_scope(), authorize_url_strips_trailing_slash_on_issuer(), bind_loopback(), build_authorize_url(), CallbackParams, error_html(), error_html_escapes_special_chars(), exchange_code() (+24 more)
+Cohesion: 0.06
+Nodes (3): App, next_wrapped_index(), slash_command_matches()
 
 ### Community 9 - "Copilot Request/Response Mapping"
-Cohesion: 0.06
-Nodes (22): build_anthropic_content(), build_responses_content(), copilot_conversation_messages(), CopilotApiKind, CopilotChatRequest, CopilotEndpoints, CopilotMessage, CopilotMessagesRequest (+14 more)
+Cohesion: 0.05
+Nodes (50): ModelEvent enum, OpenAI-compat SSE tool_calls parser, Phase A — Tool-call events on ModelEvent, ToolSpec / ToolChoice / ToolCall types, ToolRegistry, agent/loop.rs run_turn, Session struct, Command classifier (argv parser + chain detector) (+42 more)
 
 ### Community 10 - "LSP Tool Execution & Tests"
-Cohesion: 0.19
-Nodes (31): build_manager(), cap_output(), cap_output_passthrough_short(), cap_output_truncates_long_strings(), code_actions_requires_position_args(), definition_requires_path_line_column(), definition_returns_clean_error_when_server_missing(), definition_returns_clear_error_for_unsupported_extension() (+23 more)
+Cohesion: 0.04
+Nodes (47): code:toml (tar = "0.4"), code:rust (#[test]), code:rust (/// Conservative read-only classifier: returns true only whe), code:bash (git add src/tools/shell.rs), code:rust (/// Snapshot manager for auto-snapshots before risky tools. ), code:rust (snapshots: None,), code:rust (/// Take an auto-snapshot if a manager is present, emitting ), code:rust (if config.snapshot_policy.auto_per_turn {) (+39 more)
 
 ### Community 11 - "MCP Client"
-Cohesion: 0.09
-Nodes (18): ClientInner, empty_config_when_no_files(), JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, load_mcp_config(), McpClient (+10 more)
+Cohesion: 0.13
+Nodes (37): authorize_url_contains_pkce_and_scope(), authorize_url_strips_trailing_slash_on_issuer(), bind_loopback(), build_authorize_url(), CallbackParams, error_html(), error_html_escapes_special_chars(), exchange_code() (+29 more)
 
 ### Community 12 - "Auth Store"
-Cohesion: 0.14
-Nodes (19): OpenAI OAuth flow, AuthFile, AuthRecord, AuthStatus, AuthStore, corrupt_file_returns_parse_error_without_secret_body(), display_redacts_tokens(), expired_records_report_expired_status() (+11 more)
+Cohesion: 0.1
+Nodes (28): PrimaryAgent, behavior_section(), build_prompt_contains_identity_and_agent(), build_system_prompt(), detect_framework(), detect_primary_language(), detects_python_via_pyproject(), detects_react_framework() (+20 more)
 
 ### Community 13 - "NPM Package Manifest"
+Cohesion: 0.15
+Nodes (21): OpenAI OAuth flow, auth_file_version(), AuthFile, AuthRecord, AuthStatus, AuthStore, corrupt_file_returns_parse_error_without_secret_body(), debug_redacts_tokens() (+13 more)
+
+### Community 14 - "App Provider/Model Discovery"
+Cohesion: 0.12
+Nodes (21): ClientInner, defaults_enabled_to_true(), empty_config_when_no_files(), JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, load_mcp_config() (+13 more)
+
+### Community 15 - "Model Picker & Slash Commands"
+Cohesion: 0.13
+Nodes (26): load_global_config(), args(), CliArgs, equals_form_for_client_id(), explicit_client_id_overrides_vscode_compat(), handle_key(), handle_mouse(), install_panic_hook() (+18 more)
+
+### Community 16 - "Skill Registry"
+Cohesion: 0.15
+Nodes (23): hooks module, ApprovalPrompt, ApprovalAnswer, ApprovalPrompt, ask_override_promotes_write_tool(), PermissionDecision, deny_override_works_for_unknown_tool(), PermissionEngine (+15 more)
+
+### Community 17 - "CLI Entrypoint & Arg Parsing"
+Cohesion: 0.06
+Nodes (32): 0. Repo shape (the punchline), 1. Agent loop, 1a. Submission → Task spawn (`core/src/tasks/`), 1b. The turn loop (`core/src/session/turn.rs`), 1c. The sampling-request loop (`run_sampling_request` → `try_run_sampling_request`), 2. Tool calling protocol, 3. Tool dispatch, 4. Provider abstraction (+24 more)
+
+### Community 18 - "Session Store (SQLite)"
+Cohesion: 0.1
+Nodes (26): AuthEvent, connected_copilot_is_listed_in_model_options(), connected_store_with_models(), copilot_current_model(), copilot_discovered_models(), copilot_model_context_window(), copilot_model_reasoning_efforts(), EnvFallback (+18 more)
+
+### Community 19 - "LSP Server Registry"
+Cohesion: 0.09
+Nodes (19): sandboxed command execution, SandboxConfig, is_available(), resolve_backend(), SandboxBackend, SandboxConfig, SandboxSettings, wrap_command() (+11 more)
+
+### Community 20 - "LSP Phase Specs"
 Cohesion: 0.07
 Nodes (30): bin, art, artui, cpu, dependencies, ink, react, description (+22 more)
 
-### Community 14 - "App Provider/Model Discovery"
-Cohesion: 0.09
-Nodes (25): AppEvent, AuthEvent, collect_workspace_files(), copilot_current_model(), copilot_discovered_models(), copilot_model_context_window(), copilot_model_hint(), copilot_model_reasoning_efforts() (+17 more)
-
-### Community 15 - "Model Picker & Slash Commands"
-Cohesion: 0.11
-Nodes (11): available_model_options(), connected_copilot_is_listed_in_model_options(), connected_store_with_models(), first_selectable_model_index(), git_branch(), git_status_label(), include_provider_models(), run_git() (+3 more)
-
-### Community 16 - "Skill Registry"
-Cohesion: 0.20
-Nodes (19): ActiveSkill, empty_when_no_skills_dir(), home_path(), isolated(), iter_returns_loaded_skills(), loads_mattpocock_directory_skill_md(), loads_skill_from_project_dir(), loads_skill_from_universal_dot_agents_dir() (+11 more)
-
-### Community 17 - "CLI Entrypoint & Arg Parsing"
-Cohesion: 0.17
-Nodes (23): args(), CliArgs, equals_form_for_client_id(), explicit_client_id_overrides_vscode_compat(), handle_key(), handle_mouse(), install_panic_hook(), is_image_path() (+15 more)
-
-### Community 18 - "Session Store (SQLite)"
+### Community 21 - "LSP Manager"
 Cohesion: 0.14
-Nodes (11): Session store, cascade_delete(), create_and_load_session(), days_to_ymd(), list_sessions_by_workspace(), memory_crud(), MemoryEntry, MessageRecord (+3 more)
+Nodes (14): Backend, cfg(), disabled_config_yields_none(), index_persists_across_reopen(), prune_keeps_newest_retain(), Reason, SnapshotId, SnapshotManager (+6 more)
 
-### Community 19 - "LSP Server Registry"
+### Community 22 - "Credential Env Keys"
+Cohesion: 0.07
+Nodes (29): 10. Migration, 11. Implementation deltas, 12. Security notes, 13. References, 1. The friction problem, 2. The four-tier model (industry-converged), 3. Client ID, 4.1 Request a device code (+21 more)
+
+### Community 23 - "Agent Turn Loop"
+Cohesion: 0.17
+Nodes (14): Session store, cascade_delete(), create_and_load_session(), days_to_ymd(), list_sessions_by_workspace(), memory_crud(), MemoryEntry, MessageRecord (+6 more)
+
+### Community 24 - "TUI Popups & Pickers"
+Cohesion: 0.23
+Nodes (20): ActiveSkill, empty_when_no_skills_dir(), frontmatter_split_returns_none_without_delimiter(), home_path(), isolated(), iter_returns_loaded_skills(), loads_mattpocock_directory_skill_md(), loads_skill_from_project_dir() (+12 more)
+
+### Community 25 - "GitHub Device Login"
 Cohesion: 0.16
-Nodes (15): fixture_registry(), handles_extension_is_case_insensitive(), ServerRegistry::load, missing_overlay_is_not_an_error(), parses_defaults_toml(), RegistryFile, resolve_falls_back_to_cwd_when_no_marker_present(), resolve_finds_server_via_extension_and_marker() (+7 more)
+Nodes (18): refresh_access_token, AccountProvider, boundary_finds_double_newline(), completed_event_emits_usage_and_done(), Credentials, AccountProvider::current_credentials, done_sentinel_ends_stream(), failure_event_emits_error_and_terminates() (+10 more)
 
-### Community 20 - "LSP Phase Specs"
+### Community 26 - "NPM Package (art)"
+Cohesion: 0.2
+Nodes (16): fixture_registry(), handles_extension_is_case_insensitive(), ServerRegistry::load, missing_overlay_is_not_an_error(), parses_defaults_toml(), RegistryFile, resolve_falls_back_to_cwd_when_no_marker_present(), resolve_finds_server_via_extension_and_marker() (+8 more)
+
+### Community 27 - "Permissions Engine"
+Cohesion: 0.07
+Nodes (27): Architecture, Capability detection and graceful degradation, code:block1 (src/), code:block10 (Cargo.toml                          (+2 deps)), code:toml (async-lsp = { version = "<latest>", features = ["client-moni), code:rust (pub struct LspClient {), code:toml ([server.rust-analyzer]), code:rust (pub struct LspManager {) (+19 more)
+
+### Community 28 - "LSP Workspace Edits"
+Cohesion: 0.18
+Nodes (23): copilot_vim_config_dir(), CopilotVimToken, extend_from_file(), HostEntry, ignores_malformed_json(), read_copilot_vim_tokens(), reads_apps_json_namespaced_keys(), reads_hosts_json_legacy_format() (+15 more)
+
+### Community 29 - "Cloudflare tsconfig"
+Cohesion: 0.08
+Nodes (24): 1. The diagnosis, 2.1 codex-rs (Rust, ~120 crates), 2.2 opencode (Effect-TS / Bun), 2.3 What artui should keep, drop, and copy, 2. Reference shapes, 3. Target architecture, 4. Module decomposition, 5.1 `LlmProvider` trait (+16 more)
+
+### Community 30 - "NPM Install Script"
 Cohesion: 0.14
 Nodes (26): LSP support for artui (spec), oh-my-pi LSP reference design, Tree-sitter symbol index, Per-branch token budget, async-lsp crate, defaults.toml (helix-vendored server registry), helix-editor languages.toml (MPL-2.0), LspClient (per server-process) (+18 more)
 
-### Community 21 - "LSP Manager"
-Cohesion: 0.17
-Nodes (13): fixture_registry(), for_path_propagates_missing_executable_error(), for_path_returns_clear_error_for_unknown_extension(), LspManager, make_manager(), ManagerClientSnapshot, shutdown_clears_cache(), status_snapshot_reports_empty_when_idle() (+5 more)
-
-### Community 22 - "Credential Env Keys"
-Cohesion: 0.15
-Nodes (20): copilot_vim_config_dir(), CopilotVimToken, extend_from_file(), HostEntry, ignores_malformed_json(), read_copilot_vim_tokens(), reads_apps_json_namespaced_keys(), reads_hosts_json_legacy_format() (+12 more)
-
-### Community 23 - "Agent Turn Loop"
-Cohesion: 0.12
-Nodes (13): AgentLoopConfig, end_turn_explicit_finish(), format_tool_result(), looks_like_unfulfilled_promise(), render_approval_body(), run_turn(), Agent turn loop, Tool approval modal (+5 more)
-
-### Community 24 - "TUI Popups & Pickers"
-Cohesion: 0.21
-Nodes (17): draw(), centered(), draw(), draw_agent_picker(), draw_approval(), draw_login_picker(), draw_modal_backdrop(), draw_model_picker() (+9 more)
-
-### Community 25 - "GitHub Device Login"
-Cohesion: 0.17
-Nodes (15): DeviceCodeResponse, github_device_login(), GitHubDeviceFlowConfig, open_browser(), poll_for_token(), request_device_code(), run_github_device_login(), send_message() (+7 more)
-
-### Community 26 - "NPM Package (art)"
-Cohesion: 0.11
-Nodes (19): bin, art, artui, cpu, dependencies, ink, react, description (+11 more)
-
-### Community 27 - "Permissions Engine"
-Cohesion: 0.20
-Nodes (16): ApprovalAnswer, ask_override_promotes_write_tool(), deny_override_works_for_unknown_tool(), lsp_code_actions_apply_asks_in_build(), lsp_code_actions_listing_is_readonly(), lsp_readonly_actions_auto_allow(), lsp_rename_asks_in_build(), lsp_rename_denied_in_plan() (+8 more)
-
-### Community 28 - "LSP Workspace Edits"
-Cohesion: 0.22
-Nodes (18): apply_edits_to_file(), apply_text_edits(), apply_text_edits_empty_no_change(), apply_text_edits_handles_unicode(), apply_text_edits_multiline(), apply_text_edits_multiple_descending(), apply_text_edits_rejects_out_of_bounds(), apply_text_edits_single_replacement() (+10 more)
-
-### Community 29 - "Cloudflare tsconfig"
-Cohesion: 0.11
-Nodes (18): compilerOptions, declaration, esModuleInterop, forceConsistentCasingInFileNames, jsx, lib, module, moduleResolution (+10 more)
-
-### Community 30 - "NPM Install Script"
-Cohesion: 0.18
-Nodes (17): npm runInstall(), npm cli launcher, postinstall entry, Installer (Ink component), detectPlatform(), __dirname, downloadWithProgress(), findBinary() (+9 more)
-
 ### Community 31 - "tsconfig (npm)"
-Cohesion: 0.12
-Nodes (16): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution, noEmit (+8 more)
+Cohesion: 0.08
+Nodes (24): npm cli launcher, bin, art, artui, cpu, dependencies, ink, react (+16 more)
 
 ### Community 32 - "App Model/Context Accessors"
-Cohesion: 0.15
-Nodes (3): Message, active_model_from_config(), known_context_window_tokens()
+Cohesion: 0.08
+Nodes (24): Architecture, Auto-snapshot integration (dispatch layer), code:block1 (src/snapshots/), code:rust (pub struct SnapshotId(String);              // "snap_<ULID>"), code:block3 (TMP=$(mktemp)), code:block4 (TMP=$(mktemp)), code:rust (pub snapshots: Option<std::sync::Arc<crate::snapshots::Snaps), code:rust (#[derive(Debug, Clone, Deserialize)]) (+16 more)
 
 ### Community 33 - "Ollama Provider"
-Cohesion: 0.18
-Nodes (10): anthropic provider, Authentication & credentials, ollama provider, openai_account provider, artui auth store, fetch_ollama_context_window(), OllamaChatRequest, OllamaChatResponse (+2 more)
+Cohesion: 0.14
+Nodes (13): workspace_hash(), WorkspaceIndex, extract_symbol_name(), index_symbols(), is_indexable(), search_symbols(), SymbolHit, index_chunks() (+5 more)
 
 ### Community 34 - "Tool Registry"
 Cohesion: 0.25
-Nodes (8): ToolCall, dispatch_read_file(), dispatch_unknown_tool(), specs_includes_read_file(), subagent_general_has_no_task(), subagent_read_only_has_three_tools(), test_ctx(), ToolRegistry
+Nodes (20): draw(), centered(), draw(), draw_agent_picker(), draw_approval(), draw_login_picker(), draw_modal_backdrop(), draw_model_picker() (+12 more)
 
 ### Community 35 - "Shell Tool"
-Cohesion: 0.24
-Nodes (9): captures_stderr(), classify_deny(), denies_dangerous_command(), reports_nonzero_exit(), resolve_windows_shell(), runs_simple_command(), ShellTool, test_ctx() (+1 more)
+Cohesion: 0.13
+Nodes (3): first_selectable_model_index(), StatusLineItem, ThemeId
 
 ### Community 36 - "Todo Write Tool"
 Cohesion: 0.23
-Nodes (10): ctx(), empty_list_is_valid_meaning_clear_todos(), rejects_empty_subject(), rejects_multiple_in_progress(), rejects_overlong_subject(), replaces_list_and_emits_event(), requires_todos_array(), Todo (+2 more)
+Nodes (19): DeviceCodeResponse, github_device_login(), GitHubDeviceFlowConfig, open_browser(), parses_denied_token_response(), parses_pending_token_response(), parses_slow_down_token_response(), parses_success_token_response() (+11 more)
 
 ### Community 37 - "Update Check & Semver"
-Cohesion: 0.17
-Nodes (8): check_for_update(), classify(), LatestRelease, NotifyLevel, parse_semver(), SemVer, Severity, UpdateInfo
+Cohesion: 0.1
+Nodes (20): code:ts (// tool/tool.ts), code:ts (// tool/registry.ts ~290), code:ts (// session/system.ts), code:ts (const [skills, env, instructions, modelMsgs] = yield* Effect), code:ts (for (const pattern of request.patterns) {), code:ts (const defaults = Permission.fromConfig({), code:ts (export function replace(content, oldString, newString, repla), code:ts (export const Parameters = Schema.Struct({) (+12 more)
 
 ### Community 38 - "Cloudflare Worker Package"
+Cohesion: 0.17
+Nodes (18): npm runInstall(), postinstall entry, Installer (Ink component), detectPlatform(), __dirname, downloadWithProgress(), findBinary(), mirrorHasAsset() (+10 more)
+
+### Community 39 - "Hooks System"
+Cohesion: 0.29
+Nodes (18): apply_edits_to_file(), apply_text_edits(), apply_text_edits_empty_no_change(), apply_text_edits_handles_unicode(), apply_text_edits_multiline(), apply_text_edits_multiple_descending(), apply_text_edits_rejects_out_of_bounds(), apply_text_edits_single_replacement() (+10 more)
+
+### Community 40 - "Copilot Provider Streaming"
+Cohesion: 0.1
+Nodes (19): code:bash (curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.d), code:powershell (irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/inst), code:bash (npm install -g artui-cli), code:bash (# Skip the confirmation prompt (CI, scripts, automation)), code:bash (art        # short alias), code:toml (default_provider = "ollama"), code:bash (ollama serve              # optional — for local models), code:bash (# 1. Bump versions in lockstep) (+11 more)
+
+### Community 41 - "Tool Spec Serialization"
+Cohesion: 0.1
+Nodes (19): 10. Privacy, 11. Migration from current state, 12. Testing, 13. Open questions, 1. Goals, 2. File layout, 3. Schema, 4. Pragmas (+11 more)
+
+### Community 42 - "Provider Trait & Builder"
+Cohesion: 0.13
+Nodes (7): provider_metadata(), available_model_options(), include_provider_models(), model_hint(), ModelOption, next_selectable_model_index(), previous_selectable_model_index()
+
+### Community 43 - "Architecture Specs & Design Docs"
+Cohesion: 0.19
+Nodes (10): captures_stderr(), classify_deny(), denies_dangerous_command(), format_shell_output(), reports_nonzero_exit(), resolve_windows_shell(), runs_simple_command(), ShellTool (+2 more)
+
+### Community 44 - "NPM Install UI (Ink)"
+Cohesion: 0.19
+Nodes (14): default_credential_provider_id(), default_reasoning_phrases(), default_spinner_frames(), default_thinking_phrases(), OllamaConfig, OpenAiCompatConfig, PermissionsConfig, ProviderConfig (+6 more)
+
+### Community 45 - "Context Compaction"
+Cohesion: 0.11
+Nodes (19): 1. Identity and Role, 2. Environment Block (dynamic, injected each turn), 3. Output and Formatting Rules, 4. Coding Philosophy (the anti-over-engineering rules), 5. Tool Use Rules, 6. Safety and Permission Rules, 7. Autonomy and Persistence (critical for agentic loops), 8. Memory / Instruction Files (+11 more)
+
+### Community 46 - "Account Provider (Codex)"
+Cohesion: 0.11
+Nodes (18): compilerOptions, declaration, esModuleInterop, forceConsistentCasingInFileNames, jsx, lib, module, moduleResolution (+10 more)
+
+### Community 47 - "Account SSE Parsing"
+Cohesion: 0.11
+Nodes (18): 8.1 `list_files`, 8.2 `search`, 8.3 `glob`, 8.4 `read_file`, 8.5 `apply_patch`, 8.6 `shell`, 8.7 `git_status`, 8. Tool Contract (+10 more)
+
+### Community 48 - "OpenAI-compat Streaming"
+Cohesion: 0.25
+Nodes (14): all_level_passes_everything_except_same(), check_for_update(), classify(), classify_detects_each_severity(), LatestRelease, major_level_silences_minor_and_patch(), minor_level_passes_major_and_minor_only(), NotifyLevel (+6 more)
+
+### Community 49 - "UI Status Line & Theme"
+Cohesion: 0.12
+Nodes (16): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution, noEmit (+8 more)
+
+### Community 50 - "Community 50"
+Cohesion: 0.16
+Nodes (8): Message, collect_workspace_files(), extract_at_mention_partial(), file_mention_matches(), git_branch(), git_status_label(), Message, run_git()
+
+### Community 51 - "Community 51"
+Cohesion: 0.26
+Nodes (8): ToolCall, dispatch_read_file(), dispatch_unknown_tool(), specs_includes_read_file(), subagent_general_has_no_task(), subagent_read_only_has_three_tools(), test_ctx(), ToolRegistry
+
+### Community 52 - "Community 52"
+Cohesion: 0.12
+Nodes (15): 1. Product Summary, 20. Implementation Priorities, 21. Reference Notes, 2. v1 Scope, 3. Research-Informed Design Decisions, 4. v1 Architecture, 5. Project Structure, 6. Recommended Crates (+7 more)
+
+### Community 54 - "Community 54"
+Cohesion: 0.13
+Nodes (14): [0.1.0](https://github.com/lucasram20/artui/compare/v0.0.1...v0.1.0) (2026-05-22), [0.3.0](https://github.com/lucasram20/artui/compare/v0.2.0...v0.3.0) (2026-05-22), [0.3.1](https://github.com/lucasram20/artui/compare/v0.3.0...v0.3.1) (2026-05-22), [0.3.2](https://github.com/lucasram20/artui/compare/v0.3.1...v0.3.2) (2026-05-22), [0.3.3](https://github.com/lucasram20/artui/compare/v0.3.2...v0.3.3) (2026-05-22), 2026-05-13, Added, Bug Fixes (+6 more)
+
+### Community 55 - "Community 55"
+Cohesion: 0.13
+Nodes (14): artui freemodel relay (Cloudflare Worker), code:sh (cd cloudflare/), code:block2 (Published artui-freemodel-relay (1.23 sec)), code:sh (curl -i -H "User-Agent: artui-cli/test" \), code:sh (npx wrangler secret put FREEMODEL_API_KEY     # rotate the u), code:sh (# Get a new key from freemodel.dev), Deploy, Files (+6 more)
+
+### Community 56 - "Community 56"
 Cohesion: 0.13
 Nodes (14): description, devDependencies, @cloudflare/workers-types, typescript, wrangler, name, private, scripts (+6 more)
 
-### Community 39 - "Hooks System"
-Cohesion: 0.19
-Nodes (10): fire_hooks(), fire_hooks_runs_matching_command(), fire_hooks_skips_non_matching_target(), HookConfig, HookEntry, HookEvent, load_hook_config(), matches() (+2 more)
+### Community 57 - "Community 57"
+Cohesion: 0.16
+Nodes (9): InstallEvent, InstallStep, Action, initialState, LOGO_LINES, SPINNER_FRAMES, StepRow(), UiState (+1 more)
 
-### Community 40 - "Copilot Provider Streaming"
-Cohesion: 0.30
-Nodes (4): copilot provider, fetch_models_with_session(), is_default_models_url(), request_timeout()
+### Community 58 - "Community 58"
+Cohesion: 0.26
+Nodes (9): ctx(), empty_list_is_valid_meaning_clear_todos(), rejects_empty_subject(), rejects_multiple_in_progress(), rejects_overlong_subject(), replaces_list_and_emits_event(), requires_todos_array(), Todo (+1 more)
 
-### Community 41 - "Tool Spec Serialization"
-Cohesion: 0.18
-Nodes (10): anthropic_messages_shape(), openai_chat_shape(), openai_responses_shape(), round_trip_tool_spec_serde(), sample_tool(), to_anthropic_messages(), to_ollama(), to_openai_chat() (+2 more)
+### Community 59 - "Community 59"
+Cohesion: 0.14
+Nodes (13): Acceptance criteria, code:rust (// agent/loop.rs (excerpt)), code:block2 (*** Begin Patch), Files touched, In scope, Out of scope, Permission Ask flow, Phase E — `apply_patch` (V4A) + diff preview + Ask flow (+5 more)
 
-### Community 42 - "Provider Trait & Builder"
-Cohesion: 0.23
-Nodes (13): LLM tool/function calling, MCP client/server bridge, AccountProvider, CopilotProvider, build_provider(), LlmProvider, ModelRequest, ToolChoice (+5 more)
+### Community 60 - "Community 60"
+Cohesion: 0.14
+Nodes (13): code:text (src/auth/), Design constraints, Implementation phases, OAuth Provider Support Todo, Phase 1 — Auth foundation, Phase 2 — Provider registry, Phase 3 — GitHub Copilot provider, Phase 4 — OpenAI account-backed provider (+5 more)
 
-### Community 43 - "Architecture Specs & Design Docs"
-Cohesion: 0.20
+### Community 61 - "Community 61"
+Cohesion: 0.2
 Nodes (14): codex architecture audit, Copilot OAuth zero-config design, artui harness architecture, OpenCode architecture reference, OpenCode client/server split, Specs index, Session persistence SQLite design, artui v1 agentic spec (+6 more)
 
-### Community 44 - "NPM Install UI (Ink)"
-Cohesion: 0.18
-Nodes (8): InstallStep, Action, initialState, LOGO_LINES, SPINNER_FRAMES, StepRow(), UiState, useSpinnerFrame()
+### Community 62 - "Community 62"
+Cohesion: 0.15
+Nodes (12): Authentication & credentials, CLI flags, code:text (/logout copilot), code:bash (# Linux / macOS — show what's stored, then trim by hand:), code:powershell (# Windows), code:text (--copilot-vscode-compat        # use VSCode public OAuth cli), From inside artui, Manually (when you cannot launch artui) (+4 more)
 
-### Community 45 - "Context Compaction"
-Cohesion: 0.23
-Nodes (5): estimate_tokens(), usable_tokens(), compact_messages_with, needs_compaction_with, Context compaction
+### Community 63 - "Community 63"
+Cohesion: 0.15
+Nodes (12): Acceptance criteria, code:rust (ToolSpec {), Files touched, In scope, Out of scope, Phase K — `task` sub-agent tool, References, Risks (+4 more)
 
-### Community 46 - "Account Provider (Codex)"
-Cohesion: 0.30
-Nodes (3): AccountProvider, unix_timestamp(), user_agent()
+### Community 64 - "Community 64"
+Cohesion: 0.15
+Nodes (12): Acceptance criteria, API shape, code:rust (// src/providers/mod.rs (target)), Files touched, In scope, Migration of existing variants, Out of scope, Phase A — Tool-call events on `ModelEvent` (+4 more)
 
-### Community 47 - "Account SSE Parsing"
-Cohesion: 0.27
-Nodes (10): boundary_finds_double_newline(), completed_event_emits_usage_and_done(), Credentials, done_sentinel_ends_stream(), failure_event_emits_error_and_terminates(), find_event_boundary(), handle_sse_block(), ignores_non_json_data_lines() (+2 more)
+### Community 65 - "Community 65"
+Cohesion: 0.3
+Nodes (10): Prebuilt binary installer flow, Confirm-Install(), Fail(), Invoke-WithProgress(), Step(), Warn(), Step(), Success() (+2 more)
 
-### Community 48 - "OpenAI-compat Streaming"
-Cohesion: 0.41
-Nodes (7): openai_compat provider, done_signal(), emit_pending_tool_ends(), handle_sse_line(), parses_text_delta(), parses_tool_call_sse_chunks(), ToolCallAccumulator
+### Community 66 - "Community 66"
+Cohesion: 0.33
+Nodes (9): is_git_workspace(), cfg(), git(), git_backend_round_trips_tracked_edits_and_post_snapshot_untracked_files(), init_repo(), isolate_xdg_data_home(), IsolatedXdgDataHome, public_api_prunes_to_retention_limit() (+1 more)
 
-### Community 49 - "UI Status Line & Theme"
-Cohesion: 0.18
-Nodes (4): ReasoningEffort, StatusLineItem, StoredModelEndpoint, ThemeId
-
-### Community 50 - "Community 50"
-Cohesion: 0.23
-Nodes (3): copilot_device_flow_config(), openai_oauth_config(), String
-
-### Community 51 - "Community 51"
+### Community 67 - "Community 67"
 Cohesion: 0.21
-Nodes (7): AppEvent, ToolSpec, GlobTool, Tool, ToolContext, ToolResult, ToolRegistry::dispatch
+Nodes (8): AppEvent, ToolSpec, GlobTool, Tool, ToolContext, ToolResult, ToolRegistry::dispatch, TodoWriteTool
 
-### Community 52 - "Community 52"
-Cohesion: 0.24
-Nodes (7): sandboxed command execution, SandboxConfig, is_available(), SandboxConfig, wrap_command(), wrap_command_structure(), wrap_command_with_network()
+### Community 68 - "Community 68"
+Cohesion: 0.17
+Nodes (11): Built-in Tool Categories, Key Design Principles to Steal for artui, Layer 1: ripgrep (grep/glob tools), Layer 2: LSP (Language Server Protocol), Multi-Agent Layer, OpenCode Architecture Reference, Primary Agents (user-facing, switchable with Tab), Prompt Assembly Pipeline (+3 more)
 
-### Community 53 - "Community 53"
+### Community 69 - "Community 69"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:block1 (You are summarizing a coding-agent session so the rest can c), Compaction sub-prompt sketch, Files touched, In scope, Out of scope, Phase H — Compaction (token budget), References (+3 more)
+
+### Community 70 - "Community 70"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:block1 (── LSP diagnostics ──), code:block2 (src/lsp/writethrough.rs              NEW ~250 LoC), Files touched, In scope, Out of scope, Phase N3 — Writethrough on apply_patch, Risks (+3 more)
+
+### Community 71 - "Community 71"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, Bwrap command shape, code:rust (// src/sandbox/bwrap.rs (sketch)), Files touched, In scope, Out of scope, Phase J — Linux bubblewrap sandbox, References (+3 more)
+
+### Community 72 - "Community 72"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:rust (ToolSpec {), Files touched, In scope, Out of scope, Phase F — `shell` tool + classifier + output caps, References, Risks (+3 more)
+
+### Community 73 - "Community 73"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:block1 (You are in PLAN mode. Your role is to:), Files touched, In scope, Out of scope, Phase I — Build / Plan agent modes, Plan agent system prompt addendum, References (+3 more)
+
+### Community 74 - "Community 74"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, API shape, code:rust (// src/tools/mod.rs), Files touched, In scope, Out of scope, Phase B — Tool registry + first tool, References (+3 more)
+
+### Community 75 - "Community 75"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:block1 (Cargo.toml                               +2 deps), Crate choice rationale, Files touched, In scope, Out of scope, Phase N1 — LSP Skeleton + Minimal Tool, Risks (+3 more)
+
+### Community 76 - "Community 76"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:rust (// glob), Files touched, In scope, Out of scope, Phase D — `glob` + `search` tools, permission scaffold, References, Risks (+3 more)
+
+### Community 77 - "Community 77"
+Cohesion: 0.17
+Nodes (11): Acceptance criteria, code:block1 (App (TUI-only; ~25 methods)), Files touched, God-object split (concrete), In scope, Out of scope, Phase C — `Session` + agent loop, References (+3 more)
+
+### Community 78 - "Community 78"
 Cohesion: 0.47
 Nodes (10): install.sh script, download_private_asset(), err(), _is_tty(), ok(), print_logo(), prompt_confirm(), step() (+2 more)
 
-### Community 54 - "Community 54"
+### Community 79 - "Community 79"
+Cohesion: 0.29
+Nodes (9): Context percentage findings, ctx N% display, max_tool_output_chars, discover_models(), ModelEntry, ModelsResponse, openai_compat_config(), openai_compat_config_pins_credential_provider_id() (+1 more)
+
+### Community 80 - "Community 80"
 Cohesion: 0.22
-Nodes (3): ModelOption, next_selectable_model_index(), previous_selectable_model_index()
+Nodes (6): AuthRequirement, ModelListStrategy, ProviderMetadata, configured_model, ProviderMetadata, PROVIDERS table
 
-### Community 55 - "Community 55"
-Cohesion: 0.20
-Nodes (9): scripts, build, build:bun, clean, lint, prepack, readVersionFromPackage(), ABORT_FLAGS (+1 more)
+### Community 81 - "Community 81"
+Cohesion: 0.18
+Nodes (10): Acceptance criteria, code:block1 (src/lsp/types.rs                     +5 LspAction variants), Files touched, In scope, Out of scope, Phase N2 — Read-only LSP Operations, Risks, Scope (+2 more)
 
-### Community 56 - "Community 56"
-Cohesion: 0.20
-Nodes (10): agent::compaction module, Compaction sub-prompt, Phase H — Compaction (token budget), Char-based token estimation (chars/4), Auto-compact conversation (L3), Installation commands (L5), Phase L — Skills, MCP, and Polish, Plugin system (L1b) (+2 more)
+### Community 82 - "Community 82"
+Cohesion: 0.18
+Nodes (10): Acceptance criteria, Files touched, In scope, Out of scope, Phase G — SQLite session persistence + memory, References, Risks, Schema highlights (+2 more)
 
-### Community 57 - "Community 57"
+### Community 83 - "Community 83"
+Cohesion: 0.18
+Nodes (10): Acceptance criteria, code:block1 (src/lsp/types.rs                     +Rename, CodeActions va), Files touched, In scope, Out of scope, Phase N4 — Mutating LSP Operations (rename + code actions), Risks, Scope (+2 more)
+
+### Community 84 - "Community 84"
+Cohesion: 0.18
+Nodes (10): Acceptance criteria, Client ID registration (one-time), Copilot OAuth — Zero-Config Device Flow, Files touched, In scope, Out of scope, References, Risks (+2 more)
+
+### Community 85 - "Community 85"
+Cohesion: 0.51
+Nodes (9): captures_untracked_file_in_snapshot(), detects_git_workspace(), git(), init_repo(), restore(), round_trip_rewinds_tracked_edit_and_removes_untracked(), run(), take() (+1 more)
+
+### Community 86 - "Community 86"
 Cohesion: 0.42
 Nodes (7): line_range(), ReadFileTool, reads_file_with_line_numbers(), rejects_binary_file(), rejects_path_traversal(), test_ctx(), truncates_at_cap()
 
-### Community 58 - "Community 58"
-Cohesion: 0.31
-Nodes (6): Prebuilt binary installer flow, Confirm-Install(), Invoke-WithProgress(), Step(), Warn(), Success()
+### Community 87 - "Community 87"
+Cohesion: 0.2
+Nodes (9): code:block1 (┌─ private repo (lucasram20/artui) ─┐    ┌─ public R2 mirror), code:block2 (s3://artui-releases/), code:bash (ARTUI_MIRROR_BASE=https://my-internal-cdn.example.com \), Cost, Disabling the mirror, Distribution & Cloudflare R2 mirror, Install script flow, One-time R2 setup (+1 more)
 
-### Community 59 - "Community 59"
-Cohesion: 0.33
-Nodes (7): dedupe_token_candidates(), gh_auth_token(), handle_sse_line(), relaxed_mode_includes_picker_disabled_models(), stream_event_text(), stream_sse_response(), TokenCandidate
+### Community 88 - "Community 88"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M7 — Deep Subagent Trees, References, Risks, Scope (+1 more)
 
-### Community 60 - "Community 60"
+### Community 89 - "Community 89"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M8 — Production Polish (1.0 Release), References, Risks, Scope (+1 more)
+
+### Community 90 - "Community 90"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M1 — Diff Preview Popup, References, Risks, Scope (+1 more)
+
+### Community 91 - "Community 91"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M6 — Codebase Indexer, References, Risks, Scope (+1 more)
+
+### Community 92 - "Community 92"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M4 — macOS Seatbelt Sandbox, References, Risks, Scope (+1 more)
+
+### Community 93 - "Community 93"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M3 — Workspace Snapshots & Rollback, References, Risks, Scope (+1 more)
+
+### Community 94 - "Community 94"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M9 — Web Browsing Tool (Vercel agent-browser), References, Risks, Scope (+1 more)
+
+### Community 95 - "Community 95"
+Cohesion: 0.2
+Nodes (9): Acceptance criteria, Files touched, In scope, Out of scope, Phase M2 — Mid-Tool Permission Ask UI, References, Risks, Scope (+1 more)
+
+### Community 97 - "Community 97"
 Cohesion: 0.33
 Nodes (3): LlmProvider, SubagentType, TaskTool
 
-### Community 61 - "Community 61"
-Cohesion: 0.29
-Nodes (4): hooks module, ApprovalPrompt, PermissionDecision, PermissionEngine
+### Community 98 - "Community 98"
+Cohesion: 0.22
+Nodes (8): code:bash (cargo fmt --all -- --check), Graphify status, Important context for M4 planning, Next Phase Handoff — after Phase M3, Phase M3 shipped, Recommended next-session startup, Suggested next phase, Verification completed on `main`
 
-### Community 62 - "Community 62"
-Cohesion: 0.25
-Nodes (8): CI workflow, Distribution & Cloudflare R2 mirror, artui-releases R2 bucket, artui README, artui, Cloudflare R2 mirror, ratatui, Release workflow
+### Community 99 - "Community 99"
+Cohesion: 0.22
+Nodes (8): L1: Skills Integration, L1b: Plugin System, L2: MCP (Model Context Protocol) Integration, L3: Auto-Compact Conversation, L4: Powerful System Prompt, L5: Installation Commands (curl/powershell/npm), L6: Domain & Landing Page, Phase L — Skills, MCP, and Polish
 
-### Community 64 - "Community 64"
-Cohesion: 0.29
-Nodes (8): apply_patch tool (V4A parser/applier), Phase E — apply_patch (V4A) + diff preview + Ask flow, Per-patch rollback metadata, V4A patch format, git stash snapshot backend, Phase M3 — Workspace Snapshots & Rollback, Snapshot take/restore, tar.zst snapshot fallback
+### Community 100 - "Community 100"
+Cohesion: 0.22
+Nodes (8): Code References, Code style, Doing tasks, Following conventions, Proactiveness, Task Management, Tone and style, Tool usage policy
 
-### Community 65 - "Community 65"
-Cohesion: 0.29
-Nodes (8): PermissionEngine, Permission Ask flow (oneshot), Per-agent permission overlay, DiffPreview UI popup, Phase M1 — Diff Preview Popup, Generic Approval modal, auth_decisions persistent allow-list, Phase M2 — Mid-Tool Permission Ask UI
-
-### Community 66 - "Community 66"
+### Community 102 - "Community 102"
 Cohesion: 0.46
 Nodes (5): search_finds_pattern(), search_invalid_path(), search_no_matches(), SearchTool, test_ctx()
 
-### Community 67 - "Community 67"
+### Community 103 - "Community 103"
+Cohesion: 0.25
+Nodes (8): 9. Command and Permission Model, code:rust (pub enum PermissionDecision {), code:text (pwd), code:text (rm -rf /), Dangerous Pattern Denylist, Default v1 Policy, Permission Decisions, Read-only Allowlist
+
+### Community 104 - "Community 104"
+Cohesion: 0.25
+Nodes (8): [0.6.0](https://github.com/lucasram20/artui/compare/v0.5.0...v0.6.0) (2026-05-31), Added — LSP mutating ops (Phase N4), Added — LSP read-only completeness (Phase N2), Added — LSP writethrough (Phase N3), Added — Spinner header with elapsed time + token count, Added — Todo list (`todo_write` tool + TUI rendering), Changed, Notes
+
+### Community 105 - "Community 105"
+Cohesion: 0.25
+Nodes (8): CI workflow, Distribution & Cloudflare R2 mirror, artui-releases R2 bucket, artui README, artui, Cloudflare R2 mirror, ratatui, Release workflow
+
+### Community 106 - "Community 106"
+Cohesion: 0.48
+Nodes (5): is_excluded(), restore(), round_trip_rewinds_workspace(), take(), walk_included()
+
+### Community 107 - "Community 107"
 Cohesion: 0.29
-Nodes (5): configured_header(), copilot_api_headers(), CopilotUsage, fetch_copilot_usage(), user_agent()
+Nodes (5): main(), ProviderMetadata, AppConfig, LspConfig, PermissionsConfig
 
-### Community 68 - "Community 68"
+### Community 108 - "Community 108"
+Cohesion: 0.29
+Nodes (3): AppConfig, SandboxConfig, SandboxMode
+
+### Community 109 - "Community 109"
+Cohesion: 0.29
+Nodes (6): Config/provider model context availability, Context percentage + model metadata findings, Current `ctx N%` implementation, Likely fix plan, Main risks/constraints, Related status/usage display
+
+### Community 110 - "Community 110"
+Cohesion: 0.29
+Nodes (7): 17. v1 Milestones, Milestone 0 — TUI Skeleton and Config, Milestone 1 — Repo Read/Search Tools, Milestone 2 — Agent Loop and Tool Router, Milestone 3 — Patch Editing and Diff Approval, Milestone 4 — Shell Verification and Permissions, Milestone 5 — v1 Hardening and Release
+
+### Community 111 - "Community 111"
+Cohesion: 0.29
+Nodes (7): code:block2 (claude-opus-4-5 · 76k/200k tokens (38%)), code:block3 (Parent Agent  →  task("research X") →  Subagent (clean conte), Context Window Management, How Compaction Works, Prompt Caching, Subagent Context Isolation, The Token Budget Model
+
+### Community 112 - "Community 112"
 Cohesion: 0.33
-Nodes (7): Command classifier (argv parser + chain detector), shell command classifier (allow/ask/deny), Phase F — shell tool + classifier + output caps, shell tool, bubblewrap (bwrap) isolation, Phase J — Linux bubblewrap sandbox, sandbox module (wrap_command/SandboxManager)
+Nodes (6): scripts, build, build:bun, clean, lint, prepack
 
-### Community 69 - "Community 69"
-Cohesion: 0.47
-Nodes (6): cached_copilot_session(), exchange_github_token(), exchange_token_candidate(), save_cached_copilot_session(), unix_timestamp(), validate_https_url()
-
-### Community 71 - "Community 71"
-Cohesion: 0.33
-Nodes (5): Streaming model events, PermissionEngine::classify, PermissionDecision, ModelEvent, ToolCall
-
-### Community 72 - "Community 72"
-Cohesion: 0.33
-Nodes (6): Session struct, Crash recovery (interrupted tool_calls), Memory scopes (project/user/session), Phase G — SQLite session persistence + memory, SQLite schema (sessions/messages/memory), SessionStore (rusqlite/sqlx)
-
-### Community 73 - "Community 73"
-Cohesion: 0.33
-Nodes (6): ModelEvent enum, OpenAI-compat SSE tool_calls parser, Phase A — Tool-call events on ModelEvent, glob tool, Phase D — glob + search tools, permission scaffold, search tool (ripgrep wrapper)
-
-### Community 74 - "Community 74"
+### Community 113 - "Community 113"
 Cohesion: 0.67
 Nodes (4): matches_rs_files(), no_matches(), respects_max_results(), test_ctx()
 
-### Community 75 - "Community 75"
-Cohesion: 0.40
-Nodes (5): ToolSpec / ToolChoice / ToolCall types, ToolRegistry, agent/loop.rs run_turn, task tool (subagent spawn), MCP integration (L2)
+### Community 114 - "Community 114"
+Cohesion: 0.33
+Nodes (6): 14. Provider Abstraction, code:rust (#[async_trait]), code:rust (pub enum ModelEvent {), Model Events, Trait, v1 Providers
 
-### Community 76 - "Community 76"
-Cohesion: 0.50
-Nodes (4): devDependencies, @types/node, @types/react, typescript
+### Community 115 - "Community 115"
+Cohesion: 0.33
+Nodes (6): 16. Recovery Logic, code:text (Tool output exceeded 30000 chars.), Failed Patch, Failed Search, Failed Test/Build, Large Output
 
-### Community 77 - "Community 77"
-Cohesion: 0.50
-Nodes (4): refresh_access_token, AccountProvider::current_credentials, AccountProvider::refresh_into, AccountProvider::stream_responses
+### Community 116 - "Community 116"
+Cohesion: 0.33
+Nodes (6): 15. Config, code:text (~/.config/artui/config.toml), code:toml (default_provider = "ollama"), code:text (.artui/config.toml), Global Config, Project Config
 
-### Community 78 - "Community 78"
-Cohesion: 0.50
-Nodes (4): artui Cloudflare Worker relay (freemodel gateway), Provider trait abstraction (LlmProvider), discover_models(), freemodel provider (via OpenAiCompatProvider)
+### Community 117 - "Community 117"
+Cohesion: 0.33
+Nodes (5): Acceptance, Approach, M4 — macOS Seatbelt Sandbox (Design), Out of scope (M4), Problem
 
-### Community 79 - "Community 79"
-Cohesion: 0.50
+### Community 118 - "Community 118"
+Cohesion: 0.33
+Nodes (6): [0.3.9](https://github.com/lucasram20/artui/compare/v0.3.6...v0.3.9) (2026-05-31), Added, Changed, Fixed, Notes, Removed
+
+### Community 119 - "Community 119"
+Cohesion: 0.4
+Nodes (5): 19. Testing Plan, code:text (cargo run -- ~/dev/sample-rust-project), Integration Tests, Manual Demo Test, Unit Tests
+
+### Community 120 - "Community 120"
+Cohesion: 0.4
+Nodes (5): 10. Optional Linux Sandbox, Bubblewrap Behavior, code:toml ([sandbox]), code:bash (bwrap \), Sandbox Modes
+
+### Community 121 - "Community 121"
+Cohesion: 0.4
+Nodes (5): 7. Agent Loop, code:rust (async fn run_agent_turn(user_input: String, app: &mut App) -), code:toml ([agent]), Loop Pseudocode, Step Limits
+
+### Community 122 - "Community 122"
+Cohesion: 0.4
+Nodes (5): 13. TUI Layout, code:text (┌───────────────┬────────────────────────────────────┬──────), code:rust (pub enum UiMode {), Keybindings, TUI States
+
+### Community 123 - "Community 123"
+Cohesion: 0.4
+Nodes (5): 12. Search and Retrieval Best Practices, code:text (1. list_files or glob to understand structure.), Default Agent Retrieval Policy, Recommended `rg` Patterns, What artui Should Avoid
+
+### Community 124 - "Community 124"
+Cohesion: 0.4
+Nodes (5): 1. Client/Server Split, 2. Event-Driven Core, 3. Provider-Agnostic Model Abstraction, code:ts (// When a session updates, everyone who cares knows about it), Core Architecture
+
+### Community 125 - "Community 125"
+Cohesion: 0.4
+Nodes (4): code:bash (cargo fmt --all -- --check), M4 — macOS Seatbelt Implementation Plan, Tasks (completed), Verification
+
+### Community 126 - "Community 126"
+Cohesion: 0.4
+Nodes (5): 2026-05-14, Added, Changed, Fixed, Removed
+
+### Community 127 - "Community 127"
+Cohesion: 0.5
 Nodes (3): binary, child, __dirname
 
-### Community 80 - "Community 80"
-Cohesion: 0.50
+### Community 129 - "Community 129"
+Cohesion: 0.5
+Nodes (3): Current Specs, Reading order for new contributors, Specs
+
+### Community 130 - "Community 130"
+Cohesion: 0.5
+Nodes (4): 11. Context Management, Context Assembly Order, Hard Rules, Output Caps
+
+### Community 131 - "Community 131"
+Cohesion: 0.5
+Nodes (4): Claude Code vs. Codex: Key Differences in System Prompt, code:block13 (You are artui, an interactive AI coding agent for the termin), Minimal Viable System Prompt Template for artui, The Universal System Prompt
+
+### Community 132 - "Community 132"
+Cohesion: 0.5
+Nodes (3): Conventions, Phase N — Language Server Protocol Support, Reading order
+
+### Community 133 - "Community 133"
+Cohesion: 0.5
+Nodes (3): Conventions, Phase M — Production Polish Gaps, Reading order
+
+### Community 134 - "Community 134"
+Cohesion: 0.5
+Nodes (4): [0.4.0](https://github.com/lucasram20/artui/compare/v0.3.10...v0.4.0) (2026-05-31), Changed, Fixed, Notes
+
+### Community 135 - "Community 135"
+Cohesion: 0.5
+Nodes (4): 2026-05-21, Added, Changed, Fixed
+
+### Community 136 - "Community 136"
+Cohesion: 0.5
+Nodes (4): [0.3.6](https://github.com/lucasram20/artui/compare/v0.3.5...v0.3.6) (2026-05-23), Bug Fixes, Features, Notes
+
+### Community 137 - "Community 137"
+Cohesion: 0.5
+Nodes (4): 2026-05-22, Added, Changed, Removed
+
+### Community 138 - "Community 138"
+Cohesion: 0.5
+Nodes (4): [0.5.0](https://github.com/lucasram20/artui/compare/v0.4.0...v0.5.0) (2026-05-31), Added, Changed, Notes
+
+### Community 139 - "Community 139"
+Cohesion: 0.5
+Nodes (4): 2026-05-22, Added, Changed, Fixed
+
+### Community 140 - "Community 140"
+Cohesion: 0.5
 Nodes (4): BM25/FTS5 text index, Accessibility-tree snapshot format, Vercel agent-browser CLI, web_* tool family
 
-### Community 81 - "Community 81"
+### Community 144 - "Community 144"
 Cohesion: 0.67
-Nodes (3): build_openai_content(), copilot_chat_messages(), OpenAiCompatProvider::stream_chat
+Nodes (3): 18. Example v1 Workflow, code:text (Fix the parser panic when config.toml is missing the provide), code:text (1. search "providers" in src/**/*.rs)
 
-### Community 83 - "Community 83"
+### Community 145 - "Community 145"
+Cohesion: 0.67
+Nodes (3): code:ts (// session/prompt.ts:1240), code:ts (result: streamText({), Outer loop
+
+### Community 147 - "Community 147"
+Cohesion: 0.67
+Nodes (3): [0.6.1](https://github.com/lucasram20/artui/compare/v0.6.0...v0.6.1) (2026-05-31), Changed, Notes
+
+### Community 148 - "Community 148"
+Cohesion: 0.67
+Nodes (3): [0.2.0](https://github.com/lucasram20/artui/compare/v0.1.0...v0.2.0) (2026-05-22), Documentation, Features
+
+### Community 149 - "Community 149"
+Cohesion: 0.67
+Nodes (3): Added, Changed, Unreleased
+
+### Community 150 - "Community 150"
+Cohesion: 0.67
+Nodes (3): [0.3.10](https://github.com/lucasram20/artui/compare/v0.3.9...v0.3.10) (2026-05-31), Fixed, Notes
+
+### Community 151 - "Community 151"
 Cohesion: 0.67
 Nodes (3): bubblewrap (bwrap) Linux sandbox, sandbox-exec (macOS Seatbelt), seatbelt.rs sandbox module
 
@@ -495,24 +823,24 @@ Nodes (3): bubblewrap (bwrap) Linux sandbox, sandbox-exec (macOS Seatbelt), seat
   docs/archive/todos/phase-m7-deep-subagents.md · relation: semantically_similar_to
 
 ## Knowledge Gaps
-- **289 isolated node(s):** `tools`, `name`, `version`, `description`, `license` (+284 more)
+- **794 isolated node(s):** `__dirname`, `ROOT`, `PlatformDescriptor`, `Action`, `initialState` (+789 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **31 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **39 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `Per-branch token budget` and `patch-see-breakage-fix feedback loop`?**
   _Edge tagged AMBIGUOUS (relation: semantically_similar_to) - confidence is low._
-- **Why does `run_turn()` connect `Agent Turn Loop` to `App Model/Context Accessors`, `Hooks System`, `Community 71`, `Provider Trait & Builder`, `Context Compaction`, `App Provider/Model Discovery`, `CLI Entrypoint & Arg Parsing`, `Community 51`, `Community 60`?**
-  _High betweenness centrality (0.186) - this node is a cross-community bridge._
-- **Why does `App` connect `App State & Slash/Mention Matching` to `App Model/Context Accessors`, `System Prompt Construction`, `App Provider/Model Discovery`, `Model Picker & Slash Commands`, `UI Status Line & Theme`, `Community 50`, `CLI Entrypoint & Arg Parsing`, `Community 54`, `Community 63`?**
-  _High betweenness centrality (0.118) - this node is a cross-community bridge._
-- **Why does `Tool` connect `Community 51` to `LSP Tool & Diagnostics Rendering`, `Community 66`, `Shell Tool`, `Tool Registry`, `apply_patch & Copilot Integration Tests`, `Todo Write Tool`, `Community 57`, `Community 60`?**
-  _High betweenness centrality (0.117) - this node is a cross-community bridge._
-- **Are the 4 inferred relationships involving `run_turn()` (e.g. with `fire_hooks()` and `.execute()`) actually correct?**
-  _`run_turn()` has 4 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `tools`, `name`, `version` to the rest of the system?**
-  _301 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `LSP Tool & Diagnostics Rendering` be split into smaller, more focused modules?**
-  _Cohesion score 0.05413469735720375 - nodes in this community are weakly interconnected._
+- **Why does `run()` connect `Model Picker & Slash Commands` to `Ollama Provider`, `Cloudflare Worker & Release Tooling`, `Config Schema & Providers Config`, `OpenAI OAuth Login`, `App Provider/Model Discovery`, `OpenAI-compat Streaming`?**
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
+- **Why does `App` connect `OpenAI OAuth Login` to `Community 96`, `Shell Tool`, `Community 101`, `Provider Trait & Builder`, `Auth Store`, `Model Picker & Slash Commands`, `Session Store (SQLite)`, `Community 50`, `Community 53`?**
+  _High betweenness centrality (0.071) - this node is a cross-community bridge._
+- **Why does `run_turn()` connect `Cloudflare Worker & Release Tooling` to `LSP Tool & Diagnostics Rendering`, `Community 97`, `Community 67`, `Provider Trait & Builder`, `Model Picker & Slash Commands`, `Skill Registry`, `Community 50`, `LSP Server Registry`?**
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._
+- **Are the 9 inferred relationships involving `run_turn()` (e.g. with `.execute()` and `.model()`) actually correct?**
+  _`run_turn()` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 7 inferred relationships involving `run()` (e.g. with `.ok()` and `load_global_config()`) actually correct?**
+  _`run()` has 7 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `__dirname`, `ROOT`, `PlatformDescriptor` to the rest of the system?**
+  _794 weakly-connected nodes found - possible documentation gaps or missing edges._
