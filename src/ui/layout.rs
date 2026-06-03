@@ -25,7 +25,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, transcript_cache: &mut TranscriptR
     chrome::draw_app_background(frame, theme);
     let content = chrome::content_area(frame.area());
     let header_height = chrome::header_height(content.width);
-    let root = Layout::vertical([Constraint::Length(header_height), Constraint::Min(10)]).split(content);
+    let root =
+        Layout::vertical([Constraint::Length(header_height), Constraint::Min(10)]).split(content);
 
     chrome::draw_header(frame, app, theme, root[0]);
     draw_body(frame, app, theme, root[1], transcript_cache);
