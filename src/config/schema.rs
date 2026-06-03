@@ -245,6 +245,12 @@ impl Default for FreemodelConfig {
 }
 
 impl FreemodelConfig {
+    /// Maintainer relay used when compile-time/env/config URLs are unset.
+    /// Release CI should set `ARTUI_FREEMODEL_RELAY_BASE`; this keeps installs
+    /// working if that secret was missing from a given build.
+    const DEFAULT_RELAY_V1: &'static str =
+        "https://artui-freemodel-relay.kaminarikokyu.workers.dev/v1";
+
     /// Effective OpenAI-compat base URL (includes `/v1`).
     pub fn resolved_base_url(&self) -> String {
         if let Ok(url) = std::env::var("ARTUI_FREEMODEL_RELAY_URL") {
@@ -260,11 +266,10 @@ impl FreemodelConfig {
             }
         }
         let base = self.base_url.trim();
-        if base.is_empty() || base.contains("<your-subdomain>") {
-            String::new()
-        } else {
-            base.to_owned()
+        if !base.is_empty() && !base.contains("<your-subdomain>") {
+            return base.to_owned();
         }
+        Self::DEFAULT_RELAY_V1.to_owned()
     }
 }
 

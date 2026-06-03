@@ -86,7 +86,15 @@ impl OpenAiCompatProvider {
             }
         }
 
-        let mut url = self.config.base_url.trim_end_matches('/').to_owned();
+        let base = self.config.base_url.trim();
+        if base.is_empty() {
+            bail!(
+                "no API base URL configured for provider '{}'. \
+                 Set ARTUI_FREEMODEL_RELAY_URL or providers.freemodel.base_url in ~/.config/artui/config.toml",
+                self.config.credential_provider_id
+            );
+        }
+        let mut url = base.trim_end_matches('/').to_owned();
         url.push_str("/chat/completions");
 
         let mut req = self.client.post(&url).json(&body);

@@ -143,4 +143,15 @@ mod tests {
         assert_eq!(compat.base_url, cfg.resolved_base_url());
         assert_eq!(compat.default_model, cfg.default_model);
     }
+
+    #[test]
+    fn resolved_base_url_falls_back_to_maintainer_relay() {
+        let cfg = FreemodelConfig::default();
+        let url = cfg.resolved_base_url();
+        assert!(
+            url.contains("workers.dev"),
+            "expected maintainer relay fallback, got {url}"
+        );
+        assert!(url.ends_with("/v1"), "expected /v1 suffix, got {url}");
+    }
 }

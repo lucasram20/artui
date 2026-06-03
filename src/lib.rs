@@ -27,7 +27,7 @@ use std::{
 use anyhow::Result;
 use app::{App, AppEvent, AppRequest, InputAction, UiMode};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -339,6 +339,12 @@ fn handle_mouse(mouse: crossterm::event::MouseEvent, app: &mut App) {
 }
 
 fn handle_key(key: KeyEvent, app: &mut App, event_tx: mpsc::Sender<AppEvent>) {
+    // Windows conhost/Terminal delivers both Press and Release for printable
+    // keys; Release still carries KeyCode::Char, so handling it doubles input.
+    if key.kind == KeyEventKind::Release {
+        return;
+    }
+
     // Approval modal intercepts keys first — block all other handling
     // until the user answers (a/s/d/Esc).
     if app.pending_approval.is_some() {
