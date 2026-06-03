@@ -42,7 +42,7 @@ pub fn list_offset_for_selection(selected: usize, viewport_height: usize, len: u
     if len == 0 || viewport_height == 0 {
         return 0;
     }
-    if selected + 1 <= viewport_height {
+    if selected < viewport_height {
         0
     } else {
         (selected + 1)
