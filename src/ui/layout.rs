@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{ListItem, Paragraph},
@@ -25,10 +25,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, transcript_cache: &mut TranscriptR
     chrome::draw_app_background(frame, theme);
     let content = chrome::content_area(frame.area());
     let header_height = chrome::header_height(content.width);
-    let root = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(header_height), Constraint::Min(10)])
-        .split(content);
+    let root = Layout::vertical([Constraint::Length(header_height), Constraint::Min(10)]).split(content);
 
     chrome::draw_header(frame, app, theme, root[0]);
     draw_body(frame, app, theme, root[1], transcript_cache);
@@ -51,26 +48,24 @@ fn draw_body(
     let reserved_height = composer_height + footer_height + popup_height;
     let max_history_height = area.height.saturating_sub(reserved_height);
     let history_height = conversation_anchor_height(app, area.width, max_history_height);
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(history_height),
-            Constraint::Length(composer_height),
-            Constraint::Length(popup_height),
-            Constraint::Length(footer_height),
-            Constraint::Min(0),
-        ])
-        .split(area);
+    let body = Layout::vertical([
+        Constraint::Length(history_height),
+        Constraint::Length(composer_height),
+        Constraint::Length(popup_height),
+        Constraint::Length(footer_height),
+        Constraint::Min(0),
+    ])
+    .split(area);
 
-    super::chat::draw(frame, app, theme, rows[0], transcript_cache);
-    prompt::draw(frame, app, theme, rows[1]);
+    super::chat::draw(frame, app, theme, body[0], transcript_cache);
+    prompt::draw(frame, app, theme, body[1]);
     if !suggestions.is_empty() {
-        draw_slash_commands(frame, app, theme, rows[2], &suggestions);
+        draw_slash_commands(frame, app, theme, body[2], &suggestions);
     } else if !file_mentions.is_empty() {
-        draw_file_mentions(frame, app, theme, rows[2], &file_mentions);
+        draw_file_mentions(frame, app, theme, body[2], &file_mentions);
     }
     if popup_height == 0 {
-        statusline::draw_footer(frame, app, theme, rows[3]);
+        statusline::draw_footer(frame, app, theme, body[3]);
     }
 }
 
