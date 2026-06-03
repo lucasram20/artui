@@ -1,9 +1,11 @@
 mod cells;
 mod chat;
+mod components;
 mod composer;
 mod geometry;
 mod layout;
 mod popups;
+mod statusline;
 
 #[cfg(test)]
 mod render_tests;

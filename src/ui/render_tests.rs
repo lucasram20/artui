@@ -10,7 +10,7 @@ use crate::{
     ui::{
         self,
         chat::{self, TranscriptRenderCache},
-        geometry, layout,
+        geometry, statusline,
     },
 };
 
@@ -76,9 +76,9 @@ fn footer_context_bar_when_enabled() {
 #[test]
 fn context_bar_spans_short_budget_uses_percent_only() {
     let app = test_app();
-    let palette = layout::theme::palette(ThemeId::MonokaiBlue);
-    assert!(layout::context_bar_spans(&app, palette, 6).is_empty());
-    let spans = layout::context_bar_spans(&app, palette, 10);
+    let palette = ui::layout::theme::palette(ThemeId::MonokaiBlue);
+    assert!(statusline::context_bar_spans(&app, palette, 6).is_empty());
+    let spans = statusline::context_bar_spans(&app, palette, 10);
     assert_eq!(spans.len(), 1);
     assert!(spans[0].content.contains("ctx"));
 }
