@@ -16,8 +16,7 @@ use super::super::{composer, layout::theme, statusline};
 pub fn height(app: &App, width: u16) -> u16 {
     let prompt_width = 2usize;
     let text_width = width.saturating_sub(prompt_width as u16).max(1) as usize;
-    (composer::input_line_count(app.input.as_str(), text_width)
-        .clamp(1, 6) as u16)
+    (composer::input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16)
         .saturating_add(2)
 }
 

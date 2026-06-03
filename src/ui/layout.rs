@@ -4,8 +4,7 @@ use crate::{
         cells,
         chat::TranscriptRenderCache,
         components::{chrome, prompt},
-        list,
-        statusline,
+        list, statusline,
     },
 };
 use ratatui::{
