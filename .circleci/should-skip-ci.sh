@@ -17,7 +17,6 @@
 #   - docs/**, README.md, CHANGELOG.md
 #   - .gitignore, .gitattributes, .editorconfig
 #   - npm/** (the npm wrapper publishes separately)
-#   - cloudflare/** (the freemodel relay deploys separately)
 #   - .vscode/**, .idea/**
 #
 # Override: any commit message containing `[ci force]` runs CI even on
@@ -63,7 +62,6 @@ IGNORE_PATTERNS=(
   '^\.gitattributes$'
   '^\.editorconfig$'
   '^npm/'
-  '^cloudflare/'
   '^\.vscode/'
   '^\.idea/'
   '^scripts/sync-helix-lsp\.py$'

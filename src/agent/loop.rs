@@ -661,7 +661,7 @@ mod nudge_heuristic_tests {
     #[test]
     fn detects_ill_quickly_inspect() {
         // The exact phrasing from the bug report screenshot.
-        let text = "I'll quickly inspect `cloudflare/` (README, package config, worker) and summarize its purpose.";
+        let text = "I'll quickly inspect `src/providers/` and summarize how providers are wired.";
         assert!(looks_like_unfulfilled_promise(text));
     }
 

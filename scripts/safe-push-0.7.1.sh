@@ -23,7 +23,7 @@ echo "origin/main: $(git rev-parse --short origin/main)"
 
 stage_release() {
   git add \
-    src/ docs/ README.md cloudflare/ scripts/ \
+    src/ docs/ README.md scripts/ \
     Cargo.toml Cargo.lock \
     npm/ .env.example \
     .github/workflows/release.yml 2>/dev/null || true

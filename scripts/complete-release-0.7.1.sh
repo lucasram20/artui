@@ -20,7 +20,7 @@ phase1() {
   if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
     echo "Uncommitted changes detected — staging release files..."
     git add \
-      src/ docs/ README.md cloudflare/ scripts/ \
+      src/ docs/ README.md scripts/ \
       Cargo.toml Cargo.lock \
       npm/ .env.example .github 2>/dev/null || true
     # Catch any remaining tracked release paths without graphify-out / secrets
