@@ -4,6 +4,7 @@ mod components;
 mod composer;
 mod geometry;
 mod layout;
+mod list;
 mod popups;
 mod statusline;
 

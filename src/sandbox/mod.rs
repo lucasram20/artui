@@ -153,7 +153,7 @@ fn resolve_backend(mode: SandboxMode) -> Option<SandboxBackend> {
                 if win_jobobject::is_available() {
                     return Some(SandboxBackend::WinJob);
                 }
-                return None;
+                None
             }
             #[cfg(not(windows))]
             {

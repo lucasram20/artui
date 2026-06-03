@@ -4,7 +4,7 @@
 pub fn use_legacy_glyphs() -> bool {
     #[cfg(windows)]
     {
-        !std::env::var_os("ARTUI_UNICODE").is_some_and(|value| !value.is_empty())
+        std::env::var_os("ARTUI_UNICODE").is_none_or(|value| value.is_empty())
     }
     #[cfg(not(windows))]
     {
