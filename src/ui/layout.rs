@@ -1,12 +1,12 @@
 use crate::{
     app::{App, SlashCommand, ThemeId, UiMode},
-    ui::{cells, chat::TranscriptRenderCache, components::chrome, composer, statusline},
+    ui::{cells, chat::TranscriptRenderCache, components::chrome, composer, list, statusline},
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, ListItem, Paragraph},
     Frame,
 };
 
@@ -194,46 +194,47 @@ fn draw_slash_commands(
     area: Rect,
     commands: &[&SlashCommand],
 ) {
+    if commands.is_empty() {
+        return;
+    }
     let palette = theme::palette(theme);
-    let rows = commands
-        .iter()
-        .take(area.height.saturating_sub(1) as usize)
-        .enumerate()
-        .map(|(index, command)| {
-            let selected = index == app.slash_cursor.min(commands.len().saturating_sub(1));
-            let command_style = if selected {
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette.muted)
-            };
-            let description_style = if selected {
-                Style::default().fg(palette.text)
-            } else {
-                Style::default().fg(palette.muted)
-            };
-            Line::from(vec![
-                Span::styled(format!("{:<12}", command.name), command_style),
-                Span::styled(
-                    trim_to_width(command.description, area.width.saturating_sub(14) as usize),
-                    description_style,
-                ),
-            ])
-        })
-        .collect::<Vec<_>>();
-
-    let mut lines = Vec::with_capacity(rows.len() + 1);
-    lines.push(Line::from(Span::styled(
+    let divider = Line::from(Span::styled(
         "─".repeat(area.width as usize),
         Style::default().fg(palette.border),
-    )));
-    lines.extend(rows);
-
+    ));
     frame.render_widget(
-        Paragraph::new(lines).style(Style::default().bg(palette.bg)),
-        area,
+        Paragraph::new(divider).style(Style::default().bg(palette.bg)),
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: 1,
+        },
     );
+    let list_area = Rect {
+        x: area.x,
+        y: area.y.saturating_add(1),
+        width: area.width,
+        height: area.height.saturating_sub(1),
+    };
+    let items = commands
+        .iter()
+        .map(|command| {
+            ListItem::new(Line::from(vec![
+                Span::styled(
+                    format!("{:<12}", command.name),
+                    Style::default().fg(palette.muted),
+                ),
+                Span::styled(
+                    trim_to_width(command.description, area.width.saturating_sub(14) as usize),
+                    Style::default().fg(palette.muted),
+                ),
+            ]))
+        })
+        .collect::<Vec<_>>();
+    let selected = app.slash_cursor.min(commands.len().saturating_sub(1));
+    let offset = list::list_offset_for_selection(selected, list_area.height as usize, items.len());
+    list::render_stateful_list(frame, list_area, items, selected, offset, palette);
 }
 
 // ── File mention suggestions ───────────────────────────────────────────

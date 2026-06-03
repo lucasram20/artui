@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, ListItem, Paragraph},
     Frame,
 };
 
@@ -10,7 +10,7 @@ use crate::{
     agent::PrimaryAgent,
     app::{App, StatusLineItem, ThemeId},
     providers::registry::{provider_display_name, AuthRequirement, LOGIN_PROVIDERS},
-    ui::{geometry, layout::theme},
+    ui::{geometry, layout::theme, list},
 };
 
 pub fn draw_modal_backdrop(frame: &mut Frame<'_>, app: &App) {
@@ -61,37 +61,24 @@ pub fn draw_theme_picker(frame: &mut Frame<'_>, app: &App) {
 
     let items = ThemeId::ALL
         .iter()
-        .enumerate()
-        .map(|(index, theme_id)| {
-            let is_selected = index == app.theme_cursor;
+        .map(|theme_id| {
             let is_active = *theme_id == app.theme;
             let theme_palette = theme::palette(*theme_id);
-            let name_style = if is_selected {
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.rule)
-                    .add_modifier(Modifier::BOLD)
-            } else if is_active {
+            let name_style = if is_active {
                 Style::default()
                     .fg(theme_palette.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme_palette.accent)
             };
-            let description_style = if is_selected {
-                Style::default().fg(palette.text).bg(palette.rule)
-            } else {
-                Style::default().fg(palette.muted)
-            };
             ListItem::new(Line::from(vec![
-                Span::styled(selector_pointer(is_selected), name_style),
                 Span::styled(selected_mark(is_active), name_style),
                 Span::styled(format!("{:<19}", theme_id.name()), name_style),
-                Span::styled(theme_id.description(), description_style),
+                Span::styled(theme_id.description(), Style::default().fg(palette.muted)),
             ]))
         })
         .collect::<Vec<_>>();
-    frame.render_widget(List::new(items), rows[1]);
+    list::render_stateful_list(frame, rows[1], items, app.theme_cursor, 0, palette);
 
     draw_selector_help(frame, app, rows[2], "apply");
 }
@@ -146,29 +133,15 @@ pub fn draw_statusline_picker(frame: &mut Frame<'_>, app: &App) {
         .iter()
         .map(|item| {
             let enabled = app.statusline_enabled[item.index()];
-            let selected = item.index() == app.statusline_cursor;
-            let item_style = if selected {
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette.text)
-            };
-            let description_style = if selected {
-                Style::default().fg(palette.text)
-            } else {
-                Style::default().fg(palette.muted)
-            };
+            let item_style = Style::default().fg(palette.text);
             ListItem::new(Line::from(vec![
-                Span::styled(if selected { "› " } else { "  " }, item_style),
                 Span::styled(if enabled { "[x] " } else { "[ ] " }, item_style),
                 Span::styled(format!("{:<14}", item.label()), item_style),
-                Span::styled(item.description(), description_style),
+                Span::styled(item.description(), Style::default().fg(palette.muted)),
             ]))
         })
         .collect::<Vec<_>>();
-    let list = List::new(items);
-    frame.render_widget(list, rows[1]);
+    list::render_stateful_list(frame, rows[1], items, app.statusline_cursor, 0, palette);
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
@@ -230,24 +203,14 @@ pub fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
     );
 
     let items = if app.model_options.is_empty() {
-        vec![ListItem::new(Line::from(Span::styled(
+        vec![list::empty_list_item(
             "No models found. Connected account providers may still be refreshing.",
-            Style::default().fg(palette.muted),
-        )))]
+            palette,
+        )]
     } else {
-        let visible_rows = rows[1].height as usize;
-        let start = app
-            .model_scroll
-            .min(app.model_options.len().saturating_sub(visible_rows));
-        let end = start
-            .saturating_add(visible_rows)
-            .min(app.model_options.len());
-        app.model_options[start..end]
+        app.model_options
             .iter()
-            .enumerate()
-            .map(|(index, option)| {
-                let index = start + index;
-                let is_selected = index == app.model_cursor;
+            .map(|option| {
                 let is_active = option.provider_id == app.config.default_provider
                     && option.model.as_deref() == Some(app.active_model());
                 if option.model.is_none() {
@@ -261,12 +224,7 @@ pub fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
                         ),
                     ]));
                 }
-                let item_style = if is_selected {
-                    Style::default()
-                        .fg(palette.accent)
-                        .bg(palette.rule)
-                        .add_modifier(Modifier::BOLD)
-                } else if is_active {
+                let item_style = if is_active {
                     Style::default()
                         .fg(palette.text)
                         .add_modifier(Modifier::BOLD)
@@ -276,7 +234,6 @@ pub fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
                 let model = option.model.clone().unwrap_or_default();
                 let hint = option.hint.clone().unwrap_or_default();
                 ListItem::new(Line::from(vec![
-                    Span::styled(selector_pointer(is_selected), item_style),
                     Span::styled(selected_mark(is_active), item_style),
                     Span::styled(format!("{model:<28}"), item_style),
                     Span::styled(hint, Style::default().fg(palette.subtle)),
@@ -284,7 +241,12 @@ pub fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
             })
             .collect::<Vec<_>>()
     };
-    frame.render_widget(List::new(items), rows[1]);
+    let offset = if app.model_options.is_empty() {
+        0
+    } else {
+        app.model_scroll
+    };
+    list::render_stateful_list(frame, rows[1], items, app.model_cursor, offset, palette);
 
     draw_model_selector_help(frame, app, rows[2]);
 }
@@ -351,36 +313,23 @@ pub fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {
 
     let items = PrimaryAgent::ALL
         .iter()
-        .enumerate()
-        .map(|(index, agent)| {
-            let is_selected = index == app.agent_cursor;
+        .map(|agent| {
             let is_active = *agent == app.active_agent;
-            let item_style = if is_selected {
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.rule)
-                    .add_modifier(Modifier::BOLD)
-            } else if is_active {
+            let item_style = if is_active {
                 Style::default()
                     .fg(palette.text)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette.muted)
             };
-            let description_style = if is_selected {
-                Style::default().fg(palette.text).bg(palette.rule)
-            } else {
-                Style::default().fg(palette.muted)
-            };
             ListItem::new(Line::from(vec![
-                Span::styled(selector_pointer(is_selected), item_style),
                 Span::styled(selected_mark(is_active), item_style),
                 Span::styled(format!("{:<10}", agent.name()), item_style),
-                Span::styled(agent.description(), description_style),
+                Span::styled(agent.description(), Style::default().fg(palette.muted)),
             ]))
         })
         .collect::<Vec<_>>();
-    frame.render_widget(List::new(items), rows[1]);
+    list::render_stateful_list(frame, rows[1], items, app.agent_cursor, 0, palette);
 
     draw_selector_help(frame, app, rows[2], "select");
 }
@@ -429,45 +378,32 @@ pub fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
 
     let items = LOGIN_PROVIDERS
         .iter()
-        .enumerate()
-        .map(|(index, provider)| {
-            let is_selected = index == app.login_cursor;
+        .map(|provider| {
             let is_connected = matches!(
                 provider.auth_requirement,
                 AuthRequirement::None | AuthRequirement::ApiKey
             ) || app
                 .provider_status_label(provider.id)
                 .starts_with("connected");
-            let item_style = if is_selected {
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.rule)
-                    .add_modifier(Modifier::BOLD)
-            } else if is_connected {
+            let item_style = if is_connected {
                 Style::default()
                     .fg(palette.text)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette.muted)
             };
-            let description_style = if is_selected {
-                Style::default().fg(palette.text).bg(palette.rule)
-            } else {
-                Style::default().fg(palette.muted)
-            };
             let short_name = truncate_provider_name(provider.display_name);
             ListItem::new(Line::from(vec![
-                Span::styled(selector_pointer(is_selected), item_style),
                 Span::styled(selected_mark(is_connected), item_style),
                 Span::styled(format!("{:<18}", short_name), item_style),
                 Span::styled(
                     login_status_short(app, provider.id, is_connected),
-                    description_style,
+                    Style::default().fg(palette.muted),
                 ),
             ]))
         })
         .collect::<Vec<_>>();
-    frame.render_widget(List::new(items), rows[1]);
+    list::render_stateful_list(frame, rows[1], items, app.login_cursor, 0, palette);
 
     draw_selector_help(frame, app, rows[2], "connect");
 }
@@ -539,14 +475,6 @@ fn draw_selector_help(frame: &mut Frame<'_>, app: &App, area: Rect, confirm_labe
         .style(Style::default().bg(palette.bg)),
         area,
     );
-}
-
-fn selector_pointer(is_selected: bool) -> &'static str {
-    if is_selected {
-        "› "
-    } else {
-        "  "
-    }
 }
 
 fn selected_mark(is_active: bool) -> &'static str {
