@@ -5,10 +5,8 @@
 
 use std::ffi::c_void;
 use std::path::Path;
-use std::process::Stdio;
-use std::time::Duration;
-
-use tokio::process::Command;
+use std::process::{Command as StdCommand, Stdio};
+use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::JobObjects::{
@@ -60,31 +58,51 @@ pub async fn run_command(
     cwd: &Path,
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    let command = command.to_owned();
+    let cwd = cwd.to_path_buf();
+    tokio::task::spawn_blocking(move || run_command_blocking(&command, &cwd, timeout))
+        .await
+        .map_err(|e| format!("sandbox worker panicked: {e}"))?
+}
+
+fn run_command_blocking(
+    command: &str,
+    cwd: &Path,
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
     let job = create_job().map_err(|e| format!("job object: {e}"))?;
     let _job_guard = JobHandleGuard::new(job);
 
-    let child = Command::new("cmd")
+    let mut child = StdCommand::new("cmd")
         .arg("/C")
         .arg(command)
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("failed to spawn shell: {e}"))?;
 
-    if let Some(pid) = child.id() {
-        if let Err(e) = assign_pid(_job_guard.raw(), pid) {
-            tracing::warn!("sandbox: AssignProcessToJobObject failed: {e}");
-        }
+    if let Err(e) = assign_pid(_job_guard.raw(), child.id()) {
+        tracing::warn!("sandbox: AssignProcessToJobObject failed: {e}");
     }
 
-    let output = tokio::time::timeout(timeout, child.wait_with_output())
-        .await
-        .map_err(|_| format!("command timed out after {}ms", timeout.as_millis()))?
-        .map_err(|e| format!("command execution failed: {e}"))?;
-
-    Ok(output)
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|e| format!("command execution failed: {e}"));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(format!("command execution failed: {e}")),
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            return Err(format!("command timed out after {}ms", timeout.as_millis()));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn create_job() -> std::io::Result<HANDLE> {

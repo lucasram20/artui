@@ -197,6 +197,27 @@ esac
 TARGET="${OS}-${ARCH}"
 step "Target ${C_CYAN}${TARGET}${C_RESET}"
 
+# True when the release artifact exists on R2 or GitHub (skip tag-only releases).
+asset_exists_for_tag() {
+  local tag="$1"
+  local asset="artui-${tag#v}-${TARGET}.tar.gz"
+  local r2_url="${R2_BASE}/${tag}/${asset}"
+  if curl -fIsS "$r2_url" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ -n "$AUTH_HEADER" ]; then
+    if curl -fsSL -H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${REPO}/releases/tags/${tag}" \
+      | tr ',' '\n' | grep -q "\"name\": \"${asset}\""; then
+      return 0
+    fi
+  fi
+  if curl -fIsS "https://github.com/${REPO}/releases/download/${tag}/${asset}" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 mkdir -p "$INSTALL_DIR"
 
 if [ "${ARTUI_FROM_SOURCE:-0}" = "1" ]; then
@@ -234,14 +255,21 @@ if [ "$VERSION" = "latest" ]; then
     R2_TAG=""
   fi
 
-  if [ -n "$GH_TAG" ]; then
+  if [ -n "$GH_TAG" ] && asset_exists_for_tag "$GH_TAG"; then
     TAG="$GH_TAG"
     if [ -n "$R2_TAG" ] && [ "$R2_TAG" != "$GH_TAG" ]; then
       warn "R2 mirror latest (${R2_TAG}) differs from GitHub (${GH_TAG}); using GitHub."
     fi
-  elif [ -n "$R2_TAG" ]; then
+  elif [ -n "$R2_TAG" ] && asset_exists_for_tag "$R2_TAG"; then
     TAG="$R2_TAG"
-    warn "GitHub latest unavailable; using R2 mirror tag ${R2_TAG}."
+    if [ -n "$GH_TAG" ]; then
+      warn "GitHub latest (${GH_TAG}) has no ${TARGET} binary on R2 or GitHub; using mirror tag ${R2_TAG}."
+    else
+      warn "GitHub latest unavailable; using R2 mirror tag ${R2_TAG}."
+    fi
+  elif [ -n "$GH_TAG" ]; then
+    TAG="$GH_TAG"
+    warn "GitHub latest (${GH_TAG}) has no published ${TARGET} asset yet; download may fail."
   fi
 
   if [ -z "$TAG" ]; then

@@ -97,6 +97,40 @@ if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
 $target = "windows-$arch"
 Step "Target $target"
 
+function Get-AssetName([string]$Tag) {
+    return "artui-$($Tag.TrimStart('v'))-$target.zip"
+}
+
+# True when the release artifact exists on R2 or GitHub (tag-only releases are skipped).
+function Test-DownloadableRelease([string]$Tag) {
+    if (-not $Tag) { return $false }
+    $name = Get-AssetName $Tag
+    $r2Url = "$R2Base/$Tag/$name"
+    try {
+        Invoke-WebRequest -Uri $r2Url -Method Head -UseBasicParsing -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        # continue
+    }
+    if ($Token) {
+        try {
+            $tagRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag" -Headers $AuthHeaders -UseBasicParsing -ErrorAction Stop
+            if ($tagRelease.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1) {
+                return $true
+            }
+        } catch {
+            # continue
+        }
+    }
+    $publicUrl = "https://github.com/$Repo/releases/download/$Tag/$name"
+    try {
+        Invoke-WebRequest -Uri $publicUrl -Method Head -UseBasicParsing -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 if ($Version -eq 'latest') {
     Step 'Resolving latest release'
     $ghTag = $null
@@ -120,14 +154,21 @@ if ($Version -eq 'latest') {
         # R2 miss is non-fatal when GitHub succeeded.
     }
 
-    if ($ghTag) {
+    if ($ghTag -and (Test-DownloadableRelease $ghTag)) {
         $resolved = $ghTag
         if ($r2Tag -and $r2Tag -ne $ghTag) {
             Warn "R2 mirror latest ($r2Tag) differs from GitHub ($ghTag); using GitHub."
         }
-    } elseif ($r2Tag) {
+    } elseif ($r2Tag -and (Test-DownloadableRelease $r2Tag)) {
         $resolved = $r2Tag
-        Warn "GitHub latest unavailable; using R2 mirror tag $r2Tag."
+        if ($ghTag) {
+            Warn "GitHub latest ($ghTag) has no $target binary on R2 or GitHub; using mirror tag $r2Tag."
+        } else {
+            Warn "GitHub latest unavailable; using R2 mirror tag $r2Tag."
+        }
+    } elseif ($ghTag) {
+        $resolved = $ghTag
+        Warn "GitHub latest ($ghTag) has no published $target asset yet; download may fail."
     } else {
         Fail "Could not resolve latest release for $Repo from GitHub or R2 mirror."
         if (-not $Token) {
@@ -141,7 +182,7 @@ if ($Version -eq 'latest') {
 }
 Step "Version $Version"
 
-$asset = "artui-$($Version.TrimStart('v'))-$target.zip"
+$asset = Get-AssetName $Version
 $publicUrl = "https://github.com/$Repo/releases/download/$Version/$asset"
 
 $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "artui-$([guid]::NewGuid())") -Force
