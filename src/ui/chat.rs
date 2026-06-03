@@ -307,7 +307,7 @@ mod chat_meta_tests {
     }
 }
 
-fn transcript_scroll_offset(app: &App, area: Rect) -> u16 {
+pub(crate) fn transcript_scroll_offset(app: &App, area: Rect) -> u16 {
     let content_height = transcript_visual_height(app, area.width.max(1) as usize);
     let bottom_scroll = content_height.saturating_sub(area.height as usize) as u16;
     bottom_scroll.saturating_sub(app.chat_scroll.min(bottom_scroll))

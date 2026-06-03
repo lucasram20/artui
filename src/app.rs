@@ -1761,8 +1761,7 @@ impl App {
                     self.status = "Refreshing GitHub Copilot models".to_owned();
                     SlashCommandResult::Handled(self.copilot_model_refresh_request())
                 } else {
-                    self.status =
-                        "Model refresh is only available for GitHub Copilot".to_owned();
+                    self.status = "Model refresh is only available for GitHub Copilot".to_owned();
                     SlashCommandResult::Handled(None)
                 }
             }
