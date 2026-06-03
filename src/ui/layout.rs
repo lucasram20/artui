@@ -1,13 +1,12 @@
 use crate::{
-    app::{App, ReasoningEffort, SlashCommand, StatusLineItem, ThemeId, UiMode},
-    terminal_preset,
-    ui::{cells, chat::TranscriptRenderCache, composer},
+    app::{App, SlashCommand, ThemeId, UiMode},
+    ui::{cells, chat::TranscriptRenderCache, components::chrome, composer, statusline},
 };
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -18,137 +17,16 @@ pub fn draw(frame: &mut Frame<'_>, app: &App, transcript_cache: &mut TranscriptR
         app.theme
     };
 
-    let palette = theme::palette(theme);
-    frame.render_widget(
-        Block::default().style(Style::default().bg(palette.bg)),
-        frame.area(),
-    );
-
-    let content = frame.area().inner(Margin {
-        vertical: 1,
-        horizontal: 2,
-    });
-    let header_height = match content.width {
-        118.. => 7,
-        76.. => 6,
-        _ => 4,
-    };
+    chrome::draw_app_background(frame, theme);
+    let content = chrome::content_area(frame.area());
+    let header_height = chrome::header_height(content.width);
     let root = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(header_height), Constraint::Min(10)])
         .split(content);
 
-    draw_header(frame, app, theme, root[0]);
+    chrome::draw_header(frame, app, theme, root[0]);
     draw_body(frame, app, theme, root[1], transcript_cache);
-}
-
-fn draw_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    if area.width < 76 || area.height < 6 {
-        draw_compact_header(frame, app, theme, area);
-        return;
-    }
-
-    let palette = theme::palette(theme);
-    frame.render_widget(
-        Block::default().style(Style::default().bg(palette.bg)),
-        area,
-    );
-
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(19), Constraint::Min(20)])
-        .split(area);
-
-    // Left: Logo rendered with colored background spaces (avoids █ width issues)
-    let logo_lines = render_logo_lines(palette.accent);
-    frame.render_widget(
-        Paragraph::new(logo_lines).style(Style::default().bg(palette.bg)),
-        columns[0],
-    );
-
-    // Right: version + quote, vertically centered
-    let mut info_lines = vec![
-        Line::from(vec![
-            Span::styled(
-                "artui",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(" v{}", env!("CARGO_PKG_VERSION")),
-                Style::default().fg(palette.muted),
-            ),
-        ]),
-        Line::from(""),
-    ];
-
-    if let Some(quote) = &app.quote {
-        info_lines.push(Line::from(Span::styled(
-            format!("\"{}\"", quote.text),
-            Style::default().fg(palette.text),
-        )));
-        info_lines.push(Line::from(Span::styled(
-            format!("— {}", quote.author),
-            Style::default().fg(palette.muted),
-        )));
-    } else {
-        info_lines.push(Line::from(Span::styled(
-            "\"Code is like humor. When you have to explain it, it's bad.\"",
-            Style::default().fg(palette.text),
-        )));
-        info_lines.push(Line::from(Span::styled(
-            "— Cory House",
-            Style::default().fg(palette.muted),
-        )));
-    }
-
-    // Center text vertically to align with logo top
-    frame.render_widget(
-        Paragraph::new(info_lines)
-            .wrap(Wrap { trim: false })
-            .style(Style::default().fg(palette.text).bg(palette.bg)),
-        Rect {
-            x: columns[1].x,
-            y: columns[1].y,
-            width: columns[1].width,
-            height: columns[1].height,
-        },
-    );
-}
-
-/// Render "ART" logo using colored background spaces instead of █ characters.
-/// This avoids the common issue where █ renders as 2 cells wide in some terminal fonts.
-fn render_logo_lines(color: ratatui::style::Color) -> Vec<Line<'static>> {
-    // Each row is a bitmap: 1 = colored cell, 0 = empty
-    // Layout: A(5) + space + R(4) + space + T(5) = 16 chars wide
-    const LOGO_BITMAP: &[&[u8]] = &[
-        b" ### ####  #####",
-        b"#   # #  #   # ",
-        b"##### ###    # ",
-        b"#   # #  #   # ",
-        b"#   # #  #   # ",
-    ];
-
-    let on = Style::default().bg(color);
-    let off = Style::default();
-
-    LOGO_BITMAP
-        .iter()
-        .map(|row| {
-            let spans: Vec<Span<'static>> = row
-                .iter()
-                .map(|&cell| {
-                    if cell == b'#' {
-                        Span::styled(" ", on)
-                    } else {
-                        Span::styled(" ", off)
-                    }
-                })
-                .collect();
-            Line::from(spans)
-        })
-        .collect()
 }
 
 fn draw_body(
@@ -187,43 +65,8 @@ fn draw_body(
         draw_file_mentions(frame, app, theme, rows[2], &file_mentions);
     }
     if popup_height == 0 {
-        draw_footer(frame, app, theme, rows[3]);
+        statusline::draw_footer(frame, app, theme, rows[3]);
     }
-}
-
-fn draw_compact_header(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    let palette = theme::palette(theme);
-    let lines = vec![
-        Line::from(vec![
-            Span::styled(
-                "artui",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  v", Style::default().fg(palette.muted)),
-            Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(palette.text)),
-        ]),
-        Line::from(vec![
-            Span::styled(active_model(app), Style::default().fg(palette.text)),
-            Span::styled(
-                format!("  {}", app.active_agent_id()),
-                Style::default().fg(palette.accent),
-            ),
-            Span::styled("  ", Style::default().fg(palette.subtle)),
-            Span::styled(compact_cwd(), Style::default().fg(palette.muted)),
-        ]),
-    ];
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(palette.accent)),
-            )
-            .style(Style::default().fg(palette.text).bg(palette.bg)),
-        area,
-    );
 }
 
 fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
@@ -254,13 +97,14 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     frame.render_widget(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(reasoning_effort_color(palette, app.reasoning_effort)),
-            )
+            .border_style(Style::default().fg(statusline::reasoning_effort_color(
+                palette,
+                app.reasoning_effort,
+            )))
             .style(Style::default().bg(palette.bg)),
         area,
     );
-    draw_input_titles(frame, app, theme, area);
+    statusline::draw_input_titles(frame, app, theme, area);
     frame.render_widget(
         Paragraph::new(lines).style(Style::default().bg(palette.bg)),
         input_area,
@@ -482,290 +326,7 @@ fn trim_to_width(value: &str, width: usize) -> String {
     cells::trim_to_width(value, width)
 }
 
-fn statusline_enabled(app: &App, item: StatusLineItem) -> bool {
-    app.statusline_enabled[item.index()]
-}
-
-fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    let palette = theme::palette(theme);
-    let budget = area.width as usize;
-    let mut spans = Vec::new();
-
-    if statusline_enabled(app, StatusLineItem::CurrentDir) {
-        spans.push(Span::styled(
-            compact_cwd(),
-            Style::default().fg(palette.muted),
-        ));
-    }
-
-    if statusline_enabled(app, StatusLineItem::ProjectName) {
-        if let Some(name) = project_dir_name() {
-            push_separator(&mut spans, palette);
-            spans.push(Span::styled(name, Style::default().fg(palette.muted)));
-        }
-    }
-
-    if statusline_enabled(app, StatusLineItem::GitBranch) && app.git_branch_label != "no-git" {
-        push_separator(&mut spans, palette);
-        spans.push(Span::styled("(", Style::default().fg(palette.muted)));
-        spans.push(Span::styled(
-            app.git_branch_label.clone(),
-            Style::default().fg(palette.muted),
-        ));
-        if statusline_enabled(app, StatusLineItem::GitStatus)
-            && app.git_status_label != "clean"
-            && app.git_status_label != "unknown"
-        {
-            spans.push(Span::styled(" ±", Style::default().fg(palette.muted)));
-            spans.push(Span::styled(
-                app.git_status_label.clone(),
-                Style::default().fg(palette.pink),
-            ));
-        }
-        spans.push(Span::styled(")", Style::default().fg(palette.muted)));
-    } else if statusline_enabled(app, StatusLineItem::GitStatus)
-        && app.git_status_label != "clean"
-        && app.git_status_label != "unknown"
-    {
-        push_separator(&mut spans, palette);
-        spans.push(Span::styled(
-            app.git_status_label.clone(),
-            Style::default().fg(palette.pink),
-        ));
-    }
-
-    if statusline_enabled(app, StatusLineItem::Context) {
-        push_separator(&mut spans, palette);
-        let used = cells::spans_display_width(&spans);
-        let remaining = budget.saturating_sub(used);
-        spans.extend(context_bar_spans(app, palette, remaining));
-    }
-
-    let fitted = cells::fit_spans_to_width(spans, budget);
-
-    frame.render_widget(
-        Paragraph::new(Line::from(fitted))
-            .alignment(Alignment::Left)
-            .style(Style::default().fg(palette.text).bg(palette.bg)),
-        area,
-    );
-}
-
-fn push_separator(spans: &mut Vec<Span<'static>>, palette: theme::Palette) {
-    if spans.is_empty() {
-        return;
-    }
-    let sep = if terminal_preset::use_legacy_glyphs() {
-        " | "
-    } else {
-        " │ "
-    };
-    spans.push(Span::styled(sep, Style::default().fg(palette.subtle)));
-}
-
-/// Render context usage — full bar when there is room, otherwise a short percent label.
-pub(crate) fn context_bar_spans(
-    app: &App,
-    palette: theme::Palette,
-    budget: usize,
-) -> Vec<Span<'static>> {
-    use ratatui::style::Color;
-
-    let percent = app.context_usage_percent() as usize;
-    const BAR_PREFIX: usize = 4; // "ctx "
-    const BAR_WIDTH: usize = 10;
-
-    if budget < BAR_PREFIX + 3 {
-        return Vec::new();
-    }
-
-    if budget < BAR_PREFIX + BAR_WIDTH {
-        return vec![Span::styled(
-            format!("ctx {percent}%"),
-            Style::default().fg(palette.muted),
-        )];
-    }
-
-    let filled = (percent * BAR_WIDTH) / 100;
-    let bar_color = match percent {
-        0..=50 => palette.green,
-        51..=75 => Color::Yellow,
-        _ => palette.pink,
-    };
-
-    vec![
-        Span::styled("ctx ", Style::default().fg(palette.muted)),
-        Span::styled(
-            terminal_preset::context_bar_fill(filled),
-            Style::default().fg(bar_color),
-        ),
-        Span::styled(
-            terminal_preset::context_bar_empty(BAR_WIDTH - filled),
-            Style::default().fg(palette.subtle),
-        ),
-    ]
-}
-
-fn draw_input_titles(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
-    if area.width < 8 {
-        return;
-    }
-    let palette = theme::palette(theme);
-    let dot = " · ";
-
-    if statusline_enabled(app, StatusLineItem::Agent) {
-        let agent_name = app.active_agent_name();
-        let eye = app.eye_glyph();
-        let left_text = format!("{eye}{dot}{agent_name}");
-        let left_width = cells::display_width(&left_text).saturating_add(2) as u16;
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-                Span::styled(eye, Style::default().fg(palette.accent).bg(palette.bg)),
-                Span::styled(dot, Style::default().fg(palette.subtle).bg(palette.bg)),
-                Span::styled(
-                    agent_name,
-                    Style::default()
-                        .fg(palette.accent)
-                        .bg(palette.bg)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(" ", Style::default().fg(palette.border).bg(palette.bg)),
-            ])),
-            Rect {
-                x: area.x.saturating_add(2),
-                y: area.y,
-                width: left_width.min(area.width / 2),
-                height: 1,
-            },
-        );
-    }
-
-    let mut spans = vec![Span::styled(
-        " ",
-        Style::default().fg(palette.border).bg(palette.bg),
-    )];
-    let mut width_used = 2usize;
-    let budget = area.width.saturating_sub(10) as usize;
-    let mut first = true;
-
-    if statusline_enabled(app, StatusLineItem::ProviderUsage) {
-        let provider = app.provider_usage_label().to_lowercase();
-        width_used +=
-            cells::display_width(&provider) + if first { 0 } else { cells::display_width(dot) };
-        if width_used <= budget {
-            if !first {
-                spans.push(Span::styled(
-                    dot,
-                    Style::default().fg(palette.subtle).bg(palette.bg),
-                ));
-            }
-            spans.push(Span::styled(
-                provider,
-                Style::default().fg(palette.muted).bg(palette.bg),
-            ));
-            first = false;
-        }
-    }
-    if statusline_enabled(app, StatusLineItem::Model) && width_used < budget {
-        let model = active_model(app).to_owned();
-        let extra =
-            cells::display_width(&model) + if first { 0 } else { cells::display_width(dot) };
-        if width_used + extra <= budget {
-            if !first {
-                spans.push(Span::styled(
-                    dot,
-                    Style::default().fg(palette.subtle).bg(palette.bg),
-                ));
-            }
-            spans.push(Span::styled(
-                model,
-                Style::default().fg(palette.text).bg(palette.bg),
-            ));
-            width_used += extra;
-            first = false;
-        }
-    }
-    if statusline_enabled(app, StatusLineItem::Reasoning) && width_used < budget {
-        let reasoning = app.reasoning_effort.label().to_owned();
-        let extra =
-            cells::display_width(&reasoning) + if first { 0 } else { cells::display_width(dot) };
-        if width_used + extra <= budget {
-            if !first {
-                spans.push(Span::styled(
-                    dot,
-                    Style::default().fg(palette.subtle).bg(palette.bg),
-                ));
-            }
-            spans.push(Span::styled(
-                reasoning,
-                reasoning_effort_style(palette, app.reasoning_effort),
-            ));
-        }
-    }
-
-    if spans.len() <= 1 {
-        return;
-    }
-
-    spans.push(Span::styled(
-        " ",
-        Style::default().fg(palette.border).bg(palette.bg),
-    ));
-    let right_area_width = cells::spans_display_width(&spans).saturating_add(1) as u16;
-
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)),
-        Rect {
-            x: area
-                .right()
-                .saturating_sub(right_area_width.saturating_add(1)),
-            y: area.y,
-            width: right_area_width,
-            height: 1,
-        },
-    );
-}
-
-fn reasoning_effort_style(palette: theme::Palette, effort: ReasoningEffort) -> Style {
-    let style = Style::default()
-        .fg(reasoning_effort_color(palette, effort))
-        .bg(palette.bg);
-    if matches!(effort, ReasoningEffort::High | ReasoningEffort::XHigh) {
-        style.add_modifier(Modifier::BOLD)
-    } else {
-        style
-    }
-}
-
-fn reasoning_effort_color(
-    palette: theme::Palette,
-    effort: ReasoningEffort,
-) -> ratatui::style::Color {
-    match effort {
-        ReasoningEffort::Auto => palette.border,
-        ReasoningEffort::Low => palette.green,
-        ReasoningEffort::Medium => palette.yellow,
-        ReasoningEffort::High => palette.pink,
-        ReasoningEffort::XHigh => palette.purple,
-    }
-}
-
-fn compact_cwd() -> String {
-    std::env::current_dir()
-        .ok()
-        .map(|path| crate::util::paths::compact_display_path(&path))
-        .unwrap_or_else(|| "~".to_owned())
-}
-
-fn project_dir_name() -> Option<String> {
-    std::env::current_dir().ok().and_then(|path| {
-        path.file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-    })
-}
-
-fn active_model(app: &App) -> &str {
+pub(crate) fn active_model(app: &App) -> &str {
     app.active_model()
 }
 
