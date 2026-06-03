@@ -121,7 +121,7 @@ impl OpenAiCompatProvider {
                 .text()
                 .await
                 .context("failed to read error response")?;
-            bail!("OpenAI-compatible endpoint returned HTTP {status}: {body}");
+            bail!("{}", format_openai_compat_http_error(status, &body));
         }
 
         // Parse SSE stream
@@ -319,10 +319,32 @@ async fn emit_pending_tool_ends(
     }
 }
 
+fn format_openai_compat_http_error(status: reqwest::StatusCode, body: &str) -> String {
+    if status == reqwest::StatusCode::FORBIDDEN && body.contains("ip_account_conflict") {
+        return format!(
+            "HTTP 403: freemodel allows only one free account per IP on this network. \
+             The shared artui relay cannot bypass that limit for every user. \
+             Options: run `/provider` and pick OpenAI/Ollama/Copilot, set your own \
+             `FREEMODEL_API_KEY` with `providers.freemodel.base_url` in config, try another \
+             network, or upgrade at freemodel.dev.\n\nUpstream: {body}"
+        );
+    }
+
+    format!("OpenAI-compatible endpoint returned HTTP {status}: {body}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+
+    #[test]
+    fn ip_account_conflict_error_is_actionable() {
+        let body = r#"{"error":{"code":"ip_account_conflict","message":"one per IP"}}"#;
+        let msg = format_openai_compat_http_error(reqwest::StatusCode::FORBIDDEN, body);
+        assert!(msg.contains("one free account per IP"));
+        assert!(msg.contains("/provider"));
+    }
 
     #[tokio::test]
     async fn parses_tool_call_sse_chunks() {

@@ -606,7 +606,9 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 
     if statusline_enabled(app, StatusLineItem::Context) {
         push_separator(&mut spans, palette);
-        spans.extend(context_bar_spans(app, palette));
+        let used = cells::spans_display_width(&spans);
+        let remaining = budget.saturating_sub(used);
+        spans.extend(context_bar_spans(app, palette, remaining));
     }
 
     let fitted = cells::fit_spans_to_width(spans, budget);
@@ -631,28 +633,42 @@ fn push_separator(spans: &mut Vec<Span<'static>>, palette: theme::Palette) {
     spans.push(Span::styled(sep, Style::default().fg(palette.subtle)));
 }
 
-/// Render a compact colored context usage bar (10 cells wide).
-/// Green → Yellow → Red as usage increases.
-fn context_bar_spans(app: &App, palette: theme::Palette) -> Vec<Span<'static>> {
+/// Render context usage — full bar when there is room, otherwise a short percent label.
+fn context_bar_spans(app: &App, palette: theme::Palette, budget: usize) -> Vec<Span<'static>> {
     use ratatui::style::Color;
 
-    const BAR_WIDTH: usize = 10;
     let percent = app.context_usage_percent() as usize;
-    let filled = (percent * BAR_WIDTH) / 100;
+    const BAR_PREFIX: usize = 4; // "ctx "
+    const BAR_WIDTH: usize = 10;
 
+    if budget < BAR_PREFIX + 3 {
+        return Vec::new();
+    }
+
+    if budget < BAR_PREFIX + BAR_WIDTH {
+        return vec![Span::styled(
+            format!("ctx {percent}%"),
+            Style::default().fg(palette.muted),
+        )];
+    }
+
+    let filled = (percent * BAR_WIDTH) / 100;
     let bar_color = match percent {
         0..=50 => palette.green,
         51..=75 => Color::Yellow,
         _ => palette.pink,
     };
 
-    let filled_str = terminal_preset::context_bar_fill(filled);
-    let empty_str = terminal_preset::context_bar_empty(BAR_WIDTH - filled);
-
     vec![
         Span::styled("ctx ", Style::default().fg(palette.muted)),
-        Span::styled(filled_str, Style::default().fg(bar_color)),
-        Span::styled(empty_str, Style::default().fg(palette.subtle)),
+        Span::styled(
+            terminal_preset::context_bar_fill(filled),
+            Style::default().fg(bar_color),
+        ),
+        Span::styled(
+            terminal_preset::context_bar_empty(BAR_WIDTH - filled),
+            Style::default().fg(palette.subtle),
+        ),
     ]
 }
 
@@ -804,10 +820,7 @@ fn reasoning_effort_color(
 fn compact_cwd() -> String {
     std::env::current_dir()
         .ok()
-        .map(|path| {
-            let path = path.to_string_lossy();
-            path.replace(&std::env::var("HOME").unwrap_or_default(), "~")
-        })
+        .map(|path| crate::util::paths::compact_display_path(&path))
         .unwrap_or_else(|| "~".to_owned())
 }
 
