@@ -87,10 +87,19 @@ pub fn draw(
         lines.push(Line::from(""));
     }
 
-    let scroll = transcript_scroll_offset(app, area);
-    let paragraph = Paragraph::new(lines)
+    let scroll = transcript_scroll_offset(app, area) as usize;
+    let viewport_lines = area.height.max(1) as usize;
+    const OVERSCAN: usize = 4;
+    let start = scroll.saturating_sub(OVERSCAN.min(scroll));
+    let end = (scroll + viewport_lines + OVERSCAN).min(lines.len());
+    let window = if start < end {
+        &lines[start..end]
+    } else {
+        &lines[..]
+    };
+    let paragraph = Paragraph::new(window.to_vec())
         .style(Style::default().fg(palette.text).bg(palette.bg))
-        .scroll((scroll, 0))
+        .scroll(((scroll - start) as u16, 0))
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
 }
