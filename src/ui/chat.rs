@@ -2,10 +2,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Paragraph, Wrap},
+    widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
     Frame,
 };
 
@@ -101,7 +101,22 @@ pub fn draw(
         .style(Style::default().fg(palette.text).bg(palette.bg))
         .scroll(((scroll - start) as u16, 0))
         .wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, area);
+
+    if lines.len() > viewport_lines {
+        let columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .split(area);
+        frame.render_widget(paragraph, columns[0]);
+        let mut scrollbar_state = ScrollbarState::new(lines.len()).position(scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            columns[1],
+            &mut scrollbar_state,
+        );
+    } else {
+        frame.render_widget(paragraph, area);
+    }
 }
 
 fn render_message_lines(
