@@ -1,7 +1,12 @@
 mod cells;
 mod chat;
+mod composer;
+mod geometry;
 mod layout;
 mod popups;
+
+#[cfg(test)]
+mod render_tests;
 
 pub use chat::TranscriptRenderCache;
 #[allow(dead_code)]

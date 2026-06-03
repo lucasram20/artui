@@ -1,7 +1,7 @@
 use crate::{
     app::{App, ReasoningEffort, SlashCommand, StatusLineItem, ThemeId, UiMode},
     terminal_preset,
-    ui::{cells, chat::TranscriptRenderCache},
+    ui::{cells, chat::TranscriptRenderCache, composer},
 };
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -234,7 +234,7 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
     };
     let prompt_width = prompt.chars().count() + 1;
     let text_width = area.width.saturating_sub(prompt_width as u16).max(1) as usize;
-    let input_lines = input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16;
+    let input_lines = composer::input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16;
     let input_area = Rect {
         x: area.x.saturating_add(1),
         y: area.y.saturating_add(1),
@@ -248,7 +248,7 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
             Span::styled("Ask artui anything...", Style::default().fg(palette.subtle)),
         ])]
     } else {
-        wrapped_input_lines(prompt, app.input.as_str(), text_width, theme)
+        composer::wrapped_input_lines(prompt, app.input.as_str(), text_width, theme)
     };
 
     frame.render_widget(
@@ -273,7 +273,7 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
         && !app.statusline_open
         && !app.agent_picker_open
     {
-        let (cursor_row, cursor_col) = input_cursor(app.input.as_str(), text_width);
+        let (cursor_row, cursor_col) = composer::input_cursor(app.input.as_str(), text_width);
         let cursor_x = input_area.x + prompt_width as u16 + cursor_col;
         let cursor_y = input_area.y + cursor_row.min(input_area.height.saturating_sub(1));
         frame.set_cursor_position((cursor_x.min(input_area.right().saturating_sub(1)), cursor_y));
@@ -283,21 +283,7 @@ fn draw_input(frame: &mut Frame<'_>, app: &App, theme: ThemeId, area: Rect) {
 fn input_height(app: &App, width: u16) -> u16 {
     let prompt_width = 2usize;
     let text_width = width.saturating_sub(prompt_width as u16).max(1) as usize;
-    input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16
-}
-
-fn input_line_count(input: &str, text_width: usize) -> usize {
-    if input.is_empty() {
-        return 1;
-    }
-
-    input
-        .split('\n')
-        .map(|line| {
-            let len = line.chars().count();
-            len.max(1).div_ceil(text_width)
-        })
-        .sum::<usize>()
+    composer::input_line_count(app.input.as_str(), text_width).clamp(1, 6) as u16
 }
 
 fn conversation_anchor_height(app: &App, width: u16, max_height: u16) -> u16 {
@@ -333,62 +319,6 @@ fn transcript_height(app: &App, width: u16) -> u16 {
 
 fn empty_conversation_anchor(_max_height: u16) -> u16 {
     1
-}
-
-fn wrapped_input_lines<'a>(
-    prompt: &'a str,
-    input: &'a str,
-    text_width: usize,
-    theme: ThemeId,
-) -> Vec<Line<'a>> {
-    let palette = theme::palette(theme);
-    let mut lines = Vec::new();
-    for (logical_index, line) in input.split('\n').enumerate() {
-        let chars = line.chars().collect::<Vec<_>>();
-        if chars.is_empty() {
-            let prefix = if logical_index == 0 {
-                Span::styled(format!("{prompt} "), Style::default().fg(palette.accent))
-            } else {
-                Span::raw(" ".repeat(prompt.chars().count() + 1))
-            };
-            lines.push(Line::from(vec![prefix]));
-            continue;
-        }
-
-        for (chunk_index, chunk) in chars.chunks(text_width).enumerate() {
-            let prefix = if lines.is_empty() {
-                Span::styled(format!("{prompt} "), Style::default().fg(palette.accent))
-            } else if chunk_index == 0 && logical_index == 0 {
-                Span::raw(String::new())
-            } else {
-                Span::raw(" ".repeat(prompt.chars().count() + 1))
-            };
-            let content = chunk.iter().collect::<String>();
-            lines.push(Line::from(vec![
-                prefix,
-                Span::styled(content, Style::default().fg(palette.text)),
-            ]));
-        }
-    }
-    lines
-}
-
-fn input_cursor(input: &str, text_width: usize) -> (u16, u16) {
-    let mut row = 0;
-    let mut col = 0;
-    for (i, line) in input.split('\n').enumerate() {
-        if i > 0 {
-            row += 1;
-            col = 0;
-        }
-        let len = line.chars().count();
-        if len == 0 {
-            continue;
-        }
-        row += (len / text_width) as u16;
-        col = (len % text_width) as u16;
-    }
-    (row, col)
 }
 
 fn visible_slash_commands(app: &App) -> Vec<&'static SlashCommand> {
@@ -634,7 +564,11 @@ fn push_separator(spans: &mut Vec<Span<'static>>, palette: theme::Palette) {
 }
 
 /// Render context usage — full bar when there is room, otherwise a short percent label.
-fn context_bar_spans(app: &App, palette: theme::Palette, budget: usize) -> Vec<Span<'static>> {
+pub(crate) fn context_bar_spans(
+    app: &App,
+    palette: theme::Palette,
+    budget: usize,
+) -> Vec<Span<'static>> {
     use ratatui::style::Color;
 
     let percent = app.context_usage_percent() as usize;

@@ -10,7 +10,7 @@ use crate::{
     agent::PrimaryAgent,
     app::{App, StatusLineItem, ThemeId},
     providers::registry::{provider_display_name, AuthRequirement, LOGIN_PROVIDERS},
-    ui::layout::theme,
+    ui::{geometry, layout::theme},
 };
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
@@ -53,7 +53,7 @@ fn draw_modal_backdrop(frame: &mut Frame<'_>, app: &App) {
 
 fn draw_theme_picker(frame: &mut Frame<'_>, app: &App) {
     let item_count = ThemeId::ALL.len() as u16;
-    let area = selector_area(frame.area(), 76, item_count.saturating_add(8));
+    let area = geometry::selector_area(frame.area(), 76, item_count.saturating_add(8));
     render_popup_surface(frame, app, area);
 
     let palette = theme::palette(app.theme);
@@ -126,7 +126,7 @@ fn draw_theme_picker(frame: &mut Frame<'_>, app: &App) {
 }
 
 fn draw_statusline_picker(frame: &mut Frame<'_>, app: &App) {
-    let area = centered(frame.area(), 84, 18);
+    let area = geometry::centered(frame.area(), 84, 18);
     frame.render_widget(Clear, area);
 
     let palette = theme::palette(app.theme);
@@ -218,7 +218,7 @@ fn draw_statusline_picker(frame: &mut Frame<'_>, app: &App) {
 
 fn draw_model_picker(frame: &mut Frame<'_>, app: &App) {
     let item_count = app.model_options.len().max(1) as u16;
-    let area = selector_area(frame.area(), 78, item_count.saturating_add(8));
+    let area = geometry::selector_area(frame.area(), 78, item_count.saturating_add(8));
     render_popup_surface(frame, app, area);
 
     let palette = theme::palette(app.theme);
@@ -343,7 +343,7 @@ fn draw_model_selector_help(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {
     let item_count = PrimaryAgent::ALL.len() as u16;
-    let area = selector_area(frame.area(), 76, item_count.saturating_add(8));
+    let area = geometry::selector_area(frame.area(), 76, item_count.saturating_add(8));
     render_popup_surface(frame, app, area);
 
     let palette = theme::palette(app.theme);
@@ -416,7 +416,7 @@ fn draw_agent_picker(frame: &mut Frame<'_>, app: &App) {
 
 fn draw_login_picker(frame: &mut Frame<'_>, app: &App) {
     let item_count = LOGIN_PROVIDERS.len() as u16;
-    let area = selector_area(frame.area(), 82, item_count.saturating_add(8));
+    let area = geometry::selector_area(frame.area(), 82, item_count.saturating_add(8));
     render_popup_surface(frame, app, area);
 
     let palette = theme::palette(app.theme);
@@ -586,51 +586,14 @@ fn selected_mark(is_active: bool) -> &'static str {
     }
 }
 
-fn selector_area(area: Rect, width: u16, height: u16) -> Rect {
-    centered(
-        area,
-        width.min(MAX_SELECTOR_WIDTH),
-        height.clamp(MIN_SELECTOR_HEIGHT, MAX_SELECTOR_HEIGHT),
-    )
-}
-
 fn render_popup_surface(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    if let Some(shadow) = shadow_area(area, frame.area()) {
+    if let Some(shadow) = geometry::shadow_area(area, frame.area()) {
         frame.render_widget(
             Block::default().style(Style::default().bg(theme::palette(app.theme).rule)),
             shadow,
         );
     }
     frame.render_widget(Clear, area);
-}
-
-fn shadow_area(area: Rect, bounds: Rect) -> Option<Rect> {
-    let x = area.x.checked_add(POPUP_SHADOW_OFFSET)?;
-    let y = area.y.checked_add(POPUP_SHADOW_OFFSET)?;
-    let width = area.width.min(bounds.right().saturating_sub(x));
-    let height = area.height.min(bounds.bottom().saturating_sub(y));
-    (width > 0 && height > 0).then_some(Rect {
-        x,
-        y,
-        width,
-        height,
-    })
-}
-
-const MAX_SELECTOR_WIDTH: u16 = 82;
-const MIN_SELECTOR_HEIGHT: u16 = 10;
-const MAX_SELECTOR_HEIGHT: u16 = 34;
-const POPUP_SHADOW_OFFSET: u16 = 1;
-
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width.saturating_sub(2));
-    let height = height.min(area.height.saturating_sub(2));
-    Rect {
-        x: area.x + area.width.saturating_sub(width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    }
 }
 
 /// Render the Approval modal — shows the tool name, a body (diff for
@@ -644,7 +607,7 @@ fn draw_approval(frame: &mut Frame<'_>, app: &App) {
     let area = frame.area();
     let dialog_w = (area.width.saturating_mul(80) / 100).clamp(50, 120);
     let dialog_h = (area.height.saturating_mul(70) / 100).clamp(10, 40);
-    let dialog = selector_area(area, dialog_w, dialog_h);
+    let dialog = geometry::selector_area(area, dialog_w, dialog_h);
     frame.render_widget(Clear, dialog);
 
     let layout = Layout::default()
