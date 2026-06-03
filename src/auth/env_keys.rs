@@ -25,18 +25,12 @@ pub fn known_env_keys(provider_id: &str) -> &'static [&'static str] {
         // Ollama is local-only by default; we still allow OLLAMA_API_KEY for
         // gateway proxies.
         "ollama" => &["OLLAMA_API_KEY"],
-        // Hosted default provider: relay injects the maintainer key server-side,
-        // so the binary normally sends no Authorization header. These env vars
-        // are for power users who bypass the relay (see cloudflare/README.md).
-        "freemodel" => &["FREEMODEL_API_KEY", "ARTUI_FREEMODEL_API_KEY"],
         _ => &[],
     }
 }
 
 /// Resolve a credential for `provider_id`. Order: AuthStore (explicit login)
-/// → environment variables. Returns `None` if nothing is available — the
-/// caller is expected to handle the no-credential case (the freemodel relay
-/// path is one such caller: it talks to the relay anonymously).
+/// → environment variables. Returns `None` if nothing is available.
 pub fn resolve_credential(provider_id: &str, store: Option<&AuthStore>) -> Option<String> {
     if let Some(store) = store {
         if let Ok(Some(record)) = store.record(provider_id) {

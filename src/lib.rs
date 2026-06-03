@@ -133,19 +133,6 @@ pub async fn run() -> Result<()> {
         .await;
     spawn_app_request(AppRequest::FetchQuote, event_tx.clone());
 
-    // Best-effort freemodel model discovery on startup. Silent on failure so
-    // offline users still launch instantly. Only runs when freemodel is the
-    // active provider — a user who picked ollama doesn't need to hit the
-    // network for it.
-    if config.default_provider == "freemodel" {
-        spawn_app_request(
-            AppRequest::RefreshFreemodelModels {
-                config: Box::new(config.providers.freemodel.clone()),
-            },
-            event_tx.clone(),
-        );
-    }
-
     let mut terminal = setup_terminal()?;
     let mut effects: EffectManager<&'static str> = EffectManager::default();
     let mut last_frame = Instant::now();
@@ -806,16 +793,6 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
                 }
                 let _ = event_tx
                     .send(AppEvent::Auth(crate::app::AuthEvent::CopilotModels(result)))
-                    .await;
-            }
-            AppRequest::RefreshFreemodelModels { config } => {
-                let models = crate::providers::freemodel::discover_models(&config)
-                    .await
-                    .unwrap_or_default();
-                let _ = event_tx
-                    .send(AppEvent::Auth(crate::app::AuthEvent::FreemodelModels(
-                        models,
-                    )))
                     .await;
             }
             AppRequest::FetchQuote => {

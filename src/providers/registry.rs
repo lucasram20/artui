@@ -43,17 +43,7 @@ pub struct ProviderMetadata {
     pub streaming: bool,
 }
 
-pub const PROVIDERS: [ProviderMetadata; 5] = [
-    ProviderMetadata {
-        id: "freemodel",
-        display_name: "artui",
-        // Relay-backed hosted provider; no `/login` required (optional
-        // FREEMODEL_API_KEY when bypassing the relay). Internal id stays
-        // `freemodel`; UI label is `artui`.
-        auth_requirement: AuthRequirement::None,
-        model_list_strategy: ModelListStrategy::ProviderEndpoint,
-        streaming: true,
-    },
+pub const PROVIDERS: [ProviderMetadata; 4] = [
     ProviderMetadata {
         id: "ollama",
         display_name: "Ollama",
@@ -118,7 +108,6 @@ pub fn provider_display_name(id: &str) -> &str {
 
 pub fn configured_model<'a>(config: &'a AppConfig, provider_id: &str) -> &'a str {
     match provider_id {
-        "freemodel" => config.providers.freemodel.default_model.as_str(),
         "ollama" => config.providers.ollama.default_model.as_str(),
         "openai_compat" => config.providers.openai_compat.default_model.as_str(),
         "copilot" => config.providers.copilot.default_model.as_str(),

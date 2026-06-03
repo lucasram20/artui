@@ -21,13 +21,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            // Default hosted provider (UI: artui) uses the maintainer Cloudflare
-            // relay (`cloudflare/`) — upstream API key is server-side only.
-            // Override `providers.freemodel.base_url` or `ARTUI_FREEMODEL_RELAY_URL`.
-            // `FREEMODEL_API_KEY` bypasses the relay for direct upstream access.
-            // and they're free to switch to ollama or any other provider
-            // through `/model`.
-            default_provider: "freemodel".to_owned(),
+            default_provider: "ollama".to_owned(),
             auth_storage_path: None,
             agent: AgentConfig::default(),
             providers: ProviderConfig::default(),
@@ -191,7 +185,6 @@ pub struct ProviderConfig {
     pub openai_compat: OpenAiCompatConfig,
     pub openai_account: OpenAiAccountConfig,
     pub copilot: CopilotConfig,
-    pub freemodel: FreemodelConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -210,69 +203,6 @@ impl Default for OllamaConfig {
     }
 }
 
-/// Configuration for the default hosted OpenAI-compatible provider (UI label: artui).
-///
-/// Registered as a no-login default. End-user binaries route through the
-/// maintainer’s Cloudflare Worker relay (`cloudflare/`), which injects the
-/// upstream API key server-side. `default_model` is the first-launch selection;
-/// `models` is filled at runtime via `GET {base_url}/models` or user config.
-///
-/// Power users can point `base_url` at any OpenAI-compatible endpoint and set
-/// `FREEMODEL_API_KEY` or `ARTUI_FREEMODEL_API_KEY`.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct FreemodelConfig {
-    pub base_url: String,
-    pub default_model: String,
-    /// Cached/configured model id list shown in the `/model` picker. Populated
-    /// at startup by `GET {base_url}/models` and may be overridden in the
-    /// user config file.
-    pub models: Vec<String>,
-    pub request_timeout_secs: u64,
-}
-
-impl Default for FreemodelConfig {
-    fn default() -> Self {
-        Self {
-            // Relay URL: `ARTUI_FREEMODEL_RELAY_URL`, release build
-            // `ARTUI_FREEMODEL_RELAY_BASE`, or `providers.freemodel.base_url`.
-            base_url: String::new(),
-            default_model: "gpt-5.4-mini".to_owned(),
-            models: Vec::new(),
-            request_timeout_secs: 30,
-        }
-    }
-}
-
-impl FreemodelConfig {
-    /// Maintainer relay used when compile-time/env/config URLs are unset.
-    /// Release CI should set `ARTUI_FREEMODEL_RELAY_BASE`; this keeps installs
-    /// working if that secret was missing from a given build.
-    const DEFAULT_RELAY_V1: &'static str =
-        "https://artui-freemodel-relay.kaminarikokyu.workers.dev/v1";
-
-    /// Effective OpenAI-compat base URL (includes `/v1`).
-    pub fn resolved_base_url(&self) -> String {
-        if let Ok(url) = std::env::var("ARTUI_FREEMODEL_RELAY_URL") {
-            let url = url.trim();
-            if !url.is_empty() {
-                return url.to_owned();
-            }
-        }
-        if let Some(url) = option_env!("ARTUI_FREEMODEL_RELAY_BASE") {
-            let url = url.trim();
-            if !url.is_empty() {
-                return url.to_owned();
-            }
-        }
-        let base = self.base_url.trim();
-        if !base.is_empty() && !base.contains("<your-subdomain>") {
-            return base.to_owned();
-        }
-        Self::DEFAULT_RELAY_V1.to_owned()
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct OpenAiCompatConfig {
@@ -280,10 +210,7 @@ pub struct OpenAiCompatConfig {
     pub api_key_env: String,
     pub default_model: String,
     /// Provider id used when looking up credentials through
-    /// [`crate::auth::resolve_credential`]. Defaults to `"openai_compat"` so
-    /// existing user configs keep working; the freemodel provider sets this
-    /// to `"freemodel"` so it picks up the freemodel-specific env vars and
-    /// embedded fallback instead of OpenAI keys.
+    /// [`crate::auth::resolve_credential`]. Defaults to `"openai_compat"`.
     #[serde(default = "default_credential_provider_id")]
     pub credential_provider_id: String,
 }

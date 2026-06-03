@@ -22,12 +22,7 @@ pub struct OpenAiCompatProvider {
 
 impl OpenAiCompatProvider {
     pub fn new(config: OpenAiCompatConfig) -> Self {
-        // Set a stable User-Agent on every request. The artui Cloudflare
-        // relay (used by the freemodel provider, which constructs an
-        // OpenAiCompatProvider under the hood) gates requests on a
-        // substring match — `artui/<version>` satisfies it. Other
-        // upstreams (api.openai.com etc.) accept any UA, so this is
-        // strictly additive.
+        // Stable User-Agent for gateways that gate on client identity.
         let client = reqwest::Client::builder()
             .user_agent(format!("artui/{}", env!("CARGO_PKG_VERSION")))
             .build()
@@ -90,7 +85,7 @@ impl OpenAiCompatProvider {
         if base.is_empty() {
             bail!(
                 "no API base URL configured for provider '{}'. \
-                 Set ARTUI_FREEMODEL_RELAY_URL or providers.freemodel.base_url in ~/.config/artui/config.toml",
+                 Set providers.openai_compat.base_url in ~/.config/artui/config.toml",
                 self.config.credential_provider_id
             );
         }
@@ -320,16 +315,6 @@ async fn emit_pending_tool_ends(
 }
 
 fn format_openai_compat_http_error(status: reqwest::StatusCode, body: &str) -> String {
-    if status == reqwest::StatusCode::FORBIDDEN && body.contains("ip_account_conflict") {
-        return format!(
-            "HTTP 403: freemodel allows only one free account per IP on this network. \
-             The shared artui relay cannot bypass that limit for every user. \
-             Options: run `/provider` and pick OpenAI/Ollama/Copilot, set your own \
-             `FREEMODEL_API_KEY` with `providers.freemodel.base_url` in config, try another \
-             network, or upgrade at freemodel.dev.\n\nUpstream: {body}"
-        );
-    }
-
     format!("OpenAI-compatible endpoint returned HTTP {status}: {body}")
 }
 
@@ -337,14 +322,6 @@ fn format_openai_compat_http_error(status: reqwest::StatusCode, body: &str) -> S
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
-
-    #[test]
-    fn ip_account_conflict_error_is_actionable() {
-        let body = r#"{"error":{"code":"ip_account_conflict","message":"one per IP"}}"#;
-        let msg = format_openai_compat_http_error(reqwest::StatusCode::FORBIDDEN, body);
-        assert!(msg.contains("one free account per IP"));
-        assert!(msg.contains("/provider"));
-    }
 
     #[tokio::test]
     async fn parses_tool_call_sse_chunks() {

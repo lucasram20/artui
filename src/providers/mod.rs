@@ -1,6 +1,5 @@
 mod account;
 pub mod copilot;
-pub mod freemodel;
 pub(crate) mod ollama;
 mod openai_compat;
 pub mod registry;
@@ -99,15 +98,6 @@ pub trait LlmProvider: Send + Sync {
 
 pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn LlmProvider>> {
     match config.default_provider.as_str() {
-        "freemodel" => {
-            // freemodel speaks OpenAI's chat-completions surface, so we
-            // construct an `OpenAiCompatProvider` with credentials and base
-            // URL pinned to the freemodel gateway. The credential resolver
-            // is pinned to `provider_id = "freemodel"` so the OpenAI env
-            // chain is never consulted.
-            let compat = freemodel::openai_compat_config(&config.providers.freemodel);
-            Ok(Arc::new(OpenAiCompatProvider::new(compat)))
-        }
         "ollama" => Ok(Arc::new(OllamaProvider::new(
             config.providers.ollama.clone(),
         ))),
