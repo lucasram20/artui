@@ -35,12 +35,6 @@ curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh
 irm https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.ps1 | iex
 ```
 
-**npm**
-
-```bash
-npm install -g artui-cli
-```
-
 <details>
 <summary>Other install options & flags</summary>
 
@@ -53,9 +47,6 @@ curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -
 
 # Build from source
 ARTUI_FROM_SOURCE=1 curl -fsSL https://pub-5f8bc1cacf17454481c6c01145aa3e98.r2.dev/install.sh | sh -s -- --yes
-
-# npm without downloading the binary (just the wrapper)
-npm install -g artui-cli --abort
 
 # Clone + cargo install
 cargo install --path .
