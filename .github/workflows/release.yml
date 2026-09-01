@@ -75,7 +75,7 @@ jobs:
             archive: zip
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # release: published sets GITHUB_REF to the tag automatically.
           # workflow_dispatch needs an explicit ref so the matrix builds
@@ -99,7 +99,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry + build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -150,7 +150,7 @@ jobs:
     timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v8
         with:
