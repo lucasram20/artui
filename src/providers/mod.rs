@@ -85,7 +85,8 @@ pub enum ModelEvent {
         input_tokens: u32,
         output_tokens: u32,
     },
-    /// Stream finished.
+    /// Stream finished. The loop's cancel paths reuse this with
+    /// `end_turn: true` when Esc requested a stop.
     Done { end_turn: bool },
     /// Unrecoverable error.
     Error(String),

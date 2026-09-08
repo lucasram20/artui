@@ -146,6 +146,9 @@ pub async fn run_turn(
 
     loop {
         if cancel.is_cancelled() {
+            let _ = event_tx
+                .send(AppEvent::Model(ModelEvent::Done { end_turn: true }))
+                .await;
             break;
         }
 
@@ -235,6 +238,9 @@ pub async fn run_turn(
             tokio::select! {
                 _ = cancel.cancelled() => {
                     stream_handle.abort();
+                    if !assistant_text.is_empty() {
+                        extra_messages.push(Message::new(Role::Assistant, assistant_text.clone()));
+                    }
                     let _ = event_tx.send(AppEvent::Model(ModelEvent::Done { end_turn: true })).await;
                     return extra_messages;
                 }
@@ -341,12 +347,17 @@ pub async fn run_turn(
             extra_messages.push(Message::new(Role::Assistant, assistant_text.clone()));
             request
                 .messages
-                .push(Message::new(Role::Assistant, assistant_text));
+                .push(Message::new(Role::Assistant, assistant_text.clone()));
         }
 
         // Dispatch tool calls and collect results
         for call in &tool_calls {
             if cancel.is_cancelled() {
+                // Stop requested mid-dispatch: record partial progress so
+                // the turn's streamed text isn't lost, then exit the turn.
+                if !assistant_text.is_empty() {
+                    extra_messages.push(Message::new(Role::Assistant, assistant_text.clone()));
+                }
                 let _ = event_tx
                     .send(AppEvent::Model(ModelEvent::Done { end_turn: true }))
                     .await;
@@ -701,5 +712,74 @@ mod nudge_heuristic_tests {
     fn case_insensitive() {
         assert!(looks_like_unfulfilled_promise("LET ME do that"));
         assert!(end_turn_explicit_finish("ALL DONE."));
+    }
+}
+
+#[cfg(test)]
+mod cancel_tests {
+    use super::*;
+
+    struct HangingProvider;
+
+    #[async_trait::async_trait]
+    impl LlmProvider for HangingProvider {
+        async fn stream_turn(
+            &self,
+            _request: ModelRequest,
+            _tx: tokio::sync::mpsc::Sender<AppEvent>,
+        ) {
+            // Never emits: simulates a long-running stream that only the
+            // cancel token can stop.
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        }
+    }
+
+    fn test_config() -> AgentLoopConfig {
+        AgentLoopConfig {
+            max_steps_per_turn: 1,
+            ..AgentLoopConfig::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_turn_emits_done_and_keeps_partial_text() {
+        let provider: std::sync::Arc<dyn LlmProvider> = std::sync::Arc::new(HangingProvider);
+        let registry = std::sync::Arc::new(ToolRegistry::new());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(64);
+        let cancel = CancellationToken::new();
+        let request = ModelRequest {
+            messages: vec![Message::new(Role::User, "hi")],
+            system_prompt: None,
+            reasoning_effort: None,
+            tools: Vec::new(),
+            tool_choice: crate::providers::ToolChoice::Auto,
+            max_output_tokens: None,
+        };
+
+        let run = {
+            let config = test_config();
+            let run_cancel = cancel.clone();
+            tokio::spawn(async move {
+                run_turn(provider, registry, request, tx, run_cancel, &config).await
+            })
+        };
+        // Let the turn start its stream, then request a stop.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        cancel.cancel();
+
+        let extra = tokio::time::timeout(std::time::Duration::from_secs(5), run)
+            .await
+            .expect("cancelled turn should finish promptly")
+            .expect("task join");
+        assert!(extra.is_empty());
+
+        let mut saw_done = false;
+        rx.close();
+        while let Some(event) = rx.recv().await {
+            if matches!(event, AppEvent::Model(ModelEvent::Done { .. })) {
+                saw_done = true;
+            }
+        }
+        assert!(saw_done, "cancelled turn must emit Done");
     }
 }

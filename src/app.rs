@@ -374,6 +374,9 @@ impl StatusLineItem {
 pub struct ProviderRequest {
     pub provider: Arc<dyn LlmProvider>,
     pub request: ModelRequest,
+    /// Cancellation source for this turn. The UI keeps a clone in
+    /// `App::turn_cancel` so Esc can request a stop mid-stream.
+    pub cancel: tokio_util::sync::CancellationToken,
     /// Tool registry shared with the agent loop. Includes built-in tools and
     /// any MCP-discovered tools registered at startup.
     pub tool_registry: Arc<crate::tools::registry::ToolRegistry>,
@@ -501,6 +504,11 @@ pub struct App {
     /// Empty when the agent isn't doing multi-step work. Cleared when a
     /// new turn starts.
     pub todos: Vec<crate::tools::todo_write::Todo>,
+    /// Cancellation source for the in-flight agent turn. `Some` while
+    /// `mode == Streaming`; Esc takes it to request a stop.
+    pub turn_cancel: Option<tokio_util::sync::CancellationToken>,
+    /// Set when Esc requested a stop for the current turn.
+    pub turn_stop_requested: bool,
     pub mode: UiMode,
     pub transcript: Vec<Message>,
     pub input: String,
@@ -605,6 +613,8 @@ impl App {
             permissions: permissions_engine,
             lsp_manager: None,
             turn_input_tokens: 0,
+            turn_cancel: None,
+            turn_stop_requested: false,
             turn_output_tokens: 0,
             todos: Vec::new(),
             mode: UiMode::Input,
@@ -866,6 +876,8 @@ impl App {
         self.status = "Streaming response".to_owned();
         self.turn_input_tokens = 0;
         self.turn_output_tokens = 0;
+        self.turn_cancel = Some(tokio_util::sync::CancellationToken::new());
+        self.turn_stop_requested = false;
         self.todos.clear();
         self.start_thinking_animation();
 
@@ -876,6 +888,7 @@ impl App {
 
         Some(AppRequest::Provider(ProviderRequest {
             provider: Arc::clone(&self.provider),
+            cancel: self.turn_cancel.clone().unwrap_or_default(),
             request: ModelRequest {
                 messages: model_messages,
                 system_prompt: Some(self.system_prompt()),
@@ -1037,8 +1050,14 @@ impl App {
         match event {
             AppEvent::Model(ModelEvent::TextDelta(token)) => self.append_assistant_token(&token),
             AppEvent::Model(ModelEvent::Done { .. }) => {
+                self.turn_cancel.take();
+                let was_stopped = std::mem::take(&mut self.turn_stop_requested);
                 self.mode = UiMode::Input;
-                self.status = self.provider_status();
+                self.status = if was_stopped {
+                    "Stopped".to_owned()
+                } else {
+                    self.provider_status()
+                };
                 self.stop_thinking_animation();
             }
             AppEvent::Auth(AuthEvent::Status(status)) => {
@@ -1098,6 +1117,8 @@ impl App {
             },
             AppEvent::Model(ModelEvent::Error(error)) => {
                 self.append_assistant_token(&format!("\nError: {error}"));
+                self.turn_cancel.take();
+                self.turn_stop_requested = false;
                 self.mode = UiMode::Input;
                 self.status = "Provider error".to_owned();
                 self.stop_thinking_animation();
@@ -1176,6 +1197,17 @@ impl App {
     }
 
     pub fn cancel_input(&mut self) {
+        if self.mode == UiMode::Streaming {
+            // Esc during a run requests a graceful stop; the agent loop
+            // aborts the stream and the Done event lands the UI back in
+            // Input mode with a "Stopped" status.
+            if let Some(cancel) = self.turn_cancel.take() {
+                cancel.cancel();
+                self.turn_stop_requested = true;
+                self.status = "Stopping…".to_owned();
+            }
+            return;
+        }
         if self.theme_picker_open {
             self.close_theme_picker();
             return;
@@ -1196,11 +1228,9 @@ impl App {
             self.close_agent_picker();
             return;
         }
-        if self.mode != UiMode::Streaming {
-            self.input.clear();
-            self.slash_cursor = 0;
-            self.mode = UiMode::Normal;
-        }
+        self.input.clear();
+        self.slash_cursor = 0;
+        self.mode = UiMode::Normal;
     }
 
     pub fn open_theme_picker(&mut self) {
@@ -3205,5 +3235,65 @@ mod tests {
         assert_eq!(app.config.default_provider, "copilot");
         assert_eq!(app.active_model(), "plan-model");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn esc_during_streaming_requests_stop_not_clear() {
+        let config = AppConfig::default();
+        let provider = build_provider(&config).unwrap();
+        let mut app = App::new(config, provider);
+        app.mode = UiMode::Streaming;
+        app.turn_cancel = Some(tokio_util::sync::CancellationToken::new());
+        app.input = "keep me".to_owned();
+
+        app.cancel_input();
+
+        assert_eq!(app.mode, UiMode::Streaming);
+        assert!(app.turn_cancel.is_none());
+        assert!(app.turn_stop_requested);
+        assert_eq!(app.status, "Stopping…");
+        assert_eq!(app.input, "keep me");
+    }
+
+    #[test]
+    fn esc_outside_streaming_still_clears_input() {
+        let config = AppConfig::default();
+        let provider = build_provider(&config).unwrap();
+        let mut app = App::new(config, provider);
+        app.mode = UiMode::Input;
+        app.input = "draft".to_owned();
+
+        app.cancel_input();
+
+        assert!(app.input.is_empty());
+        assert!(!app.turn_stop_requested);
+    }
+
+    #[test]
+    fn done_after_stop_request_shows_stopped_status() {
+        let config = AppConfig::default();
+        let provider = build_provider(&config).unwrap();
+        let mut app = App::new(config, provider);
+        app.mode = UiMode::Streaming;
+        app.turn_stop_requested = true;
+
+        app.handle_event(AppEvent::Model(ModelEvent::Done { end_turn: true }));
+
+        assert_eq!(app.mode, UiMode::Input);
+        assert_eq!(app.status, "Stopped");
+        assert!(!app.turn_stop_requested);
+    }
+
+    #[test]
+    fn done_without_stop_request_restores_provider_status() {
+        let config = AppConfig::default();
+        let provider = build_provider(&config).unwrap();
+        let mut app = App::new(config, provider);
+        app.mode = UiMode::Streaming;
+
+        app.handle_event(AppEvent::Model(ModelEvent::Done { end_turn: true }));
+
+        assert_eq!(app.mode, UiMode::Input);
+        assert_eq!(app.status, app.provider_status());
     }
 }
