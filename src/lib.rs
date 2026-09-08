@@ -34,7 +34,6 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tachyonfx::EffectManager;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<()> {
@@ -740,7 +739,7 @@ fn spawn_app_request(request: AppRequest, event_tx: mpsc::Sender<AppEvent>) {
     tokio::spawn(async move {
         match request {
             AppRequest::Provider(request) => {
-                let cancel = CancellationToken::new();
+                let cancel = request.cancel.clone();
                 let registry = request.tool_registry;
                 let config = agent::r#loop::AgentLoopConfig {
                     context_window: request.context_window,
